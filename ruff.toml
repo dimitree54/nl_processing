@@ -1,0 +1,86 @@
+preview = true
+
+line-length = 120
+
+[lint]
+select = [
+    "E402",
+    "E501",
+    "F401",
+    "F841",
+    "TID251",
+    "TID252",
+    "T201",
+    "T203",
+    "T100",
+    "ANN001",
+    "ANN201",
+    "ANN202",
+    "ANN204",
+    "ANN205",
+    "ANN206",
+    "ANN401",
+    "RUF029",
+    "N801",
+    "N802",
+    "N803",
+    "N804",
+    "N805",
+    "N806",
+    "N807",
+    "N815",
+    "N816",
+    "PIE794",
+    "PIE796",
+    "PYI016",
+    "PYI062",
+    "PT014",
+    "I",
+    "PLC0415",
+    "S608",
+    "S610",
+    "S611",
+    "S601",
+    "S602",
+    "S603",
+    "S609",
+    "S701",
+    "S702",
+    "ARG",
+]
+dummy-variable-rgx = "^__+$|^_[A-Za-z0-9][A-Za-z0-9_]*$"
+external = ["DC"]
+
+[lint.flake8-tidy-imports.banned-api]
+"unittest" = { msg = "Use pytest instead of unittest for testing" }
+"unittest.TestCase" = { msg = "Use pytest classes without inheriting from TestCase" }
+"unittest.mock" = { msg = "Use pytest-mock or unittest.mock from pytest" }
+"src" = { msg = "Do not import via 'src'; import the package directly (e.g., 'module_name')." }
+"__future__" = { msg = "Do not import from __future__" }
+"pytest.skip" = { msg = "Test skipping is forbidden. If a test fails, fix it or remove it." }
+"pytest.mark.skip" = { msg = "Test skipping is forbidden. If a test fails, fix it or remove it." }
+"pytest.mark.skipif" = { msg = "Conditional test skipping is forbidden. If a test fails, fix it or remove it." }
+"typing.TYPE_CHECKING" = { msg = "Avoid using if TYPE_CHECKING. Do you really need it here? Maybe without it check will still pass? Maybe you just need to fix circular import?" }
+"os.getenv" = { msg = "Use os.environ['KEY'] to ensure the variable is set. Silent fallbacks are not allowed. Fail laudly if unexpected env" }
+"os.environ.get" = { msg = "Use os.environ['KEY'] to ensure the variable is set. Silent fallbacks are not allowed. Fail laudly if unexpected env" }
+"os.environ.setdefault" = { msg = "Please, let program to fail in case of misconfigured environment - no fallbacks allowed." }
+"dict.get" = { msg = "Are you sure that it is approved fallback? Prefer using `[]` to fail laundly if something unexpected happens." }
+"typing.Any" = { msg = "Do not use Any. Prefer a concrete type." }
+"typing_extensions.Any" = { msg = "Do not use Any. Prefer a concrete type." }
+"builtins.object" = { msg = "Do not use `object` as a type. Use a specific type instead." }
+"typing.cast" = { msg = "Do not use cast(). Use proper type narrowing (isinstance checks, overloads, or TypeGuard) instead." }
+
+[lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[lint.ruff]
+strictly-empty-init-modules = true
+
+[lint.isort]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+force-sort-within-sections = true
+combine-as-imports = true
+split-on-trailing-comma = true
+
+[lint.per-file-ignores]
+"scripts/*" = ["T201", "S603"]
