@@ -12,6 +12,7 @@ dependencies = [
   "pydantic>=2.0,<3",
   "langchain>=0.3,<1",
   "langchain-openai>=0.3,<1",
+  "opencv-python>=4.10,<5",
 ]
 
 [tool.setuptools.packages.find]
