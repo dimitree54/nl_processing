@@ -9,30 +9,33 @@ from nl_processing.extract_text_from_image.benchmark import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
 
 
-def test_full_dutch_extraction_pipeline(tmp_path: pathlib.Path) -> None:
-    """End-to-end: generate image → extract → verify content."""
+@pytest.mark.asyncio
+async def test_full_dutch_extraction_pipeline(tmp_path: pathlib.Path) -> None:
+    """End-to-end: generate image -> extract -> verify content."""
     text = "Nederland is een mooi land"
     image_path = str(tmp_path / "e2e.png")
     generate_test_image(text, image_path, font_scale=1.5, width=800, height=100)
 
     extractor = ImageTextExtractor()
-    result = extractor.extract_from_path(image_path)
+    result = await extractor.extract_from_path(image_path)
 
     assert isinstance(result, str)
     assert len(result.strip()) > 0
 
 
-def test_unsupported_format_raises_error(tmp_path: pathlib.Path) -> None:
+@pytest.mark.asyncio
+async def test_unsupported_format_raises_error(tmp_path: pathlib.Path) -> None:
     """E2e: unsupported format raises UnsupportedImageFormatError immediately."""
     bmp_path = str(tmp_path / "test.bmp")
     pathlib.Path(bmp_path).write_bytes(b"fake bmp content")
 
     extractor = ImageTextExtractor()
     with pytest.raises(UnsupportedImageFormatError):
-        extractor.extract_from_path(bmp_path)
+        await extractor.extract_from_path(bmp_path)
 
 
-def test_blank_image_raises_target_language_not_found(tmp_path: pathlib.Path) -> None:
+@pytest.mark.asyncio
+async def test_blank_image_raises_target_language_not_found(tmp_path: pathlib.Path) -> None:
     """E2e: blank image with no text raises TargetLanguageNotFoundError."""
     blank = numpy.zeros((100, 400, 3), dtype=numpy.uint8)
     blank.fill(255)
@@ -41,10 +44,11 @@ def test_blank_image_raises_target_language_not_found(tmp_path: pathlib.Path) ->
 
     extractor = ImageTextExtractor()
     with pytest.raises(TargetLanguageNotFoundError):
-        extractor.extract_from_path(blank_path)
+        await extractor.extract_from_path(blank_path)
 
 
-def test_supported_image_formats(tmp_path: pathlib.Path) -> None:
+@pytest.mark.asyncio
+async def test_supported_image_formats(tmp_path: pathlib.Path) -> None:
     """E2e: verify PNG, JPEG, WebP formats are accepted (no format error)."""
     img = numpy.zeros((100, 400, 3), dtype=numpy.uint8)
     img.fill(255)
@@ -57,6 +61,6 @@ def test_supported_image_formats(tmp_path: pathlib.Path) -> None:
         # Should not raise UnsupportedImageFormatError
         # May raise TargetLanguageNotFoundError or return text — both are valid
         try:
-            extractor.extract_from_path(path)
+            await extractor.extract_from_path(path)
         except TargetLanguageNotFoundError:
             pass  # Expected — "Test" is English, not Dutch

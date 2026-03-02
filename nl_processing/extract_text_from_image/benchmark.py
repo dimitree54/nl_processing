@@ -3,9 +3,6 @@ import re
 import cv2
 import numpy
 
-from nl_processing.core.models import Language
-from nl_processing.extract_text_from_image.service import ImageTextExtractor
-
 
 def generate_test_image(
     text: str,
@@ -58,33 +55,3 @@ def evaluate_extraction(extracted: str, ground_truth: str) -> bool:
     Returns True if exact match after normalization.
     """
     return normalize_text(extracted) == normalize_text(ground_truth)
-
-
-def run_benchmark(
-    test_cases: list[tuple[str, str]],
-    *,
-    model: str = "gpt-5-mini",
-    language: Language = Language.NL,
-) -> list[dict[str, str | bool]]:
-    """Run the benchmark suite against a specified model.
-
-    Args:
-        test_cases: List of (image_path, ground_truth_text) tuples.
-        model: LLM model name.
-        language: Target language.
-
-    Returns:
-        List of result dicts with keys: image_path, ground_truth, extracted, passed.
-    """
-    extractor = ImageTextExtractor(language=language, model=model)
-    results: list[dict[str, str | bool]] = []
-    for image_path, ground_truth in test_cases:
-        extracted = extractor.extract_from_path(image_path)
-        passed = evaluate_extraction(extracted, ground_truth)
-        results.append({
-            "image_path": image_path,
-            "ground_truth": ground_truth,
-            "extracted": extracted,
-            "passed": passed,
-        })
-    return results
