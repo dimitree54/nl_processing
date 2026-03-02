@@ -1,12 +1,16 @@
+import os
+import pathlib
+
 import numpy as np
 import pytest
 
+from nl_processing.core.exceptions import TargetLanguageNotFoundError
 from nl_processing.core.models import ExtractedText, Language
 from nl_processing.extract_text_from_image.benchmark import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
 
 
-def test_constructor_defaults(monkeypatch):
+def test_constructor_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test ImageTextExtractor constructor with default arguments."""
     # Mock environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -17,7 +21,7 @@ def test_constructor_defaults(monkeypatch):
     # The main thing is that construction succeeds
 
 
-def test_constructor_custom_params(monkeypatch):
+def test_constructor_custom_params(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test ImageTextExtractor constructor with custom arguments."""
     # Mock environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -26,7 +30,7 @@ def test_constructor_custom_params(monkeypatch):
     assert extractor._language == Language.NL
 
 
-def test_extract_from_path_happy_path(monkeypatch, tmp_path):
+def test_extract_from_path_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     """Test extract_from_path with mocked LLM returning expected text."""
     # Mock environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -38,7 +42,7 @@ def test_extract_from_path_happy_path(monkeypatch, tmp_path):
     # Mock the _extract method to return expected text
     expected_text = "De kat zit op de mat"
 
-    def mock_extract(self, base64_string, media_type):
+    def mock_extract(_self: object, _base64_string: str, _media_type: str) -> str:
         return expected_text
 
     extractor = ImageTextExtractor()
@@ -51,7 +55,7 @@ def test_extract_from_path_happy_path(monkeypatch, tmp_path):
     assert result == expected_text
 
 
-def test_extract_from_cv2_happy_path(monkeypatch):
+def test_extract_from_cv2_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test extract_from_cv2 with mocked LLM returning expected text."""
     # Mock environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -63,7 +67,7 @@ def test_extract_from_cv2_happy_path(monkeypatch):
     # Mock the _extract method to return expected text
     expected_text = "Hallo wereld"
 
-    def mock_extract(self, base64_string, media_type):
+    def mock_extract(_self: object, _base64_string: str, _media_type: str) -> str:
         return expected_text
 
     extractor = ImageTextExtractor()
@@ -76,7 +80,7 @@ def test_extract_from_cv2_happy_path(monkeypatch):
     assert result == expected_text
 
 
-def test_both_methods_converge_to_extract(monkeypatch, tmp_path):
+def test_both_methods_converge_to_extract(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     """Test that both extract_from_path and extract_from_cv2 call the same internal _extract method."""
     # Mock environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -92,7 +96,7 @@ def test_both_methods_converge_to_extract(monkeypatch, tmp_path):
     # Track calls to _extract
     extract_calls = []
 
-    def mock_extract(self, base64_string, media_type):
+    def mock_extract(_self: object, base64_string: str, media_type: str) -> str:
         extract_calls.append((base64_string[:20], media_type))  # Track partial base64 + media_type
         return "test result"
 
@@ -111,7 +115,7 @@ def test_both_methods_converge_to_extract(monkeypatch, tmp_path):
     assert extract_calls[1][1] == "image/png"
 
 
-def test_extract_handles_dict_response(monkeypatch, tmp_path):
+def test_extract_handles_dict_response(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     """Test that _extract handles dict response from structured output."""
     # Mock environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -123,7 +127,7 @@ def test_extract_handles_dict_response(monkeypatch, tmp_path):
     # Mock the _extract method to simulate handling dict response
     expected_text = "Dit is een test"
 
-    def mock_extract(self, base64_string, media_type):
+    def mock_extract(_self: object, _base64_string: str, _media_type: str) -> str:
         # Simulate the dict handling logic from the actual _extract method
         result = {"text": expected_text}  # Dict response from LLM
         if isinstance(result, ExtractedText):
@@ -132,8 +136,6 @@ def test_extract_handles_dict_response(monkeypatch, tmp_path):
             text = result["text"]  # Handle dict response
 
         if not text.strip():
-            from nl_processing.core.exceptions import TargetLanguageNotFoundError
-
             raise TargetLanguageNotFoundError("No text in the target language was found in the image")
 
         return text
@@ -148,7 +150,7 @@ def test_extract_handles_dict_response(monkeypatch, tmp_path):
     assert result == expected_text
 
 
-def test_extract_with_russian_language(monkeypatch):
+def test_extract_with_russian_language(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that constructor works with different language."""
     # Mock environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -158,9 +160,8 @@ def test_extract_with_russian_language(monkeypatch):
         ImageTextExtractor(language=Language.RU)
 
 
-def test_missing_openai_key():
+def test_missing_openai_key() -> None:
     """Test that missing OPENAI_API_KEY raises appropriate error."""
-    import os
 
     # Ensure OPENAI_API_KEY is not set
     if "OPENAI_API_KEY" in os.environ:

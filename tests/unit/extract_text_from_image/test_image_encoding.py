@@ -1,3 +1,7 @@
+import base64
+import pathlib
+
+import cv2
 import numpy as np
 import pytest
 
@@ -11,18 +15,18 @@ from nl_processing.extract_text_from_image.image_encoding import (
 )
 
 
-def test_get_image_format():
+def test_get_image_format() -> None:
     """Test get_image_format returns lowercase extensions."""
     assert get_image_format("image.png") == ".png"
     assert get_image_format("image.jpg") == ".jpg"
     assert get_image_format("image.JPEG") == ".jpeg"
     assert get_image_format("image.gif") == ".gif"
     assert get_image_format("image.webp") == ".webp"
-    assert get_image_format("image") == ""
+    assert not get_image_format("image")
     assert get_image_format("path/to/image.PNG") == ".png"
 
 
-def test_encode_path_to_base64(tmp_path):
+def test_encode_path_to_base64(tmp_path: pathlib.Path) -> None:
     """Test encoding image file to base64."""
     # Create a test image file
     test_image_path = str(tmp_path / "test.png")
@@ -36,12 +40,10 @@ def test_encode_path_to_base64(tmp_path):
     assert len(base64_string) > 0
     assert media_type == "image/png"
     # Check it looks like base64
-    import base64
-
     base64.b64decode(base64_string)  # Should not raise
 
 
-def test_encode_cv2_to_base64():
+def test_encode_cv2_to_base64() -> None:
     """Test encoding cv2 array to base64 PNG."""
     # Create a small white image array
     img = np.zeros((50, 100, 3), dtype=np.uint8)
@@ -55,12 +57,10 @@ def test_encode_cv2_to_base64():
     assert len(base64_string) > 0
     assert media_type == "image/png"
     # Check it looks like base64
-    import base64
-
     base64.b64decode(base64_string)  # Should not raise
 
 
-def test_validate_image_format_valid():
+def test_validate_image_format_valid() -> None:
     """Test validate_image_format with valid formats."""
     valid_formats = [
         "image.png",
@@ -76,7 +76,7 @@ def test_validate_image_format_valid():
         validate_image_format(image_path)  # Should not raise
 
 
-def test_validate_image_format_invalid():
+def test_validate_image_format_invalid() -> None:
     """Test validate_image_format with invalid formats."""
     invalid_formats = [
         "image.bmp",
@@ -93,20 +93,18 @@ def test_validate_image_format_invalid():
         assert "Unsupported image format" in str(exc_info.value)
 
 
-def test_encode_cv2_to_base64_failure():
+def test_encode_cv2_to_base64_failure() -> None:
     """Test encode_cv2_to_base64 with invalid array."""
     # Create an invalid array that might cause cv2.imencode to fail
     # This is difficult to trigger reliably, so we'll test with an empty array
     img = np.array([])
 
     # OpenCV throws cv2.error, not ValueError, for empty arrays
-    import cv2
-
     with pytest.raises(cv2.error):
         encode_cv2_to_base64(img)
 
 
-def test_encode_path_to_base64_file_not_found():
+def test_encode_path_to_base64_file_not_found() -> None:
     """Test encode_path_to_base64 with non-existent file."""
     with pytest.raises(FileNotFoundError):
         encode_path_to_base64("nonexistent.png")
