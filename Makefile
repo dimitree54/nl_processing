@@ -6,5 +6,5 @@ check:
 	uv run vulture nl_processing tests vulture_whitelist.py
 	npx jscpd --exitCode 1
 	uv run pytest -n auto tests/unit
-	uv run pytest -n auto tests/integration
-	uv run pytest -n auto tests/e2e --e2e-client=serverless
+	doppler run -- uv run pytest -n auto tests/integration
+	doppler run -- uv run pytest -n auto tests/e2e

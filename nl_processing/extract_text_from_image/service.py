@@ -26,13 +26,17 @@ class ImageTextExtractor:
         text = extractor.extract_from_cv2(cv2_image)
     """
 
-    def __init__(self, *, language: Language = Language.NL, model: str = "gpt-5-mini") -> None:
+    def __init__(
+        self, *, language: Language = Language.NL, model: str = "gpt-5-nano", reasoning_effort: str | None = "low"
+    ) -> None:
         self._language = language
         prompt_path = str(_PROMPTS_DIR / f"{language.value}.json")
         self._system_prompt = load_prompt(prompt_path)
+
         self._llm = ChatOpenAI(
             model=model,
-        ).with_structured_output(ExtractedText)
+            reasoning_effort=reasoning_effort,
+        ).bind_tools([ExtractedText], tool_choice=ExtractedText.__name__)
 
     def extract_from_path(self, path: str) -> str:
         """Extract text from image at the given file path.
@@ -61,20 +65,14 @@ class ImageTextExtractor:
         )
         messages = [*system_messages, human_message]
         try:
-            result = self._llm.invoke(messages)
+            response = self._llm.invoke(messages)
+            result = ExtractedText(**response.tool_calls[0]["args"])  # type: ignore[attr-defined]
         except Exception as e:
             raise APIError(str(e)) from e
 
-        # Extract text from result
-        if isinstance(result, ExtractedText):
-            text = result.text
-        else:
-            # Handle dict response from structured output
-            text = result["text"]
-
         # Check if target language text was found
-        if not text.strip():
+        if not result.text.strip():
             msg = "No text in the target language was found in the image"
             raise TargetLanguageNotFoundError(msg)
 
-        return text
+        return result.text

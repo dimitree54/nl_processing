@@ -109,9 +109,9 @@ N/A — this task does not introduce or use any third-party libraries.
 
 11. **Delete `tests/e2e/test_smoke_e2e.py`**: This file tests e2e options for the old processor flow. No longer relevant.
 
-12. **Delete `tests/e2e/conftest.py`**: This file defines `pytest_addoption` for the `--e2e-client` option used only by the deleted `test_smoke_e2e.py`. No other test uses this option.
+12. **Delete `tests/e2e/conftest.py`**: This file defines an obsolete pytest CLI option used only by the deleted `test_smoke_e2e.py`. No other test uses this option.
 
-13. **Rewrite `vulture_whitelist.py`**: The current content references `tests.e2e.conftest.pytest_addoption` which no longer exists. Replace with an empty whitelist (just a comment explaining the file's purpose) or a minimal valid Python file. Example:
+13. **Rewrite `vulture_whitelist.py`**: The current content references a removed pytest hook from `tests/e2e/conftest.py` which no longer exists. Replace with an empty whitelist (just a comment explaining the file's purpose) or a minimal valid Python file. Example:
     ```python
     # Vulture whitelist — list false-positive "unused" symbols here.
     ```
@@ -158,7 +158,7 @@ After this task:
 8. `tests/integration/test_processor_integration.py` does not exist
 9. `tests/e2e/test_smoke_e2e.py` does not exist
 10. `tests/e2e/conftest.py` does not exist
-11. `vulture_whitelist.py` contains no reference to `pytest_addoption` or `tests.e2e.conftest`
+11. `vulture_whitelist.py` contains no reference to removed pytest hooks or `tests.e2e.conftest`
 12. `uv run ruff format` produces no errors
 13. `uv run ruff check` produces no errors related to the cleaned files
 14. `uv run vulture nl_processing tests vulture_whitelist.py` produces no errors from deleted/cleaned files

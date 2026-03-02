@@ -40,7 +40,7 @@ Implement the `nl_processing/core/` package providing shared Pydantic interface 
   - `tests/unit/test_processor_unit.py` (delete — references non-existent `nl_processing.processor`)
   - `tests/integration/test_processor_integration.py` (delete — references non-existent `nl_processing.processor`)
   - `tests/e2e/test_smoke_e2e.py` (delete — references non-existent `nl_processing.processor` via `__init__.py`)
-  - `tests/e2e/conftest.py` (delete — defines `pytest_addoption` for removed e2e test)
+  - `tests/e2e/conftest.py` (delete — defines obsolete pytest CLI option for removed e2e test)
   - `vulture_whitelist.py` (rewrite — currently references deleted `conftest.py`)
   - `tests/unit/database/test_database.py` (delete — imports from broken `nl_processing` `__init__`, and `database` module is out of scope for this architecture)
 

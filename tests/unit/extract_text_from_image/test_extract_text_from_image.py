@@ -1,5 +1,6 @@
 import os
 import pathlib
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -26,8 +27,22 @@ def test_constructor_custom_params(monkeypatch: pytest.MonkeyPatch) -> None:
     # Mock environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    extractor = ImageTextExtractor(language=Language.NL, model="custom-model")
+    extractor = ImageTextExtractor(language=Language.NL, model="custom-model", reasoning_effort="high")
     assert extractor._language == Language.NL
+
+
+def test_constructor_reasoning_effort_param(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test ImageTextExtractor constructor accepts reasoning_effort parameter."""
+    # Mock environment variable
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    # Test None (default)
+    extractor1 = ImageTextExtractor(reasoning_effort=None)
+    assert extractor1._language == Language.NL
+
+    # Test explicit values
+    extractor2 = ImageTextExtractor(reasoning_effort="medium")
+    assert extractor2._language == Language.NL
 
 
 def test_extract_from_path_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
@@ -115,8 +130,8 @@ def test_both_methods_converge_to_extract(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert extract_calls[1][1] == "image/png"
 
 
-def test_extract_handles_dict_response(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
-    """Test that _extract handles dict response from structured output."""
+def test_extract_handles_tool_calls_response(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
+    """Test that _extract handles tool_calls response from bind_tools."""
     # Mock environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
@@ -124,21 +139,21 @@ def test_extract_handles_dict_response(monkeypatch: pytest.MonkeyPatch, tmp_path
     test_image_path = str(tmp_path / "test.png")
     generate_test_image("Test", test_image_path)
 
-    # Mock the _extract method to simulate handling dict response
+    # Mock the _extract method to simulate handling tool_calls response
     expected_text = "Dit is een test"
 
     def mock_extract(_self: object, _base64_string: str, _media_type: str) -> str:
-        # Simulate the dict handling logic from the actual _extract method
-        result = {"text": expected_text}  # Dict response from LLM
-        if isinstance(result, ExtractedText):
-            text = result.text
-        else:
-            text = result["text"]  # Handle dict response
+        # Simulate the tool_calls handling logic from the actual _extract method
+        # Create a mock response with tool_calls
+        mock_response = SimpleNamespace()
+        mock_response.tool_calls = [{"args": {"text": expected_text}}]
 
-        if not text.strip():
+        result = ExtractedText(**mock_response.tool_calls[0]["args"])
+
+        if not result.text.strip():
             raise TargetLanguageNotFoundError("No text in the target language was found in the image")
 
-        return text
+        return result.text
 
     extractor = ImageTextExtractor()
     monkeypatch.setattr(extractor, "_extract", mock_extract.__get__(extractor, ImageTextExtractor))
