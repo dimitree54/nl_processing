@@ -1,6 +1,5 @@
 import os
 import pathlib
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -8,25 +7,7 @@ import pytest
 from nl_processing.core.models import Language
 from nl_processing.extract_text_from_image.benchmark import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
-
-
-class _AsyncChainMock:
-    """Async mock for the LangChain chain — replaces unittest.mock.AsyncMock."""
-
-    def __init__(self, return_value: SimpleNamespace) -> None:
-        self.ainvoke_calls: list[dict[str, list[object]]] = []
-        self._return_value = return_value
-
-    async def ainvoke(self, input_dict: dict[str, list[object]]) -> SimpleNamespace:
-        self.ainvoke_calls.append(input_dict)
-        return self._return_value
-
-
-def _make_tool_response(text: str) -> SimpleNamespace:
-    """Build a fake LLM response with tool_calls matching bind_tools output."""
-    resp = SimpleNamespace()
-    resp.tool_calls = [{"args": {"text": text}}]
-    return resp
+from tests.unit.extract_text_from_image.conftest import _AsyncChainMock, make_tool_response
 
 
 def test_constructor_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -36,7 +17,7 @@ def test_constructor_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     extractor = ImageTextExtractor()
     assert extractor._language == Language.NL
     # Chain should be stored (not prompt + llm separately)
-    assert hasattr(extractor, "_chain")
+    assert extractor._chain is not None
 
 
 def test_constructor_custom_params(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,7 +53,7 @@ async def test_extract_from_path_happy_path(monkeypatch: pytest.MonkeyPatch, tmp
     expected_text = "De kat zit op de mat"
 
     extractor = ImageTextExtractor()
-    extractor._chain = _AsyncChainMock(_make_tool_response(expected_text))
+    extractor._chain = _AsyncChainMock(make_tool_response(expected_text))
 
     result = await extractor.extract_from_path(test_image_path)
     assert result == expected_text
@@ -94,7 +75,7 @@ async def test_extract_from_cv2_happy_path(monkeypatch: pytest.MonkeyPatch) -> N
     expected_text = "Hallo wereld"
 
     extractor = ImageTextExtractor()
-    extractor._chain = _AsyncChainMock(_make_tool_response(expected_text))
+    extractor._chain = _AsyncChainMock(make_tool_response(expected_text))
 
     result = await extractor.extract_from_cv2(img)
     assert result == expected_text
@@ -114,7 +95,7 @@ async def test_both_methods_converge_to_chain(monkeypatch: pytest.MonkeyPatch, t
     img.fill(255)
 
     extractor = ImageTextExtractor()
-    extractor._chain = _AsyncChainMock(_make_tool_response("test result"))
+    extractor._chain = _AsyncChainMock(make_tool_response("test result"))
 
     await extractor.extract_from_path(test_image_path)
     await extractor.extract_from_cv2(img)
@@ -139,7 +120,7 @@ async def test_extract_handles_tool_calls_response(monkeypatch: pytest.MonkeyPat
     expected_text = "Dit is een test"
 
     extractor = ImageTextExtractor()
-    extractor._chain = _AsyncChainMock(_make_tool_response(expected_text))
+    extractor._chain = _AsyncChainMock(make_tool_response(expected_text))
 
     result = await extractor.extract_from_path(test_image_path)
     assert result == expected_text

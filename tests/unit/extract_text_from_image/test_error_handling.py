@@ -1,5 +1,4 @@
 import pathlib
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -11,35 +10,11 @@ from nl_processing.core.exceptions import (
 )
 from nl_processing.extract_text_from_image.benchmark import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
-
-
-class _AsyncChainMock:
-    """Async mock for the LangChain chain — replaces unittest.mock.AsyncMock."""
-
-    def __init__(self, return_value: SimpleNamespace) -> None:
-        self.ainvoke_calls: list[dict[str, list[object]]] = []
-        self._return_value = return_value
-
-    async def ainvoke(self, input_dict: dict[str, list[object]]) -> SimpleNamespace:
-        self.ainvoke_calls.append(input_dict)
-        return self._return_value
-
-
-class _AsyncChainMockError:
-    """Async mock that raises an exception on ainvoke."""
-
-    def __init__(self, exception: Exception) -> None:
-        self._exception = exception
-
-    async def ainvoke(self, _input_dict: dict[str, list[object]]) -> SimpleNamespace:
-        raise self._exception
-
-
-def _make_tool_response(text: str) -> SimpleNamespace:
-    """Build a fake LLM response with tool_calls matching bind_tools output."""
-    resp = SimpleNamespace()
-    resp.tool_calls = [{"args": {"text": text}}]
-    return resp
+from tests.unit.extract_text_from_image.conftest import (
+    _AsyncChainMock,
+    _AsyncChainMockError,
+    make_tool_response,
+)
 
 
 def _setup_extractor_with_mock_chain(
@@ -54,7 +29,7 @@ def _setup_extractor_with_mock_chain(
     generate_test_image("Test", test_image_path)
 
     extractor = ImageTextExtractor()
-    extractor._chain = _AsyncChainMock(_make_tool_response(mock_text_response))
+    extractor._chain = _AsyncChainMock(make_tool_response(mock_text_response))
 
     return test_image_path, extractor
 
