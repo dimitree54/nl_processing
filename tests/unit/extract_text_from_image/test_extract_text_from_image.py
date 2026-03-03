@@ -1,7 +1,6 @@
 import os
 import pathlib
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
@@ -9,6 +8,18 @@ import pytest
 from nl_processing.core.models import Language
 from nl_processing.extract_text_from_image.benchmark import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
+
+
+class _AsyncChainMock:
+    """Async mock for the LangChain chain — replaces unittest.mock.AsyncMock."""
+
+    def __init__(self, return_value: SimpleNamespace) -> None:
+        self.ainvoke_calls: list[dict[str, list[object]]] = []
+        self._return_value = return_value
+
+    async def ainvoke(self, input_dict: dict[str, list[object]]) -> SimpleNamespace:
+        self.ainvoke_calls.append(input_dict)
+        return self._return_value
 
 
 def _make_tool_response(text: str) -> SimpleNamespace:
@@ -61,14 +72,13 @@ async def test_extract_from_path_happy_path(monkeypatch: pytest.MonkeyPatch, tmp
     expected_text = "De kat zit op de mat"
 
     extractor = ImageTextExtractor()
-    extractor._chain = AsyncMock()
-    extractor._chain.ainvoke = AsyncMock(return_value=_make_tool_response(expected_text))
+    extractor._chain = _AsyncChainMock(_make_tool_response(expected_text))
 
     result = await extractor.extract_from_path(test_image_path)
     assert result == expected_text
 
     # Verify ainvoke was called with the right structure
-    call_args = extractor._chain.ainvoke.call_args[0][0]
+    call_args = extractor._chain.ainvoke_calls[0]
     assert "images" in call_args
     assert len(call_args["images"]) == 1
 
@@ -84,8 +94,7 @@ async def test_extract_from_cv2_happy_path(monkeypatch: pytest.MonkeyPatch) -> N
     expected_text = "Hallo wereld"
 
     extractor = ImageTextExtractor()
-    extractor._chain = AsyncMock()
-    extractor._chain.ainvoke = AsyncMock(return_value=_make_tool_response(expected_text))
+    extractor._chain = _AsyncChainMock(_make_tool_response(expected_text))
 
     result = await extractor.extract_from_cv2(img)
     assert result == expected_text
@@ -105,18 +114,16 @@ async def test_both_methods_converge_to_chain(monkeypatch: pytest.MonkeyPatch, t
     img.fill(255)
 
     extractor = ImageTextExtractor()
-    extractor._chain = AsyncMock()
-    extractor._chain.ainvoke = AsyncMock(return_value=_make_tool_response("test result"))
+    extractor._chain = _AsyncChainMock(_make_tool_response("test result"))
 
     await extractor.extract_from_path(test_image_path)
     await extractor.extract_from_cv2(img)
 
     # Verify chain.ainvoke was called twice (once per method)
-    assert extractor._chain.ainvoke.call_count == 2
+    assert len(extractor._chain.ainvoke_calls) == 2
 
     # Both calls should pass {"images": [HumanMessage(...)]}
-    for call in extractor._chain.ainvoke.call_args_list:
-        call_input = call[0][0]
+    for call_input in extractor._chain.ainvoke_calls:
         assert "images" in call_input
         assert len(call_input["images"]) == 1
 
@@ -132,8 +139,7 @@ async def test_extract_handles_tool_calls_response(monkeypatch: pytest.MonkeyPat
     expected_text = "Dit is een test"
 
     extractor = ImageTextExtractor()
-    extractor._chain = AsyncMock()
-    extractor._chain.ainvoke = AsyncMock(return_value=_make_tool_response(expected_text))
+    extractor._chain = _AsyncChainMock(_make_tool_response(expected_text))
 
     result = await extractor.extract_from_path(test_image_path)
     assert result == expected_text
