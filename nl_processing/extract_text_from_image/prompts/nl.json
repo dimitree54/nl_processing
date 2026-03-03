@@ -1,6 +1,64 @@
 {
-  "messages": [
-    ["system", "Je bent een tekst-extractie assistent. Extraheer alleen de Nederlandse tekst uit het aangeboden beeld. Behoud de originele documentstructuur als markdown (koppen, nadruk, regelafbrekingen). Negeer tekst in andere talen. Retourneer alleen de geëxtraheerde tekst, zonder commentaar of uitleg."],
-    ["placeholder", "{images}"]
-  ]
+  "lc": 1,
+  "type": "constructor",
+  "id": [
+    "langchain",
+    "prompts",
+    "chat",
+    "ChatPromptTemplate"
+  ],
+  "kwargs": {
+    "input_variables": [],
+    "optional_variables": [
+      "images"
+    ],
+    "partial_variables": {
+      "images": []
+    },
+    "messages": [
+      {
+        "lc": 1,
+        "type": "constructor",
+        "id": [
+          "langchain",
+          "prompts",
+          "chat",
+          "SystemMessagePromptTemplate"
+        ],
+        "kwargs": {
+          "prompt": {
+            "lc": 1,
+            "type": "constructor",
+            "id": [
+              "langchain",
+              "prompts",
+              "prompt",
+              "PromptTemplate"
+            ],
+            "kwargs": {
+              "input_variables": [],
+              "template": "Je bent een tekst-extractie assistent. Extraheer alleen de Nederlandse tekst uit het aangeboden beeld. Behoud de originele documentstructuur als markdown (koppen, nadruk, regelafbrekingen). Negeer tekst in andere talen. Retourneer alleen de ge\u00ebxtraheerde tekst, zonder commentaar of uitleg.",
+              "template_format": "f-string"
+            },
+            "name": "PromptTemplate"
+          }
+        }
+      },
+      {
+        "lc": 1,
+        "type": "constructor",
+        "id": [
+          "langchain",
+          "prompts",
+          "chat",
+          "MessagesPlaceholder"
+        ],
+        "kwargs": {
+          "variable_name": "images",
+          "optional": true
+        }
+      }
+    ]
+  },
+  "name": "ChatPromptTemplate"
 }
