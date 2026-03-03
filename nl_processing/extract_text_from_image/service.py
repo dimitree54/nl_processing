@@ -41,9 +41,7 @@ class ImageTextExtractor:
 
         llm = ChatOpenAI(
             model=model, service_tier=service_tier, reasoning_effort=reasoning_effort, temperature=temperature
-        ).bind_tools(
-            [ExtractedText], tool_choice=ExtractedText.__name__
-        )
+        ).bind_tools([ExtractedText], tool_choice=ExtractedText.__name__)
 
         self._chain = prompt | llm
 
