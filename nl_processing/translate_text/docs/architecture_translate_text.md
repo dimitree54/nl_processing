@@ -51,7 +51,7 @@ translator = TextTranslator(source_language=Language.NL, target_language=Languag
 
 The `translate()` method returns `str` (the translated text), not a Pydantic wrapper model.
 
-**Rationale:** The output is a single string — wrapping it in a Pydantic model adds no value. Structured output (`with_structured_output()`) is still used internally to enforce clean LLM output (no conversational chatter), but the public interface returns the unwrapped string.
+**Rationale:** The output is a single string — wrapping it in a Pydantic model adds no value. Structured output is still used internally via Pydantic tool calling (LangChain tools) to enforce clean LLM output (no conversational chatter), but the public interface returns the unwrapped string.
 
 ### Decision: Empty String for Edge Cases
 

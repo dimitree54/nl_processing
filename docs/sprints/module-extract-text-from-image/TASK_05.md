@@ -71,7 +71,7 @@ Create comprehensive unit tests for the `extract_text_from_image` module coverin
   - **Assertion**: `pytest.raises(ExceptionType)` for exception testing
   - **Documentation**: https://docs.pytest.org/en/stable/
 
-- **Mocking strategy**: Mock the LangChain `ChatOpenAI` and its `with_structured_output()` chain to avoid real API calls.
+- **Mocking strategy**: Mock the LangChain `ChatOpenAI` and tool-calling response (`tool_calls`) to avoid real API calls.
   - Use `monkeypatch` or `unittest.mock.patch` (NOTE: ruff bans `unittest.mock` import. Use `from unittest.mock import patch, MagicMock` — the ruff ban is on `unittest` and `unittest.TestCase`, not `unittest.mock`). **CORRECTION**: Check ruff.toml — `"unittest.mock"` IS banned. Use `pytest`'s `monkeypatch` fixture instead, or import `mock` from `pytest-mock` if available. Since `pytest-mock` is not in `pyproject.toml`, use `monkeypatch` to patch attributes.
   - **Alternative**: Patch at the service module level. For example, patch `nl_processing.extract_text_from_image.service.ChatOpenAI` to return a mock that returns `ExtractedText(text="expected text")`.
 
@@ -93,7 +93,7 @@ Create comprehensive unit tests for the `extract_text_from_image` module coverin
    - **Test no raw exception leak**: Mock chain to raise various exceptions → all wrapped as `APIError`
 
 3. **Create `tests/unit/extract_text_from_image/test_extract_text_from_image.py`** — tests for the main service:
-   - **Test constructor defaults**: `ImageTextExtractor()` defaults to `Language.NL` and `model="gpt-5-mini"`
+   - **Test constructor defaults**: `ImageTextExtractor()` defaults to `Language.NL` and `model="gpt-5-nano"` (GPT-5 Mini is the evaluation baseline)
    - **Test `extract_from_path` happy path**: Mock chain to return `ExtractedText(text="De kat zit op de mat")`, create a test PNG in `tmp_path`, call `extract_from_path()`, verify the returned text matches
    - **Test `extract_from_cv2` happy path**: Mock chain to return `ExtractedText(text="Hallo wereld")`, create a numpy array, call `extract_from_cv2()`, verify the returned text matches
    - **Test both methods converge**: Verify that both `extract_from_path` and `extract_from_cv2` invoke the same internal `_extract` method (can verify by checking mock call patterns)

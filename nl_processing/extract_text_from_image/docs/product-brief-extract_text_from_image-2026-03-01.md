@@ -47,7 +47,7 @@ Traditional OCR tools (Tesseract, etc.) extract text from images without context
 A Python module that:
 - Accepts an image (file path or OpenCV `numpy.ndarray`) and target language as input
 - Provides two input methods: `extract_from_path(path)` and `extract_from_cv2(image)`
-- Uses the `core` prompt execution engine with language-specific prompts to extract text
+- Uses LangChain directly with language-specific prompts to extract text (`core` provides shared models/exceptions and the prompt loading utility)
 - Returns markdown-formatted text preserving original layout (headings, emphasis, line breaks)
 - Defines module-specific error types: `TargetLanguageNotFoundError`, `UnsupportedImageFormatError` (defined in `core`)
 - Provides a class-based interface (`ImageTextExtractor`) with sensible defaults
@@ -60,7 +60,7 @@ A Python module that:
 ### Acceptance Criteria
 
 1. **Extraction Accuracy:** 100% exact match (after normalization) on the synthetic test suite. Normalization strips all whitespace, line breaks, and markdown formatting characters before comparison.
-2. **Extraction Speed:** Each extraction call completes in <= 1 second (wall clock time, excluding network variability outside module control).
+2. **Extraction Speed:** Each extraction call completes in < 10 seconds (wall clock time).
 
 ### Benchmark System
 

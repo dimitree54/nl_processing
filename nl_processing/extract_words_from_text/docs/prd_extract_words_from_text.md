@@ -98,14 +98,14 @@ All features are required — no phased MVP. The module either works completely 
 **Public interface:**
 
 ```python
-from nl_processing.extract_words_from_text import WordExtractor
+from nl_processing.extract_words_from_text.service import WordExtractor
 
 extractor = WordExtractor()
 words = extractor.extract(text)
 ```
 
 **Constructor (all parameters optional, sensible defaults):**
-- `model` — LLM model name (default: GPT-5 Mini, passed to `core` engine)
+- `model` — LLM model name (default: `gpt-5-nano`). GPT-5 Mini is used as an evaluation baseline; the default is downgraded to the cheapest model that still passes quality gates.
 - `language` — target language as `Language` enum from `core` (default: `Language.NL`)
 
 **Return type:** flat list of `WordEntry` objects (from `core`), each containing:
@@ -118,7 +118,7 @@ words = extractor.extract(text)
 
 - No module-specific dependencies beyond `core`
 - Language-specific prompts stored as JSON in module directory, loaded by `core` utilities
-- Uses `core` prompt execution engine for all LLM interaction
+- Uses LangChain directly for all LLM interaction; `core` provides shared models/exceptions and the prompt loading utility.
 
 ## Functional Requirements
 

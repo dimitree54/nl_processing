@@ -75,7 +75,7 @@ Implement the core `ImageTextExtractor` class in `service.py` with `extract_from
     from langchain_openai import ChatOpenAI
     from langchain_core.messages import HumanMessage
 
-    llm = ChatOpenAI(model="gpt-5-mini")
+    llm = ChatOpenAI(model="gpt-5-nano")  # GPT-5 Mini is evaluation baseline
 
     message = HumanMessage(
         content=[
@@ -85,14 +85,16 @@ Implement the core `ImageTextExtractor` class in `service.py` with `extract_from
     )
     response = llm.invoke([message])
     ```
-  - **Structured output binding**:
+  - **Structured output binding (recommended: tool calling)**:
     ```python
-    structured_llm = llm.with_structured_output(ExtractedText)
-    result = structured_llm.invoke([message])  # Returns ExtractedText instance
+    tool_llm = llm.bind_tools([ExtractedText], tool_choice=ExtractedText.__name__)
+    response = tool_llm.invoke([message])
+    # Parse tool_calls into ExtractedText
+    result = ExtractedText(**response.tool_calls[0]["args"])
     ```
   - **Known gotchas**:
-    - `with_structured_output()` works with vision messages — the model extracts text AND structures the output.
-    - The `model` parameter must support vision (e.g., `gpt-4o`, `gpt-4o-mini`, `gpt-5-mini`). The architecture specifies `gpt-5-mini` as default.
+    - Tool calling works with vision messages — the model extracts text AND returns a structured tool call.
+    - The `model` parameter must support vision (e.g., `gpt-4o`, `gpt-4o-mini`, `gpt-5-nano`). GPT-5 Mini is used as an evaluation baseline; the default is downgraded to the cheapest model that still passes quality gates.
     - `OPENAI_API_KEY` must be set as an environment variable. `ChatOpenAI` reads it automatically from `os.environ`.
     - Base64 image data URL format: `data:image/<format>;base64,<encoded_data>`
 
@@ -211,7 +213,7 @@ Implement the core `ImageTextExtractor` class in `service.py` with `extract_from
            text = extractor.extract_from_cv2(cv2_image)
        """
 
-       def __init__(self, *, language: Language = Language.NL, model: str = "gpt-5-mini") -> None:
+       def __init__(self, *, language: Language = Language.NL, model: str = "gpt-5-nano") -> None:
            self._language = language
            prompt_path = str(_PROMPTS_DIR / f"{language.value}.json")
            self._system_prompt = load_prompt(prompt_path)
@@ -284,7 +286,7 @@ Implement the core `ImageTextExtractor` class in `service.py` with `extract_from
 
 ## Anti-disaster constraints (mandatory)
 
-- **Reuse before build**: Uses `load_prompt()` from core (T5 of core sprint), uses LangChain's built-in `with_structured_output()`. No custom parsing.
+- **Reuse before build**: Uses `load_prompt()` from core (T5 of core sprint), uses LangChain tool calling for structured output. No custom parsing.
 - **Correct libraries only**: `langchain-openai` and `opencv-python` from `pyproject.toml`.
 - **Correct file locations**: `service.py` and `image_encoding.py` within `nl_processing/extract_text_from_image/` per architecture.
 - **No regressions**: The mock `service.py` is completely replaced — no backward compatibility needed (zero-legacy policy).
@@ -309,7 +311,7 @@ After this task:
 
 1. `from nl_processing.extract_text_from_image.service import ImageTextExtractor` succeeds
 2. `ImageTextExtractor()` can be instantiated (with default args)
-3. `ImageTextExtractor(language=Language.NL, model="gpt-5-mini")` works
+3. `ImageTextExtractor(language=Language.NL, model="gpt-5-nano")` works
 4. `nl_processing/extract_text_from_image/prompts/nl.json` exists and is valid ChatPromptTemplate JSON
 5. `service.py` contains `extract_from_path` and `extract_from_cv2` methods
 6. `image_encoding.py` contains `encode_path_to_base64` and `encode_cv2_to_base64` functions
@@ -338,5 +340,5 @@ After this task:
 ## Notes / risks
 
 - **Risk**: The Dutch prompt may not produce optimal extraction quality on the first attempt. **Mitigation**: Integration tests (T6) will validate accuracy. Prompt can be iterated.
-- **Risk**: `gpt-5-mini` may not exist yet or may have a different name. **Mitigation**: The architecture specifies it as the default model. If the model name is wrong, change the default in the constructor. This is a single-line change.
-- **Risk**: `with_structured_output()` combined with vision messages may behave differently than with text-only messages. **Mitigation**: This is a documented LangChain feature. Integration tests (T6) will validate end-to-end behavior.
+- **Risk**: Model names may change. **Mitigation**: Keep defaults centralized in constructors; validate via integration tests and adjust default model if needed.
+- **Risk**: Tool calling combined with vision messages may behave differently than with text-only messages. **Mitigation**: Integration tests (T6) validate end-to-end behavior.

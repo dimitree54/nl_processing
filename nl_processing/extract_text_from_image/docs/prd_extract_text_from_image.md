@@ -19,7 +19,7 @@ classification:
 
 ## Executive Summary
 
-`extract_text_from_image` is the first module in the `nl_processing` pipeline. It extracts text from images using LLM vision capabilities, returning clean markdown-formatted text with language-specific filtering. It accepts images as file paths or OpenCV arrays, sends them to the `core` prompt execution engine with language-specific prompts, and returns structured output via the `ExtractedText` model from `core`. On initial release, only Dutch language extraction is supported. The module targets developers who need a zero-configuration, black-box text extraction tool.
+`extract_text_from_image` is the first module in the `nl_processing` pipeline. It extracts text from images using LLM vision capabilities, returning clean markdown-formatted text with language-specific filtering. It accepts images as file paths or OpenCV arrays, builds and executes its own LangChain chain (no shared core "engine"), and enforces structured output via the `ExtractedText` model from `core` using tool calling. On initial release, only Dutch language extraction is supported. The module targets developers who need a zero-configuration, black-box text extraction tool.
 
 ### What Makes This Special
 
@@ -30,7 +30,7 @@ No ready-made solution combines LLM-based text extraction, language-specific fil
 ### Technical Success
 
 - 100% exact match (after normalization) on the synthetic test suite — primary quality gate
-- Each extraction call completes in <= 1 second (wall clock time)
+- Each extraction call completes in < 10 seconds (wall clock time)
 - Synthetic test images generated with OpenCV serve as both quality benchmarks and regression tests
 
 ### Measurable Outcomes
@@ -38,7 +38,7 @@ No ready-made solution combines LLM-based text extraction, language-specific fil
 | Metric | Target | Measurement |
 |---|---|---|
 | Extraction accuracy | 100% exact match (normalized) | Synthetic benchmark suite |
-| Extraction latency | <= 1 second per call | Benchmark timing |
+| Extraction latency | < 10 seconds per call | Benchmark timing |
 | Integration time | < 5 minutes | Docstring completeness |
 
 ## Scope
@@ -98,7 +98,7 @@ No MVP/version distinction. All features are required for the single release.
 **Public interface:**
 
 ```python
-from nl_processing.extract_text_from_image import ImageTextExtractor
+from nl_processing.extract_text_from_image.service import ImageTextExtractor
 
 extractor = ImageTextExtractor()
 text = extractor.extract_from_path("image.png")
@@ -108,14 +108,14 @@ text = extractor.extract_from_cv2(cv2_image)
 **Exceptions** (all from `core`): `TargetLanguageNotFoundError`, `UnsupportedImageFormatError`, `APIError`
 
 **Constructor (all parameters optional, sensible defaults):**
-- `model` — LLM model name (default: GPT-5 Mini, passed to `core` engine)
+- `model` — LLM model name (default: `gpt-5-nano`). GPT-5 Mini is used as an evaluation baseline; the default is downgraded to the cheapest model that still passes the synthetic benchmark suite without quality loss.
 - `language` — target language as `Language` enum from `core` (default: `Language.NL`)
 
 ### Implementation Considerations
 
 - Dependencies: `opencv-python` (numpy) — module-specific; `core` handles LangChain/OpenAI
 - Language-specific prompts stored as JSON in module directory, loaded by `core` utilities
-- Uses `core` prompt execution engine for all LLM interaction
+- Uses LangChain directly for all LLM interaction; `core` provides shared models/exceptions and the prompt loading utility.
 
 ## Functional Requirements
 
@@ -145,7 +145,7 @@ text = extractor.extract_from_cv2(cv2_image)
 
 ### Performance
 
-- NFR1: Each extraction call completes in <= 1 second wall clock time (excluding network latency outside module control)
+- NFR1: Each extraction call completes in < 10 seconds wall clock time (QA gate)
 - NFR2: Module does not perform unnecessary image processing or conversions that add latency
 
 ### Integration

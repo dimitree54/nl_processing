@@ -73,7 +73,7 @@ Each module adds 9-14 module-specific FRs covering its domain logic (see module 
 ### Cross-Cutting Concerns
 
 1. **Error propagation:** Each module wraps upstream API errors as `APIError` from `core` — consistent typed exceptions for callers
-2. **Model configurability:** Every module accepts optional `model` parameter (default: GPT-5 Mini) — each module instantiates its own ChatOpenAI
+2. **Model configurability:** Every module accepts optional `model` parameter (baseline: GPT-5 Mini; default: cheapest model that passes quality gates, currently targeting `gpt-5-nano`) — each module instantiates its own ChatOpenAI
 3. **Language extensibility:** `Language` enum + per-module prompt JSONs — adding a language is a linguistic task, not engineering
 4. **Prompt loading:** Shared utility in core for loading ChatPromptTemplate-format JSON files; content per-module
 5. **Testing patterns:** Each module has different validation approach (exact match, set comparison, structural comparison) but shares the pattern of curated test cases as quality gate
@@ -90,7 +90,7 @@ Each module adds 9-14 module-specific FRs covering its domain logic (see module 
 
 ### Decision: No Engine Abstraction — Modules Use LangChain Directly
 
-**Decision:** There is no shared "prompt execution engine" wrapping LangChain. Each module builds and executes its own LangChain chains directly using LangChain's built-in interfaces (`ChatOpenAI`, `ChatPromptTemplate`, `with_structured_output()`, chain composition via `|` operator, etc.).
+**Decision:** There is no shared "prompt execution engine" wrapping LangChain. Each module builds and executes its own LangChain chains directly using LangChain's built-in interfaces (`ChatOpenAI`, `ChatPromptTemplate`, tool calling via `bind_tools(...)`, chain composition via `|` operator, etc.).
 
 **Rationale:** A thin wrapper that merely forwards calls to LangChain adds indirection without value. LangChain already provides one-line chain execution, structured output binding, and composable chain interfaces. Wrapping these in a project-specific engine would:
 - Add a layer that developers must learn on top of LangChain
@@ -137,6 +137,8 @@ nl_processing/core/
 
 **Rationale:** Using LangChain's native serialization means prompts can be loaded with `ChatPromptTemplate` built-in deserialization — no custom parsing needed. The `core` prompt loading helper wraps this for convenience but does not invent a new format.
 
+**Implementation status:** The current `nl_processing.core.prompts.load_prompt()` implementation is temporarily based on a simplified `{ "messages": [[role, template], ...] }` JSON shape. This is non-compliant with this decision and will be corrected by migrating prompt saving/loading to LangChain native serialization.
+
 ### Decision: Module Internal Structure (Standard Layout)
 
 Every pipeline module follows this structure:
@@ -178,7 +180,7 @@ Module-specific exceptions (`TargetLanguageNotFoundError`, `UnsupportedImageForm
 
 **Decision:** Each module's public class constructor creates its own `ChatOpenAI` instance. There is no shared or singleton LLM client.
 
-**Rationale:** Modules may need different model configurations (e.g., vision model for image extraction vs text model for translation). Constructor accepts optional `model` parameter with GPT-5 Mini as default.
+**Rationale:** Modules may need different model configurations (e.g., vision model for image extraction vs text model for translation). We start with GPT-5 Mini as a baseline during evaluation, then downgrade to the cheapest model that still passes module quality gates. Constructor accepts optional `model` parameter; current default target is `gpt-5-nano`.
 
 ---
 
@@ -279,7 +281,7 @@ The public class follows this pattern:
 # nl_processing/<module>/service.py
 
 class <ModuleName>:
-    def __init__(self, *, language: Language = Language.NL, model: str = "gpt-5-mini") -> None:
+    def __init__(self, *, language: Language = Language.NL, model: str = "gpt-5-nano") -> None:
         ...
 
     def <primary_method>(self, input_data: <InputType>) -> <OutputType>:
@@ -654,7 +656,7 @@ jobs:
 | CFR7-11 (Pydantic models) | `core/models.py` — public interface models only |
 | CFR12-15 (Exceptions) | `core/exceptions.py` |
 | CFR16-20 (Prompt management) | `core/prompts.py` + `core/scripts/prompt_author.py` |
-| SFR1-2 (Structured output) | Each module uses LangChain `with_structured_output()` directly |
+| SFR1-2 (Structured output) | Each module uses LangChain tool calling (recommended: `bind_tools(...)` + `tool_calls`) to enforce schemas |
 | SFR3-5 (Configuration) | Constructor pattern with defaults, model param |
 | SFR6-8 (Language support) | Language enum + per-module prompt JSONs |
 | SFR9-11 (Error handling) | APIError wrapping pattern + module-specific semantics |

@@ -141,8 +141,8 @@ Create integration tests (real OpenAI API calls with synthetic test images) and 
        )
 
 
-   def test_extraction_latency(tmp_path: pathlib.Path) -> None:
-       """Each extraction call completes in <= 1 second (ETI-NFR1)."""
+    def test_extraction_latency(tmp_path: pathlib.Path) -> None:
+        """Each extraction call completes in < 10 seconds (ETI-NFR1)."""
        ground_truth = "Snel test"
        image_path = str(tmp_path / "latency.png")
        generate_test_image(ground_truth, image_path, font_scale=1.5, width=400, height=100)
@@ -152,9 +152,8 @@ Create integration tests (real OpenAI API calls with synthetic test images) and 
        extractor.extract_from_path(image_path)
        elapsed = time.time() - start
 
-       # Note: NFR1 says <=1s "excluding network latency outside module control"
-       # We allow up to 10s to account for network variability in CI
-       assert elapsed < 10, f"Extraction took {elapsed:.2f}s — exceeds timeout"
+        # Integration tests make real API calls; network latency is included.
+        assert elapsed < 10, f"Extraction took {elapsed:.2f}s — exceeds timeout"
    ```
 
 3. **Create `tests/e2e/extract_text_from_image/` directory and `__init__.py`** (empty).

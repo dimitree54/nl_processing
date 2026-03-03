@@ -80,6 +80,7 @@ Only Pydantic models that form public module interfaces (input/output contracts)
 - CFR11: Each module stores its own prompt JSON files in its own directory (e.g., `nl_processing/extract_text_from_image/prompts/`)
 - CFR12: `core` provides a prompt authoring helper script (dev-time only, in `core/scripts/`): the developer writes a temporary Python file with an inline multi-message prompt definition, runs the helper, and it serializes the prompt to JSON in the correct format
 - CFR13: The prompt JSON format uses LangChain's `ChatPromptTemplate` native serialization — no custom format
+  - Implementation note: current `core.prompts.load_prompt()` is temporarily implemented against a simplified `{ "messages": [[role, template], ...] }` shape and is non-compliant with CFR13. A follow-up sprint will migrate prompt saving/loading to LangChain native serialization.
 - CFR14: `core` does not define the prompt content — only the loading mechanism and serialization format. Prompt content is a module-level concern
 
 ### Core Non-Functional Requirements
@@ -93,13 +94,13 @@ Only Pydantic models that form public module interfaces (input/output contracts)
 
 ### Structured Output
 
-- SFR1: Every module uses LangChain's `with_structured_output()` to enforce Pydantic structured output
+- SFR1: Every module enforces structured output via LangChain tool calling using Pydantic models (recommended: `bind_tools([...], tool_choice=...)` + parsing `tool_calls`). `with_structured_output()` is allowed but not the preferred standard.
 - SFR2: Every module returns only the requested content — no LLM conversational prefixes, suffixes, or metadata
 
 ### Configuration
 
 - SFR3: Every module can be instantiated with zero or minimal arguments and produce a fully functional instance with best-known defaults
-- SFR4: Every module uses GPT-5 Mini as the default model
+- SFR4: Default model selection is cost-driven: start with GPT-5 Mini as a baseline and then downgrade to the cheapest model that still passes the module's quality gates (benchmarks/tests) without loss of output quality. Current default target for modules is `gpt-5-nano` (overrideable per module).
 - SFR5: Every module's constructor accepts an optional `model` parameter
 
 ### Language Support

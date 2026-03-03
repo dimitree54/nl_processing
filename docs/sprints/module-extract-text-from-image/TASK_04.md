@@ -149,7 +149,7 @@ Create `nl_processing/extract_text_from_image/benchmark.py` containing three int
    def run_benchmark(
        test_cases: list[tuple[str, str]],
        *,
-       model: str = "gpt-5-mini",
+       model: str = "gpt-5-nano",  # GPT-5 Mini is evaluation baseline
        language: Language = Language.NL,
    ) -> list[dict[str, str | bool]]:
        """Run the benchmark suite against a specified model.

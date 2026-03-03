@@ -42,7 +42,7 @@ classification:
 
 | Criterion | Target | Validation Method |
 |---|---|---|
-| No LLM chatter in output | 100% of calls | Structured output schema enforcement |
+| No LLM chatter in output | 100% of calls | Structured output enforcement via Pydantic tool calling (LangChain tools) |
 | Cyrillic-only output (test case) | Pass | Regex check on curated test without proper nouns |
 | Markdown structure preserved | Pass | Structural comparison on curated markdown test |
 | Translation latency (~100 words) | < 5 seconds | Wall clock timing in test |
@@ -81,7 +81,7 @@ classification:
 
 **Rising Action:** He opens the README, sees a 5-line quick-start example:
 ```python
-from nl_processing.translate_text import TextTranslator
+from nl_processing.translate_text.service import TextTranslator
 from nl_processing.core.models import Language
 
 translator = TextTranslator(source_language=Language.NL, target_language=Language.RU)
@@ -123,12 +123,12 @@ The module exposes exactly three public symbols:
 
 `Language` enum and `APIError` exception are imported from `core`.
 
-Everything else is internal (`_`-prefixed or not exported via `__init__.py`).
+Everything else is internal (`_`-prefixed and not re-exported from the package `__init__.py`). Public imports should target `service.py` directly.
 
 ### Implementation Considerations
 
 - **Prompt file:** Translation prompt with few-shot examples stored as JSON in module directory, loaded by `core` utilities
-- **Model configuration:** Default model (GPT-5 Mini) set via `core` engine default. Optional constructor param allows override
+- **Model configuration:** Default model is `gpt-5-nano` (baseline evaluation starts from GPT-5 Mini, then downgrades to the cheapest model that still passes quality gates). Optional constructor param allows override.
 - No module-specific dependencies beyond `core`
 
 ## Functional Requirements

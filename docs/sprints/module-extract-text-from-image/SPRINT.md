@@ -66,7 +66,7 @@ Implement the `nl_processing/extract_text_from_image/` module providing `ImageTe
 from nl_processing.core.models import Language
 
 class ImageTextExtractor:
-    def __init__(self, *, language: Language = Language.NL, model: str = "gpt-5-mini") -> None:
+    def __init__(self, *, language: Language = Language.NL, model: str = "gpt-5-nano") -> None:
         ...
 
     def extract_from_path(self, path: str) -> str:
@@ -96,7 +96,7 @@ class ImageTextExtractor:
 - Image format validation: PNG, JPEG, GIF, WebP supported; others raise `UnsupportedImageFormatError` (ETI-FR8)
 - Image → base64 encoding pipeline (ETI-FR1, ETI-FR2)
 - OpenAI Vision API integration via LangChain `HumanMessage` with image content parts
-- `with_structured_output()` via `ExtractedText` model from core (SFR1)
+- Structured output via Pydantic tool calling using `ExtractedText` model from core (SFR1)
 - Error handling: `TargetLanguageNotFoundError` for no target text (ETI-FR7, ETI-FR9), `APIError` wrapping (SFR9-10)
 - Synthetic benchmark utilities: image generator, quality evaluator, model comparison runner (ETI-FR10-13)
 - Add `opencv-python` dependency to `pyproject.toml` (ETI-NFR4)
@@ -185,7 +185,7 @@ All items must be true:
 ## Risks + mitigations
 
 - **Risk**: OpenAI Vision API response format may vary — `ExtractedText` structured output may not always extract cleanly.
-  - **Mitigation**: `with_structured_output()` enforces the Pydantic schema. Integration tests validate 100% exact match on synthetic images.
+  - **Mitigation**: Tool calling enforces the Pydantic schema. Integration tests validate 100% exact match on synthetic images.
 - **Risk**: Synthetic test images may not produce clear enough text for the Vision API.
   - **Mitigation**: Use high-contrast black-on-white text with a large font. Start with simple single-line text, iterate if needed.
 - **Risk**: `TargetLanguageNotFoundError` detection requires post-extraction logic — the LLM may return an empty `text` field or describe that no text was found.
@@ -232,7 +232,7 @@ N/A — no data model changes
 - OpenAI Vision API: image as base64 in `HumanMessage` with image content parts
 - Two inputs converge to same internal pipeline after base64 encoding
 - Format validation before API call — fail fast
-- `with_structured_output()` via `ExtractedText` from core
+- Structured output via tool calling using `ExtractedText` from core
 - Each module instantiates its own `ChatOpenAI`
 - Error pattern: wrap API errors as `APIError`, domain errors are module-level decisions
 - Benchmark utilities are internal to the module (not in core or tests)

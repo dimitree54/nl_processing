@@ -29,7 +29,7 @@ parentArchitecture: docs/planning-artifacts/architecture.md
 
 The `translate()` method sends all input words in a single LLM call, not one call per word.
 
-**Rationale:** (1) Performance — 10 words in <1 second requires batching. Individual calls would exceed the target. (2) Cost — one API call vs N calls. (3) LangChain's `with_structured_output()` can enforce a list schema in a single response.
+**Rationale:** (1) Performance — 10 words in <1 second requires batching. Individual calls would exceed the target. (2) Cost — one API call vs N calls. (3) Pydantic tool calling (LangChain tools) can enforce a list schema in a single response.
 
 ### Decision: One-to-One Order-Preserving Mapping
 

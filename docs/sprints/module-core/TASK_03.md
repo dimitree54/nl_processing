@@ -74,7 +74,7 @@ Create `nl_processing/core/models.py` with the four public interface types — `
     class ExtractedText(BaseModel):
         text: str
     ```
-  - **Usage — with_structured_output()**: Pydantic v2 models work directly with LangChain's `with_structured_output()` — no `.schema()` needed. LangChain uses `.model_json_schema()` internally.
+- **Usage — tool calling (recommended)**: Pydantic v2 models can be used as tool schemas in LangChain tool calling (e.g., `bind_tools([MyModel], tool_choice=...)`). LangChain derives JSON schema from the Pydantic model (via Pydantic v2 schema APIs).
   - **Known gotchas**: Pydantic v2 uses `model_dump()` instead of `dict()`. Ensure tests use v2 API.
 
 - **Library**: `enum` (stdlib)

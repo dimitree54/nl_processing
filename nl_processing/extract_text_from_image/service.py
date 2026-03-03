@@ -27,16 +27,15 @@ class ImageTextExtractor:
     """
 
     def __init__(
-        self, *, language: Language = Language.NL, model: str = "gpt-5-nano", reasoning_effort: str | None = "low"
+        self, *, language: Language = Language.NL, model: str = "gpt-4.1-mini", reasoning_effort: str | None = None
     ) -> None:
         self._language = language
         prompt_path = str(_PROMPTS_DIR / f"{language.value}.json")
         prompt = load_prompt(prompt_path)
 
-        llm = ChatOpenAI(
-            model=model,
-            reasoning_effort=reasoning_effort,
-        ).bind_tools([ExtractedText], tool_choice=ExtractedText.__name__)
+        llm = ChatOpenAI(model=model, service_tier="priority", reasoning_effort=reasoning_effort).bind_tools(
+            [ExtractedText], tool_choice=ExtractedText.__name__
+        )
 
         self._chain = prompt | llm
 

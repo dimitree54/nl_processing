@@ -25,7 +25,7 @@ classification:
 
 - **LLM translation quality for individual words:** Captures nuance and context-appropriate meanings that algorithmic services miss at the word level
 - **Extensible result objects:** `TranslationResult` (from `core`) is a Pydantic model ready for future field additions without API changes
-- **One-to-one batch processing:** Structured output guarantees clean input→output mapping — no missing or extra items
+- **One-to-one batch processing:** Structured output via Pydantic tool calling guarantees clean input→output mapping — no missing or extra items
 
 ## Success Criteria
 
@@ -68,7 +68,7 @@ classification:
 
 **Rising Action:** Opens README, sees quick-start example:
 ```python
-from nl_processing.translate_word import WordTranslator
+from nl_processing.translate_word.service import WordTranslator
 from nl_processing.core.models import Language
 
 translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
@@ -101,7 +101,7 @@ results = translator.translate(["huis", "lopen", "snel"])
 **Public Interface:**
 
 - `WordTranslator` class
-  - Constructor: `__init__(source_language: Language, target_language: Language, model: str = "gpt-5-mini")` — `Language` from `core`, optional model override
+  - Constructor: `__init__(source_language: Language, target_language: Language, model: str = "gpt-5-nano")` — `Language` from `core`, optional model override (baseline evaluation starts from GPT-5 Mini, then downgrades to the cheapest model that still passes quality gates)
   - Method: `translate(words: list[str]) -> list[TranslationResult]` — `TranslationResult` from `core`
 
 `Language`, `TranslationResult`, and `APIError` are imported from `core`.

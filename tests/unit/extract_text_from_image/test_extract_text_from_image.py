@@ -6,8 +6,7 @@ from unittest.mock import AsyncMock
 import numpy as np
 import pytest
 
-from nl_processing.core.exceptions import TargetLanguageNotFoundError
-from nl_processing.core.models import ExtractedText, Language
+from nl_processing.core.models import Language
 from nl_processing.extract_text_from_image.benchmark import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
 

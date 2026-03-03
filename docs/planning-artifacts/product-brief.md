@@ -41,7 +41,7 @@ Developers building language processing pipelines face fragmented tooling: class
 ### Proposed Solution
 
 A set of Python modules that:
-- Use LLM capabilities (GPT-5 Mini baseline via LangChain) for higher quality than traditional tools
+- Use LLM capabilities (GPT-5 Mini as an evaluation baseline, downgraded to the cheapest model that still passes quality gates; currently targeting `gpt-5-nano`) via LangChain for higher quality than traditional tools
 - Enforce structured output via Pydantic tool calling — no conversational prefixes/suffixes
 - Expose minimal public interfaces with sensible defaults — zero-config primary usage
 - Use language-specific prompts written in the target language — extensible by adding prompts, not code
@@ -51,7 +51,7 @@ A set of Python modules that:
 ### Key Differentiators
 
 - **LLM-powered quality** — contextual understanding, language-aware processing, natural output
-- **Structured output discipline** — Pydantic/LangChain `with_structured_output()` guarantees clean programmatic results
+- **Structured output discipline** — Pydantic tool calling (LangChain tools) guarantees clean programmatic results
 - **Prompt-driven language extensibility** — new language = new prompt, not new toolchain
 - **Zero-config developer experience** — import, instantiate with defaults, call one method, get results
 - **Composable pipeline** — each module works independently or as part of a chain
@@ -90,7 +90,7 @@ N/A — all modules are designed exclusively for integration developers as consu
 
 - **Python 3.12+**
 - **LangChain + langchain-openai** — LLM orchestration layer. All API communication goes through LangChain, enabling model swap without code changes
-- **OpenAI API** (GPT-5 Mini baseline) — LLM provider
+- **OpenAI API** (GPT-5 Mini baseline; `gpt-5-nano` default target) — LLM provider
 - **Pydantic** — structured output enforcement via LangChain tool calling, and all public interface models
 - **Authentication:** `OPENAI_API_KEY` environment variable, managed via Doppler CLI
 - **Secrets Management:** Doppler CLI for all environment variables — no `.env` files

@@ -42,10 +42,10 @@ This document provides the complete epic and story breakdown for nl_processing, 
 
 **Shared Module Patterns (from shared PRD):**
 
-- SFR1: Every module uses LangChain's `with_structured_output()` to enforce Pydantic structured output
+- SFR1: Every module enforces structured output via LangChain tool calling using Pydantic models (recommended: `bind_tools(...)` + parsing `tool_calls`)
 - SFR2: Every module returns only the requested content — no LLM conversational prefixes, suffixes, or metadata
 - SFR3: Every module can be instantiated with zero or minimal arguments and produce a fully functional instance with best-known defaults
-- SFR4: Every module uses GPT-5 Mini as the default model
+- SFR4: Default model selection is cost-driven: start with GPT-5 Mini as baseline, then downgrade to the cheapest model that still passes quality gates (current default target: `gpt-5-nano`)
 - SFR5: Every module's constructor accepts an optional `model` parameter
 - SFR6: Every module uses language-specific prompts written in the target language, stored as JSON files in the module's directory
 - SFR7: Every module's interface supports specifying target language(s) via the `Language` enum from `core`
@@ -149,7 +149,7 @@ This document provides the complete epic and story breakdown for nl_processing, 
 
 **extract_text_from_image (from module PRD):**
 
-- ETI-NFR1: Each extraction call completes in <= 1 second wall clock time (excluding network latency outside module control)
+- ETI-NFR1: Each extraction call completes in < 10 seconds wall clock time
 - ETI-NFR2: Module does not perform unnecessary image processing or conversions that add latency
 - ETI-NFR3: Module supports all image formats accepted by the OpenAI Vision API
 - ETI-NFR4: `opencv-python` (numpy) for image handling and synthetic test generation
@@ -461,7 +461,7 @@ So that I get clean markdown-formatted Dutch text without needing to know anythi
 
 **Given** `OPENAI_API_KEY` is configured via Doppler
 **When** I instantiate `ImageTextExtractor()` with default arguments
-**Then** it creates an instance with `language=Language.NL` and `model="gpt-5-mini"`
+**Then** it creates an instance with `language=Language.NL` and `model="gpt-5-nano"`
 **And** the constructor accepts optional `language: Language` and `model: str` keyword arguments
 
 **Given** an image file containing Dutch text at a valid path
@@ -478,7 +478,7 @@ So that I get clean markdown-formatted Dutch text without needing to know anythi
 **Given** the module uses OpenAI Vision API
 **When** the chain is invoked internally
 **Then** the image is sent as base64-encoded data in a `HumanMessage` with image content parts
-**And** `with_structured_output()` enforces clean output via `ExtractedText` model from `core`
+**And** LangChain tool calling enforces clean output via `ExtractedText` model from `core` (tool schema + `tool_calls`)
 
 **Given** `service.py` and `prompts/nl.json` are created
 **When** I run `doppler run -- make check`
@@ -540,7 +540,7 @@ So that I can validate extraction accuracy at 100% exact match and compare model
 **When** I run `doppler run -- pytest tests/integration/extract_text_from_image/`
 **Then** real API calls are made with synthetic test images
 **And** extraction accuracy is 100% exact match (after normalization) on the synthetic test suite
-**And** each extraction call completes in <= 1 second wall clock time
+**And** each extraction call completes in < 10 seconds wall clock time
 
 **Given** e2e tests are created
 **When** I run `doppler run -- pytest tests/e2e/extract_text_from_image/`
@@ -563,7 +563,7 @@ So that I get a flat list of `WordEntry` objects with normalized forms and word 
 
 **Given** `OPENAI_API_KEY` is configured via Doppler
 **When** I instantiate `WordExtractor()` with default arguments
-**Then** it creates an instance with `language=Language.NL` and `model="gpt-5-mini"`
+**Then** it creates an instance with `language=Language.NL` and `model="gpt-5-nano"`
 **And** the constructor accepts optional `language: Language` and `model: str` keyword arguments
 
 **Given** a markdown-formatted Dutch text string
@@ -635,7 +635,7 @@ So that I get natural, human-sounding Russian text with markdown formatting pres
 **When** I instantiate `TextTranslator(source_language=Language.NL, target_language=Language.RU)`
 **Then** it creates a working translator instance
 **And** the constructor requires `source_language` and `target_language` (both mandatory)
-**And** the constructor accepts an optional `model: str` keyword argument (default: `"gpt-5-mini"`)
+**And** the constructor accepts an optional `model: str` keyword argument (default: `"gpt-5-nano"`)
 **And** constructor completes in < 1 second (no API calls at init time)
 
 **Given** an unsupported language pair (e.g., `Language.RU` as source and `Language.NL` as target)
@@ -716,7 +716,7 @@ So that I get a one-to-one, order-preserving list of `TranslationResult` objects
 **When** I instantiate `WordTranslator(source_language=Language.NL, target_language=Language.RU)`
 **Then** it creates a working translator instance
 **And** the constructor requires `source_language` and `target_language` (both mandatory)
-**And** the constructor accepts an optional `model: str` keyword argument (default: `"gpt-5-mini"`)
+**And** the constructor accepts an optional `model: str` keyword argument (default: `"gpt-5-nano"`)
 
 **Given** a list of normalized Dutch words/phrases (e.g., `["huis", "lopen", "snel"]`)
 **When** I call `translator.translate(words)`

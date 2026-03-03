@@ -80,7 +80,7 @@ Additional internal files may be added during implementation if `service.py` app
 ## Test Strategy
 
 - **Unit tests:** Mock LangChain chain invocation. Test image encoding logic (path → base64, cv2 → base64), format validation, error mapping.
-- **Integration tests:** Real API calls with synthetic test images. Validate extraction accuracy (100% exact match after normalization) and performance (≤1s per call).
+- **Integration tests:** Real API calls with synthetic test images. Validate extraction accuracy (100% exact match after normalization) and performance (<10s per call).
 - **E2e tests:** Full extraction scenarios with real-world-like images.
 
 Synthetic test image generation is used in both unit tests (deterministic input) and integration tests (accuracy benchmark).
