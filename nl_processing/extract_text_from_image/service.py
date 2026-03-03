@@ -33,12 +33,15 @@ class ImageTextExtractor:
         model: str = "gpt-4.1-mini",
         reasoning_effort: str | None = None,
         service_tier: str | None = None,
+        temperature: float | None = 0,
     ) -> None:
         self._language = language
         prompt_path = str(_PROMPTS_DIR / f"{language.value}.json")
         prompt = load_prompt(prompt_path)
 
-        llm = ChatOpenAI(model=model, service_tier=service_tier, reasoning_effort=reasoning_effort).bind_tools(
+        llm = ChatOpenAI(
+            model=model, service_tier=service_tier, reasoning_effort=reasoning_effort, temperature=temperature
+        ).bind_tools(
             [ExtractedText], tool_choice=ExtractedText.__name__
         )
 

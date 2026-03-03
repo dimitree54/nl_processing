@@ -16,9 +16,9 @@ from nl_processing.extract_text_from_image.service import ImageTextExtractor
 @pytest.mark.asyncio
 async def test_simple_dutch_text_extraction(tmp_path: pathlib.Path) -> None:
     """Single line of simple Dutch text — baseline accuracy test."""
-    ground_truth = "De kat zit op de mat"
+    ground_truth = "Het regent vandaag in Utrecht"
     image_path = str(tmp_path / "simple.png")
-    generate_test_image(ground_truth, image_path, font_scale=1.5, width=800, height=100)
+    generate_test_image(ground_truth, image_path, font_scale=1.5, width=900, height=100)
 
     extractor = ImageTextExtractor(language=Language.NL)
     extracted = await extractor.extract_from_path(image_path)
@@ -80,10 +80,10 @@ async def test_extraction_latency(tmp_path: pathlib.Path) -> None:
 @pytest.mark.asyncio
 async def test_mixed_dutch_russian_extracts_only_dutch(tmp_path: pathlib.Path) -> None:
     """Image with mixed Dutch + Russian text — only Dutch text should be extracted (FR3, FR4)."""
-    dutch_text = "Welkom bij ons"
+    dutch_text = "Goede reis"
     # Russian text renders as garbled chars in cv2, but the model should recognize
     # it as non-Dutch content and exclude it from extraction.
-    mixed_text = f"{dutch_text}\nДобро пожаловать"
+    mixed_text = f"{dutch_text}\nСчастливого пути"
     image_path = str(tmp_path / "mixed_lang.png")
     generate_test_image(mixed_text, image_path, font_scale=1.2, width=800, height=200)
 
@@ -100,7 +100,7 @@ async def test_english_only_raises_target_language_not_found(
     tmp_path: pathlib.Path,
 ) -> None:
     """Image with English-only text — should raise TargetLanguageNotFoundError (FR7)."""
-    english_text = "The quick brown fox jumps over the lazy dog"
+    english_text = "Remember to bring your umbrella tomorrow"
     image_path = str(tmp_path / "english_only.png")
     generate_test_image(english_text, image_path, font_scale=1.2, width=800, height=100)
 

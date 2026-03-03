@@ -4,9 +4,9 @@ Usage:
     uv run python nl_processing/extract_text_from_image/prompts/generate_nl_prompt.py
 
 This script:
-1. Generates 3 synthetic test images using benchmark.generate_test_image()
+1. Generates synthetic test images and encodes real photos
 2. Encodes them to base64
-3. Builds a ChatPromptTemplate with few-shot examples (HumanMessage + AIMessage + ToolMessage triplets)
+3. Builds a ChatPromptTemplate with 5 few-shot examples (HumanMessage + AIMessage + ToolMessage triplets)
 4. Serializes with dumpd() and saves to nl.json
 
 The script is the source of truth — nl.json is the generated artifact.
@@ -39,8 +39,57 @@ EXAMPLE_1_EXPECTED = "De kat zit op de mat"
 EXAMPLE_2_TEXT = "Welkom bij ons\nДобро пожаловать"
 EXAMPLE_2_EXPECTED = "Welkom bij ons"
 
-EXAMPLE_3_TEXT = "The quick brown fox jumps over the lazy dog"
-EXAMPLE_3_EXPECTED = ""
+EXAMPLE_3_IMAGE = Path(__file__).parent / "examples" / "dutch_handwritten_mixed.jpg"
+EXAMPLE_3_EXPECTED = (
+    "getal, het\n"
+    "getrouwd\n"
+    "niet\n"
+    "nieuw\n"
+    "mooi\n"
+    "hoog\n"
+    "baan\n"
+    "kunst\n"
+    "heel\n"
+    "leren kennen\n"
+    "eeuw\n"
+    "moe\n"
+    "vroeg\n"
+    "ver\n"
+    "daar\n"
+    "tijd\n"
+    "lezen"
+)
+
+EXAMPLE_4_IMAGE = Path(__file__).parent / "examples" / "dutch_vocabulary_wide.jpg"
+EXAMPLE_4_EXPECTED = (
+    "vandaan\n"
+    "veranderen\n"
+    "verbeteren\n"
+    "vlakbij\n"
+    "volgorde, de\n"
+    "voorbeeld, het\n"
+    "voornaam, de\n"
+    "vorm, de\n"
+    "vraag, de\n"
+    "vriendin, de\n"
+    "vrouw, de\n"
+    "wat\n"
+    "week, de\n"
+    "welkom\n"
+    "werken\n"
+    "wonen\n"
+    "woonplaats, de\n"
+    "woord, het\n"
+    "ze\n"
+    "zeggen\n"
+    "zij\n"
+    "zijn\n"
+    "zijn\n"
+    "zin, de"
+)
+
+EXAMPLE_5_TEXT = "The quick brown fox jumps over the lazy dog"
+EXAMPLE_5_EXPECTED = ""
 
 OUTPUT_PATH = Path(__file__).parent / "nl.json"
 
@@ -51,6 +100,12 @@ def _generate_image_b64(text: str, *, width: int = 800, height: int = 200) -> st
         img_path = str(Path(tmpdir) / "image.png")
         generate_test_image(text, img_path, width=width, height=height, font_scale=1.2)
         b64, media_type = encode_path_to_base64(img_path)
+    return f"data:{media_type};base64,{b64}"
+
+
+def _encode_existing_image_b64(path: Path) -> str:
+    """Encode an existing image file and return its base64 data URL."""
+    b64, media_type = encode_path_to_base64(str(path))
     return f"data:{media_type};base64,{b64}"
 
 
@@ -72,10 +127,12 @@ def _make_example_ai(expected_text: str, call_id: str) -> AIMessage:
 
 
 def build_prompt() -> ChatPromptTemplate:
-    """Build the Dutch extraction prompt with 3 few-shot examples."""
+    """Build the Dutch extraction prompt with 5 few-shot examples."""
     img1 = _generate_image_b64(EXAMPLE_1_TEXT)
     img2 = _generate_image_b64(EXAMPLE_2_TEXT)
-    img3 = _generate_image_b64(EXAMPLE_3_TEXT)
+    img3 = _encode_existing_image_b64(EXAMPLE_3_IMAGE)
+    img4 = _encode_existing_image_b64(EXAMPLE_4_IMAGE)
+    img5 = _generate_image_b64(EXAMPLE_5_TEXT)
 
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=SYSTEM_INSTRUCTION),
@@ -88,6 +145,12 @@ def build_prompt() -> ChatPromptTemplate:
         _make_example_human(img3),
         _make_example_ai(EXAMPLE_3_EXPECTED, "call_example_3"),
         ToolMessage(content=EXAMPLE_3_EXPECTED, tool_call_id="call_example_3"),
+        _make_example_human(img4),
+        _make_example_ai(EXAMPLE_4_EXPECTED, "call_example_4"),
+        ToolMessage(content=EXAMPLE_4_EXPECTED, tool_call_id="call_example_4"),
+        _make_example_human(img5),
+        _make_example_ai(EXAMPLE_5_EXPECTED, "call_example_5"),
+        ToolMessage(content=EXAMPLE_5_EXPECTED, tool_call_id="call_example_5"),
         MessagesPlaceholder(variable_name="images"),
     ])
 
