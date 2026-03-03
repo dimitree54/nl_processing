@@ -12,10 +12,8 @@ The script is the source of truth — nl_ru.json is the generated artifact.
 Re-run this script whenever examples or system instruction change.
 """
 
-import json
 from pathlib import Path
 
-from langchain_core.load import dumpd
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
@@ -85,11 +83,6 @@ def build_prompt() -> ChatPromptTemplate:
 
 
 if __name__ == "__main__":
-    prompt = build_prompt()
-    data = dumpd(prompt)
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-    print(f"Prompt saved to {OUTPUT_PATH}")  # noqa: T201
-    print(f"Messages: {len(prompt.messages)}")  # noqa: T201
-    print(f"Input variables: {prompt.input_variables}")  # noqa: T201
+    from nl_processing.core.scripts.prompt_author import save_prompt
+
+    save_prompt(build_prompt(), str(OUTPUT_PATH))

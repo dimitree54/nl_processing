@@ -32,12 +32,28 @@ def serialize_prompt_to_json(prompt: ChatPromptTemplate, output_path: str) -> No
     data = dumpd(prompt)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+        f.write("\n")
+
+
+def save_prompt(prompt: ChatPromptTemplate, output_path: str) -> None:
+    """Serialize a prompt to JSON and print a summary to stdout.
+
+    Intended for use in ``if __name__ == "__main__"`` blocks of prompt
+    generation scripts so each script stays DRY.
+
+    Args:
+        prompt: The ChatPromptTemplate to serialize.
+        output_path: Path where to save the JSON file.
+    """
+    serialize_prompt_to_json(prompt, output_path)
+    print(f"Prompt saved to {output_path}")  # noqa: T201
+    print(f"Messages: {len(prompt.messages)}")  # noqa: T201
+    print(f"Input variables: {prompt.input_variables}")  # noqa: T201
 
 
 OUTPUT_PATH = "output_prompt.json"
 
 
 if __name__ == "__main__":
-    prompt = build_prompt()
-    serialize_prompt_to_json(prompt, OUTPUT_PATH)
-    print(f"Prompt saved to {OUTPUT_PATH}")  # noqa: T201 — dev script, print is intentional
+    _prompt = build_prompt()
+    save_prompt(_prompt, OUTPUT_PATH)
