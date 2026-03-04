@@ -19,9 +19,9 @@ parentBrief: docs/planning-artifacts/product-brief.md
 
 ## Executive Summary
 
-`database` is a highly independent persistence module for the `nl_processing` project. It provides a class-based async interface for storing, linking, and retrieving words across multiple languages using a shared relational database. The module manages per-language word tables, cross-language translation link tables, and per-user word lists — all behind a minimal public API where the developer instantiates a client with a `user_id` and immediately starts working.
+`database` is a highly independent persistence module for the `nl_processing` project. It provides a class-based async interface for storing, linking, and retrieving words across multiple languages using a shared relational database. The module operates on the unified `Word` model from `core.models` — the same Pydantic model used by `extract_words_from_text` (output) and `translate_word` (input/output), enabling zero-conversion data flow across the entire pipeline. It manages per-language word tables, cross-language translation link tables, and per-user word lists — all behind a minimal public API where the developer instantiates a client with a `user_id` and immediately starts working.
 
-The module has a direct dependency on `translate_word` — when new words are added, translation is triggered asynchronously. The user receives immediate feedback on which words were new vs. already known, without waiting for translations to complete.
+The module has a direct dependency on `translate_word` — when new words are added, translation is triggered asynchronously. The user receives immediate feedback on which `Word` objects were new vs. already known, without waiting for translations to complete.
 
 The module follows the project's zero-config philosophy: environment variables for database connection are the only required setup (with a clear error and setup instructions if missing), and all other parameters use sensible defaults. A convenience function creates all required database tables in a single call.
 
@@ -62,8 +62,8 @@ The `nl_processing` pipeline modules (`extract_words_from_text`, `translate_word
 
 An async Python module that:
 - Provides a `DatabaseService` class instantiated with `user_id` (string) and minimal optional configuration
-- Manages per-language word tables (unified word model: `normalized_form`, `language`, `word_type`), per-language-pair translation link tables, and per-user word lists
-- Exposes two primary methods: `add_words(words)` — adds words, triggers async translation via `translate_word`, returns immediate feedback; `get_words(...)` — retrieves user's word-translation pairs with optional filtering (by word_type, limit, random sampling)
+- Manages per-language word tables storing `Word` objects (from `core.models`: `normalized_form`, `word_type` as `PartOfSpeech`, `language` as `Language`), per-language-pair translation link tables, and per-user word lists
+- Exposes two primary methods: `add_words(list[Word])` — adds words, triggers async translation via `translate_word`, returns `AddWordsResult` with new/existing `Word` lists; `get_words(...)` — retrieves `list[WordPair]` (source `Word` + translated `Word`) with optional filtering (by `PartOfSpeech`, limit, random sampling)
 - Provides a one-time `create_tables()` convenience function for initial setup
 - Uses abstract backend interface with Neon PostgreSQL as the first implementation
 - Includes a local caching layer for performance optimization
@@ -99,8 +99,8 @@ This module has no MVP/phased delivery — it is a single, indivisible unit.
 ### Core Features
 
 1. **`DatabaseService` class** with `user_id` constructor, minimal optional parameters, sensible defaults
-2. **Per-language word tables** — separate table per language (e.g., `words_nl`, `words_ru`), unified word model (`normalized_form`, `word_type`)
-3. **Translation link tables** — separate table per language pair (e.g., `translations_nl_ru`), references both language tables
+2. **Per-language word tables** — separate table per language (e.g., `words_nl`, `words_ru`), storing `Word` model fields (`normalized_form`, `word_type` as `PartOfSpeech.value`). `language` is not stored — determined by the table.
+3. **Translation link tables** — separate table per language pair (e.g., `translations_nl_ru`), links `Word` entries across language tables
 4. **Per-user word lists** — user's known words referencing the shared word tables
 5. **`add_words(words)`** — adds words to shared table (deduplication), triggers async translation via `translate_word`, records user-word associations, returns feedback (new vs. existing)
 6. **`get_words(...)`** — retrieves user's word-translation pairs with optional filtering: `word_type`, `limit`, random sampling

@@ -23,6 +23,54 @@ parentArchitecture: docs/planning-artifacts/architecture.md
 
 ---
 
+## Core Data Model: `Word` from `core.models`
+
+The `database` module persists and retrieves instances of the unified `Word` model defined in `nl_processing.core.models`:
+
+```python
+class Word(BaseModel):
+    normalized_form: str
+    word_type: PartOfSpeech    # enum: NOUN, VERB, ADJECTIVE, ADVERB, PREPOSITION, ...
+    language: Language          # enum: NL, RU (extensible)
+```
+
+Supporting types (also from `core.models`):
+
+```python
+class Language(Enum):
+    NL = "nl"
+    RU = "ru"
+
+class PartOfSpeech(Enum):
+    NOUN = "noun"
+    VERB = "verb"
+    ADJECTIVE = "adjective"
+    ADVERB = "adverb"
+    PREPOSITION = "preposition"
+    CONJUNCTION = "conjunction"
+    PRONOUN = "pronoun"
+    ARTICLE = "article"
+    NUMERAL = "numeral"
+    PROPER_NOUN_PERSON = "proper_noun_person"
+    PROPER_NOUN_COUNTRY = "proper_noun_country"
+```
+
+### Model-to-Database Mapping
+
+| `Word` field | DB column | Storage notes |
+|---|---|---|
+| `normalized_form` | `normalized_form` (VARCHAR, UNIQUE) | Direct mapping |
+| `word_type` | `word_type` (VARCHAR) | Stored as `PartOfSpeech.value` string (e.g., `"noun"`, `"verb"`) |
+| `language` | **Not stored as column** — determined by table | `words_nl` contains NL words, `words_ru` contains RU words. Redundant in DB. |
+
+**Key design decisions:**
+
+- **`language` is not a DB column** in per-language word tables. It would be redundant — the table itself defines the language. When reading from DB, `DatabaseService` reconstructs the full `Word` object by setting `language` programmatically based on which table was queried.
+- **`word_type` is stored as the string value** of the `PartOfSpeech` enum (e.g., `"noun"`), not the enum name (e.g., `"NOUN"`). This keeps the DB human-readable and decoupled from Python enum naming.
+- **`PartOfSpeech` is a closed enum** — adding a new part of speech requires updating the enum in `core.models`. This is an intentional trade-off: type safety and IDE autocompletion over runtime flexibility. The enum is designed to be extended as needed.
+
+---
+
 ## Module-Specific Architectural Decisions
 
 ### Decision: Symmetric Per-Language Tables
@@ -33,11 +81,11 @@ Each language has its own word table (`words_nl`, `words_ru`, etc.) with identic
 
 **Table schema (per language):**
 
-| Column | Type | Constraints |
-|---|---|---|
-| `id` | SERIAL | PRIMARY KEY |
-| `normalized_form` | VARCHAR | NOT NULL, UNIQUE |
-| `word_type` | VARCHAR | NOT NULL |
+| Column | Type | Constraints | Maps to |
+|---|---|---|---|
+| `id` | SERIAL | PRIMARY KEY | (internal, not in `Word` model) |
+| `normalized_form` | VARCHAR | NOT NULL, UNIQUE | `Word.normalized_form` |
+| `word_type` | VARCHAR | NOT NULL | `Word.word_type.value` |
 
 ### Decision: Per-Language-Pair Translation Link Tables
 
@@ -82,9 +130,13 @@ Database operations are defined behind an abstract base class (`AbstractBackend`
 ```python
 class AbstractBackend(ABC):
     @abstractmethod
-    async def add_word(self, table: str, normalized_form: str, word_type: str) -> int | None: ...
+    async def add_word(self, table: str, normalized_form: str, word_type: str) -> int | None:
+        """Insert word if not exists, return row id. Return None if already exists."""
+        ...
     @abstractmethod
-    async def get_word(self, table: str, normalized_form: str) -> dict | None: ...
+    async def get_word(self, table: str, normalized_form: str) -> dict | None:
+        """Return row dict {id, normalized_form, word_type} or None."""
+        ...
     @abstractmethod
     async def add_translation_link(self, table: str, source_id: int, target_id: int) -> None: ...
     @abstractmethod
@@ -94,6 +146,8 @@ class AbstractBackend(ABC):
     @abstractmethod
     async def create_tables(self, languages: list[str], pairs: list[tuple[str, str]]) -> None: ...
 ```
+
+**Note:** The backend interface operates on primitives (`str`, `int`, `dict`), not `Word` objects. The `DatabaseService` layer handles conversion between `Word` model instances and backend primitives. This keeps the backend abstraction database-focused and model-agnostic.
 
 ### Decision: Neon PostgreSQL as First Backend
 
@@ -107,7 +161,7 @@ The `database` module directly imports and calls `translate_word.WordTranslator`
 
 **Rationale:** (1) Simpler than callback/hook patterns — no injection needed. (2) Both modules are internal to `nl_processing` — tight coupling is acceptable. (3) Translation is an integral part of the word-addition flow, not an optional extension.
 
-**Async pattern:** Translation runs as a fire-and-forget `asyncio.Task`. The `add_words()` method creates the task and returns immediately. When translation completes, a callback stores the result and creates the translation link. Failures are logged, not raised.
+**Async pattern:** Translation runs as a fire-and-forget `asyncio.Task`. The `add_words()` method receives `list[Word]` (with `language` set to the source language), creates the task, and returns immediately. When translation completes, `translate_word` returns `list[Word]` (with `language` set to the target language). The callback stores the translated `Word` objects in the target language table and creates translation links. Failures are logged, not raised.
 
 ### Decision: Fire-and-Forget Async Translation
 
@@ -148,11 +202,16 @@ All public methods are `async def`. The module is designed for use in async Pyth
 
 **Rationale:** (1) Database I/O is inherently async — blocking would waste resources. (2) `asyncpg` is natively async. (3) Fire-and-forget translation requires an event loop. (4) Consistent with modern Python async patterns.
 
-### Decision: Unified Word Model
+### Decision: Unified `Word` Model from `core`
 
-All language tables share the same schema: `normalized_form` (VARCHAR, UNIQUE), `word_type` (VARCHAR). The word model is language-agnostic at the database level — language-specific semantics (what "normalized" means for each language) are defined upstream by the extraction modules.
+The `database` module uses the `Word` model from `nl_processing.core.models` as the canonical data type for all word operations. Both `add_words()` and `get_words()` work with `Word` instances. This is the same model used by `extract_words_from_text` (output) and `translate_word` (input/output), ensuring zero-conversion data flow across the pipeline.
 
-**Rationale:** (1) Simplifies the abstract backend interface — all language tables have identical operations. (2) New languages don't require schema changes. (3) `word_type` values may overlap across languages (noun, verb) or be language-specific — the database doesn't enforce a taxonomy.
+**Rationale:** (1) Single model for the entire pipeline — no mapping or conversion between modules. (2) All language tables share identical schema derived from `Word` fields. (3) New languages don't require schema changes — only a new table with the same schema. (4) `word_type` uses `PartOfSpeech` enum values, providing type safety while keeping DB storage as human-readable strings.
+
+**Reconstruction on read:** When reading from a per-language table, `DatabaseService` constructs `Word` objects by:
+1. Reading `normalized_form` and `word_type` from the DB row
+2. Converting `word_type` string back to `PartOfSpeech` enum
+3. Setting `language` programmatically based on the table being queried (e.g., `words_nl` → `Language.NL`)
 
 ---
 
@@ -166,7 +225,7 @@ nl_processing/database/
 │   ├── __init__.py
 │   ├── abstract.py              # AbstractBackend (ABC)
 │   └── neon.py                  # NeonBackend (asyncpg implementation)
-├── models.py                    # AddWordsResult, WordTranslationPair (module-internal models)
+├── models.py                    # AddWordsResult, WordPair (module-internal models, NOT Word — that's in core)
 ├── exceptions.py                # ConfigurationError, DatabaseError
 ├── logging.py                   # Structured logging setup
 ├── testing.py                   # Test utilities: drop_all_tables, reset_database, count helpers (NOT production code)

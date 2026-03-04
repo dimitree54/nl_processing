@@ -71,15 +71,15 @@ All features are required — no phased MVP. The module either works completely 
 
 **Opening Scene:** Alex finds `database` in the nl_processing project. Reads the docstring — set database environment variables, instantiate `DatabaseService` with user_id, call `add_words()`. Four lines of code.
 
-**Rising Action:** Alex sets `DATABASE_URL` in his environment (Neon connection string). Creates tables with `create_tables()`. Instantiates `DatabaseService("alex")`. Calls `add_words(dutch_words)` with words from the extraction pipeline. Gets immediate feedback: 8 words were new (added to shared corpus, translation triggered), 2 already existed.
+**Rising Action:** Alex sets `DATABASE_URL` in his environment (Neon connection string). Creates tables with `create_tables()`. Instantiates `DatabaseService("alex")`. Calls `add_words(dutch_words)` with `list[Word]` objects from the extraction pipeline — the same `Word` model that `extract_words_from_text` outputs. Gets immediate feedback as `AddWordsResult`: 8 words in `new_words`, 2 in `existing_words`.
 
-**Climax:** Alex calls `get_words()` a few seconds later — gets back pairs of Dutch words with Russian translations. Some of the just-added words already have translations. Alex calls again later — all translations are complete.
+**Climax:** Alex calls `get_words()` a few seconds later — gets back `list[WordPair]`, each containing a source `Word` (Dutch) and target `Word` (Russian). Some of the just-added words already have translations. Alex calls again later — all translations are complete.
 
 **Resolution:** The module becomes a transparent persistence layer in Alex's pipeline. Words accumulate in the shared corpus. Each run only translates genuinely new words. Alex's vocabulary grows over time.
 
 ### Journey 2: Filtered Retrieval
 
-**Alex** wants to study only nouns. He calls `get_words(word_type="noun", limit=10, random=True)` — gets 10 random Dutch nouns with their Russian translations from his personal word list. Next day, he wants all verbs — `get_words(word_type="verb")`.
+**Alex** wants to study only nouns. He calls `get_words(word_type=PartOfSpeech.NOUN, limit=10, random=True)` — gets 10 random `WordPair` objects, each a Dutch noun `Word` paired with its Russian translation `Word`. Next day, he wants all verbs — `get_words(word_type=PartOfSpeech.VERB)`.
 
 ### Journey 3: Error Handling
 
@@ -108,24 +108,38 @@ Later, the Neon service is temporarily unavailable. `add_words()` raises `Databa
 
 ```python
 from nl_processing.database.service import DatabaseService
+from nl_processing.core.models import Word, Language, PartOfSpeech
 
 # One-time setup
 await DatabaseService.create_tables()
 
 # Per-user usage
 db = DatabaseService(user_id="alex")
-result = await db.add_words(words, source_language=Language.NL, target_language=Language.RU)
-# result.new_words: list[str] — newly added words
-# result.existing_words: list[str] — words already in the corpus
 
+# add_words accepts list[Word] from core.models
+words = [
+    Word(normalized_form="de fiets", word_type=PartOfSpeech.NOUN, language=Language.NL),
+    Word(normalized_form="lopen", word_type=PartOfSpeech.VERB, language=Language.NL),
+]
+result = await db.add_words(words)
+# result.new_words: list[Word] — newly added words
+# result.existing_words: list[Word] — words already in the corpus
+
+# get_words returns list[WordPair] — source Word + translated Word
 pairs = await db.get_words(
-    language=Language.NL,
-    word_type="noun",      # optional filter
-    limit=10,              # optional limit
-    random=True,           # optional random sampling
+    word_type=PartOfSpeech.NOUN,  # optional filter
+    limit=10,                      # optional limit
+    random=True,                   # optional random sampling
 )
-# pairs: list of word-translation pair objects
+# pairs[0].source  → Word(normalized_form="de fiets", word_type=NOUN, language=NL)
+# pairs[0].target  → Word(normalized_form="велосипед", word_type=NOUN, language=RU)
 ```
+
+**Core model used:** `Word` from `nl_processing.core.models` — unified model with `normalized_form: str`, `word_type: PartOfSpeech`, `language: Language`. Same model used by `extract_words_from_text` (output) and `translate_word` (input/output). The `database` module stores and returns `Word` instances directly — no conversion needed between modules.
+
+**Module-internal models** (in `database/models.py`):
+- `AddWordsResult` — feedback from `add_words()`: `new_words: list[Word]`, `existing_words: list[Word]`
+- `WordPair` — a source `Word` paired with its translated `Word`: `source: Word`, `target: Word`
 
 **Constructor:**
 - `user_id: str` — required, identifies the user
@@ -138,6 +152,9 @@ pairs = await db.get_words(
 
 ### Implementation Considerations
 
+- All public methods accept and return `Word` instances from `core.models` — the `Word` model is the canonical data type for the entire pipeline
+- `word_type` stored in DB as `PartOfSpeech.value` string (e.g., `"noun"`), reconstructed to enum on read
+- `language` not stored in per-language word tables (redundant) — set programmatically on read based on table
 - Direct dependency on `translate_word` for async translation of new words
 - `asyncpg` for async PostgreSQL connectivity to Neon
 - Abstract backend interface for future backend swaps
@@ -150,26 +167,26 @@ pairs = await db.get_words(
 ### Database Setup
 
 - FR1: Module provides `create_tables()` async class method that creates all required tables (empty) in a single call
-- FR2: Module creates per-language word tables (e.g., `words_nl`, `words_ru`) with unified schema: `id`, `normalized_form`, `word_type`
+- FR2: Module creates per-language word tables (e.g., `words_nl`, `words_ru`) with columns: `id` (SERIAL PK), `normalized_form` (VARCHAR UNIQUE), `word_type` (VARCHAR) — mapped from `Word.normalized_form` and `Word.word_type.value`
 - FR3: Module creates per-language-pair translation link tables (e.g., `translations_nl_ru`) referencing both language tables
 - FR4: Module creates per-user word list tables referencing the shared language tables
 
 ### Word Management
 
-- FR5: `add_words(words)` accepts a list of words and adds new words to the appropriate language table
-- FR6: Module checks for word existence before adding — duplicates are silently skipped
-- FR7: `add_words()` returns feedback indicating which words were new (added) and which already existed
+- FR5: `add_words(words: list[Word])` accepts a list of `Word` objects (from `core.models`) and adds new words to the appropriate language table (determined by `Word.language`)
+- FR6: Module checks for word existence by `normalized_form` before adding — duplicates are silently skipped
+- FR7: `add_words()` returns `AddWordsResult` with `new_words: list[Word]` and `existing_words: list[Word]`
 - FR8: `add_words()` records user-word associations for all provided words (new and existing)
-- FR9: `add_words()` triggers asynchronous translation of new words via `translate_word` — does not wait for completion
-- FR10: When async translation completes, the module creates translation link records associating the source word with its translation
+- FR9: `add_words()` triggers asynchronous translation of new words via `translate_word` — does not wait for completion. Translated words are returned as `list[Word]` with `language` set to the target language.
+- FR10: When async translation completes, the module stores translated `Word` objects in the target language table and creates translation link records
 
 ### Word Retrieval
 
-- FR11: `get_words()` returns the user's words as word-translation pairs
+- FR11: `get_words()` returns `list[WordPair]` — each containing a source `Word` and its translated `Word` (both from `core.models`)
 - FR12: Words with pending translations (not yet completed) are excluded from results, with a warning logged
-- FR13: `get_words()` accepts optional `word_type` parameter to filter by part of speech
-- FR14: `get_words()` accepts optional `limit` parameter to restrict result count
-- FR15: `get_words()` accepts optional `random` parameter for random sampling when combined with `limit`
+- FR13: `get_words()` accepts optional `word_type: PartOfSpeech` parameter to filter by part of speech
+- FR14: `get_words()` accepts optional `limit: int` parameter to restrict result count
+- FR15: `get_words()` accepts optional `random: bool` parameter for random sampling when combined with `limit`
 
 ### Configuration
 
