@@ -30,6 +30,7 @@ _This document covers shared architectural decisions for the `nl_processing` pro
 > - [`extract_words_from_text`](../../nl_processing/extract_words_from_text/docs/architecture_extract_words_from_text.md)
 > - [`translate_text`](../../nl_processing/translate_text/docs/architecture_translate_text.md)
 > - [`translate_word`](../../nl_processing/translate_word/docs/architecture_translate_word.md)
+> - [`database`](../../nl_processing/database/docs/architecture_database.md)
 
 ---
 
@@ -52,13 +53,13 @@ Each module adds 9-14 module-specific FRs covering its domain logic (see module 
 
 - 3 core NFRs (CNFR1-3): core is internal-only, has own tests
 - 9 shared NFRs (SNFR1-9): OPENAI_API_KEY only, internal modules (no PyPI), type hints, 100% test pass rate, project-level dependency management
-- Module-specific NFRs: performance targets vary (1s for image extraction, 5s for text processing, <1s for word translation batch)
+- Module-specific NFRs: performance targets vary (1s for image extraction, 5s for text processing, <1s for word translation batch, ≤200ms for database operations)
 
 **Scale & Complexity:**
 
 - Primary domain: Python library (internal modules, no web/mobile/API surface)
 - Complexity level: Medium — quality validation and benchmarking required, no regulatory/compliance concerns
-- Architectural components: 5 packages (`core` + 4 modules), each with clear boundaries
+- Architectural components: 6 packages (`core` + 5 modules), each with clear boundaries
 
 ### Technical Constraints & Dependencies
 
@@ -67,6 +68,7 @@ Each module adds 9-14 module-specific FRs covering its domain logic (see module 
 - **Pydantic >=2.0** — structured output enforcement and public interface models
 - **OPENAI_API_KEY** — only external configuration (via `os.environ[]`, never `os.getenv`), managed via Doppler
 - **opencv-python** — module-specific dependency for `extract_text_from_image` only
+- **asyncpg** — module-specific dependency for `database` only (async PostgreSQL driver for Neon)
 - **Project state:** Greenfield (scaffold/stubs only — no implementation exists yet)
 - **Build tooling:** `pyproject.toml` with `uv` package manager — already initialized
 
@@ -273,6 +275,7 @@ from nl_processing.extract_text_from_image.service import ImageTextExtractor
 from nl_processing.extract_words_from_text.service import WordExtractor
 from nl_processing.translate_text.service import TextTranslator
 from nl_processing.translate_word.service import WordTranslator
+from nl_processing.database.service import DatabaseService
 ```
 
 The public class follows this pattern:
@@ -425,7 +428,21 @@ nl_processing/                          # project root
 │   │       ├── prd_translate_word.md
 │   │       └── architecture_translate_word.md
 │   │
-│   └── database/                       # existing package — out of scope for this architecture
+│   └── database/                       # module 5: async persistence layer
+│       ├── __init__.py                 # public exports: DatabaseService, CachedDatabaseService
+│       ├── service.py                  # DatabaseService, CachedDatabaseService (public classes)
+│       ├── backend/
+│       │   ├── __init__.py
+│       │   ├── abstract.py             # AbstractBackend (ABC)
+│       │   └── neon.py                 # NeonBackend (asyncpg implementation)
+│       ├── models.py                   # AddWordsResult, WordTranslationPair (module-internal models)
+│       ├── exceptions.py               # ConfigurationError, DatabaseError
+│       ├── logging.py                  # Structured logging setup
+│       ├── testing.py                  # Test utilities: drop_all_tables, reset_database (NOT production)
+│       └── docs/
+│           ├── product-brief-database-2026-03-02.md
+│           ├── prd_database.md
+│           └── architecture_database.md
 │
 └── tests/
     ├── __init__.py
@@ -435,21 +452,24 @@ nl_processing/                          # project root
     │   ├── extract_text_from_image/    # module 1 unit tests
     │   ├── extract_words_from_text/    # module 2 unit tests
     │   ├── translate_text/             # module 3 unit tests
-    │   └── translate_word/             # module 4 unit tests
+    │   ├── translate_word/             # module 4 unit tests
+    │   └── database/                   # module 5 unit tests
     ├── integration/
     │   ├── __init__.py
     │   ├── core/
     │   ├── extract_text_from_image/
     │   ├── extract_words_from_text/
     │   ├── translate_text/
-    │   └── translate_word/
+    │   ├── translate_word/
+    │   └── database/
     └── e2e/
         ├── __init__.py
         ├── conftest.py
         ├── extract_text_from_image/
         ├── extract_words_from_text/
         ├── translate_text/
-        └── translate_word/
+        ├── translate_word/
+        └── database/
 ```
 
 ### Documentation Organization Principle
@@ -468,7 +488,7 @@ nl_processing/                          # project root
 - `core` knows nothing about modules — it provides models, exceptions, and utilities
 - Modules import from `core` (models, exceptions, optionally prompt loader)
 - Modules import from `langchain`/`langchain-openai` directly for chain building
-- Modules never import from each other — they are independently usable
+- Modules never import from each other — they are independently usable. **Exception:** `database` has a direct dependency on `translate_word` for automatic translation of newly added words (intentional — `database` is a persistence/orchestration layer)
 
 **Module boundary: module ↔ caller**
 - Each module has exactly one public class in `service.py` (imported directly, no `__init__.py` re-export)
@@ -490,9 +510,13 @@ Image → [extract_text_from_image] → markdown text
          markdown text → [extract_words_from_text] → list[WordEntry]
          markdown text → [translate_text] → translated text
          list[str] → [translate_word] → list[TranslationResult]
+
+         list[words] + user_id → [database] → word-translation pairs, feedback
+                                     ↓ (async, fire-and-forget)
+                                 [translate_word] → translations stored back
 ```
 
-Each module is independently callable. The pipeline is composable — the caller connects modules, not the modules themselves. There is no pipeline orchestrator in the architecture.
+Each module is independently callable. The pipeline is composable — the caller connects modules, not the modules themselves. The `database` module is the only module that directly depends on another module (`translate_word`) — it acts as a persistence and orchestration layer that triggers translation of new words asynchronously.
 
 ### Prompt File Naming Convention
 
@@ -516,6 +540,18 @@ Each module is independently callable. The pipeline is composable — the caller
 - **Project name:** `nl_processing`
 - **Environments:** `dev`, `stg`, `prd`
 - **Config file:** `.doppler.yaml` in project root (tracked in git)
+
+### Environment Separation for Database
+
+Each Doppler environment has its own `DATABASE_URL` pointing to a separate Neon database:
+
+| Doppler Env | Database | Purpose |
+|---|---|---|
+| `dev` | `nl_processing_dev` | Development + all automated tests. Ephemeral — freely wiped by tests. |
+| `stg` | `nl_processing_stg` | Pre-production validation. Stable — not wiped by tests. |
+| `prd` | `nl_processing_prd` | Production data. Stable — never touched by tests. |
+
+All `make check` and CI runs use the `dev` environment. See `database` module architecture for full testing strategy.
 
 ### Running Commands
 
@@ -547,6 +583,7 @@ All env vars are documented in `docs/ENV_VARS.md`.
 | Variable | Type | Description | Set by |
 |---|---|---|---|
 | `OPENAI_API_KEY` | Secret | OpenAI API authentication key | Developer (via Doppler) |
+| `DATABASE_URL` | Secret | Neon PostgreSQL connection string (used by `database` module) | Developer (via Doppler) |
 
 ### Adding New Variables
 

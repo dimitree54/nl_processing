@@ -19,6 +19,7 @@ The modules form a sequential processing pipeline:
 2. **`extract_words_from_text`** — Extracts and normalizes words from markdown text. Text in, structured word objects out.
 3. **`translate_text`** — Translates text between languages with markdown preservation. Text in, translated text out.
 4. **`translate_word`** — Translates normalized words and short phrases. Word list in, translation result objects out.
+5. **`database`** — Async persistence layer for words, translations, and per-user word lists. Stores words per-language, links translations per-language-pair, tracks user vocabulary. Direct integration with `translate_word` for automatic translation of new words.
 
 Each module is independently usable — the pipeline is composable, not monolithic.
 
@@ -146,6 +147,7 @@ The `core` package provides shared infrastructure. Each module uses LangChain di
 | `extract_words_from_text` | Markdown text | Word objects (normalized form + type) | Dutch | Flat word-type taxonomy |
 | `translate_text` | Text | Translated text | Dutch → Russian | Markdown-preserving translation |
 | `translate_word` | Word list | Translation result objects | Dutch → Russian | One-to-one batch translation |
+| `database` | Words, user_id | Word-translation pairs, feedback | Dutch / Russian | Async persistence with auto-translation |
 
 For module-specific details (API surface, error handling, success criteria, functional requirements), see each module's dedicated product brief and PRD.
 
@@ -175,3 +177,4 @@ All modules follow the same quality gate pattern:
 - Pipeline-level integration and orchestration
 - Architecture designed for language extensibility with minimal effort per new language
 - Rich result objects with additional fields (usage examples, synonyms) — structure already designed for extensibility
+- Growing shared multilingual word corpus via `database` module — translations paid once globally, vocabulary accumulates across users

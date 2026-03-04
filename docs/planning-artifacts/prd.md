@@ -53,7 +53,7 @@ N/A — internal utility modules. Success is binary: all tests pass, module work
 
 ## Core Package — `nl_processing/core/`
 
-The `core` package is the shared infrastructure layer. It is not a user-facing module — it is consumed only by the 4 pipeline modules internally.
+The `core` package is the shared infrastructure layer. It is not a user-facing module — it is consumed only by the pipeline modules internally.
 
 ### Core Functional Requirements
 
@@ -169,11 +169,15 @@ Each module defines its own semantics for handling input that contains no conten
 
 ### Performance targets
 
-Performance targets vary by module based on processing characteristics (vision API calls vs text processing vs batch translation). See individual module PRDs for specific targets.
+Performance targets vary by module based on processing characteristics (vision API calls vs text processing vs batch translation vs database I/O). See individual module PRDs for specific targets.
 
 ### Test approach
 
-Each module uses the test methodology most appropriate to its output type (synthetic images, set comparison, structural comparison, exact match). See individual module PRDs for specifics.
+Each module uses the test methodology most appropriate to its output type (synthetic images, set comparison, structural comparison, exact match, database assertions). See individual module PRDs for specifics.
+
+### Module dependencies
+
+Most modules are independently usable with no cross-module dependencies. The `database` module is an exception — it has a direct dependency on `translate_word` for automatic translation of newly added words. This is an intentional design decision: `database` is a persistence and orchestration layer, not a pure processing module.
 
 ---
 
@@ -185,3 +189,4 @@ Each module uses the test methodology most appropriate to its output type (synth
 | `extract_words_from_text` | `nl_processing/extract_words_from_text/docs/prd_extract_words_from_text.md` |
 | `translate_text` | `nl_processing/translate_text/docs/prd_translate_text.md` |
 | `translate_word` | `nl_processing/translate_word/docs/prd_translate_word.md` |
+| `database` | `nl_processing/database/docs/prd_database.md` |
