@@ -9,6 +9,12 @@ from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.logging import get_logger
 from nl_processing.database.models import AddWordsResult, ScoredWordPair
 from nl_processing.database.service import DatabaseService
+from nl_processing.database.testing import (
+    count_translation_links,
+    count_user_words,
+    count_words,
+    reset_database,
+)
 
 # Benchmark utilities used by integration tests at runtime (not detected by static analysis)
 from nl_processing.extract_text_from_image.benchmark import run_benchmark
@@ -94,4 +100,8 @@ __all__ = [
     "WordExtractor",
     "TextTranslator",
     "WordTranslator",
+    "count_translation_links",
+    "count_user_words",
+    "count_words",
+    "reset_database",
 ]
