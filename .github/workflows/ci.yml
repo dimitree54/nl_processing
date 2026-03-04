@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Ruff format check
+        run: uv run ruff format --check
+
+      - name: Ruff lint
+        run: uv run ruff check
+
+      - name: Pylint – module size
+        run: uvx pylint nl_processing tests --disable=all --enable=C0302 --max-module-lines=200
+
+      - name: Pylint – banned builtins
+        run: uvx pylint nl_processing tests --load-plugins=pylint.extensions.bad_builtin --disable=all --enable=W0141 --bad-functions=hasattr,getattr,setattr
+
+      - name: Vulture – dead code
+        run: uv run vulture nl_processing tests vulture_whitelist.py
+
+      - name: jscpd – copy-paste detection
+        run: npx jscpd --exitCode 1
+
+  test:
+    name: Tests (unit + integration + e2e)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Unit tests
+        run: uv run pytest -n auto tests/unit
+
+      - name: Integration tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: uv run pytest -n auto tests/integration
+
+      - name: E2E tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: uv run pytest -n auto tests/e2e
