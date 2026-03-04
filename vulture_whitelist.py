@@ -2,6 +2,7 @@
 
 # Functions that are owned by future sprints but flagged as unused
 from nl_processing.database.backend.abstract import AbstractBackend
+from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import ConfigurationError, DatabaseError
 from nl_processing.database.logging import get_logger
 from nl_processing.database.models import AddWordsResult, ScoredWordPair
@@ -49,6 +50,16 @@ ScoredWordPair.scores  # type: ignore[misc]
 ScoredWordPair.pair.source  # type: ignore[union-attr]
 ScoredWordPair.pair.target  # type: ignore[union-attr]
 
+# NeonBackend — concrete implementation, used by T5+ (DatabaseService)
+NeonBackend.create_tables  # type: ignore[misc]
+NeonBackend.add_word  # type: ignore[misc]
+NeonBackend.get_word  # type: ignore[misc]
+NeonBackend.add_translation_link  # type: ignore[misc]
+NeonBackend.get_user_words  # type: ignore[misc]
+NeonBackend.add_user_word  # type: ignore[misc]
+NeonBackend.increment_user_exercise_score  # type: ignore[misc]
+NeonBackend.get_user_exercise_scores  # type: ignore[misc]
+
 __all__ = [
     "save_translation",
     "ConfigurationError",
@@ -57,6 +68,7 @@ __all__ = [
     "AddWordsResult",
     "ScoredWordPair",
     "AbstractBackend",
+    "NeonBackend",
     "run_benchmark",
     "WordExtractor",
     "TextTranslator",
