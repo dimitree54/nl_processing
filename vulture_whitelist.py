@@ -6,7 +6,7 @@ from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import ConfigurationError, DatabaseError
 from nl_processing.database.logging import get_logger
 from nl_processing.database.models import AddWordsResult, ScoredWordPair
-from nl_processing.database.service import save_translation
+from nl_processing.database.service import DatabaseService
 
 # Benchmark utilities used by integration tests at runtime (not detected by static analysis)
 from nl_processing.extract_text_from_image.benchmark import run_benchmark
@@ -50,6 +50,14 @@ ScoredWordPair.scores  # type: ignore[misc]
 ScoredWordPair.pair.source  # type: ignore[union-attr]
 ScoredWordPair.pair.target  # type: ignore[union-attr]
 
+# DatabaseService — public API, used by consuming code / future tasks (T6+)
+DatabaseService.add_words  # type: ignore[misc]
+DatabaseService.get_words  # type: ignore[misc]
+DatabaseService.create_tables  # type: ignore[misc]
+
+# classmethod first parameter — required by Python, flagged by vulture
+cls  # noqa: F821
+
 # NeonBackend — concrete implementation, used by T5+ (DatabaseService)
 NeonBackend.create_tables  # type: ignore[misc]
 NeonBackend.add_word  # type: ignore[misc]
@@ -61,7 +69,7 @@ NeonBackend.increment_user_exercise_score  # type: ignore[misc]
 NeonBackend.get_user_exercise_scores  # type: ignore[misc]
 
 __all__ = [
-    "save_translation",
+    "DatabaseService",
     "ConfigurationError",
     "DatabaseError",
     "get_logger",
