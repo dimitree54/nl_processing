@@ -104,7 +104,7 @@ ROTATED_VOCABULARY_EXPECTED: set[tuple[str, str]] = {
 
 
 def _to_set(words: list) -> set[tuple[str, str]]:
-    return {(w.normalized_form, w.word_type) for w in words}
+    return {(w.normalized_form, w.word_type.value) for w in words}
 
 
 def _format_diff(expected: set, actual: set) -> str:

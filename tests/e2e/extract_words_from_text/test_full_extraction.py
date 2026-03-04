@@ -1,6 +1,6 @@
 import pytest
 
-from nl_processing.core.models import WordEntry
+from nl_processing.core.models import PartOfSpeech, Word
 from nl_processing.extract_words_from_text.service import WordExtractor
 
 
@@ -13,7 +13,7 @@ async def test_markdown_formatted_dutch_text() -> None:
     result = await extractor.extract(text)
 
     assert len(result) > 0, "Expected non-empty result for Dutch markdown text"
-    assert all(isinstance(w, WordEntry) for w in result)
+    assert all(isinstance(w, Word) for w in result)
 
     for w in result:
         assert "#" not in w.normalized_form, f"Markdown heading symbol found: {w.normalized_form}"
@@ -22,7 +22,7 @@ async def test_markdown_formatted_dutch_text() -> None:
 
 @pytest.mark.asyncio
 async def test_full_pipeline_various_word_types() -> None:
-    """E2e: longer Dutch text with various word types produces valid WordEntry objects."""
+    """E2e: longer Dutch text with various word types produces valid Word objects."""
     text = (
         "De oude man wandelt langzaam door het mooie park. "
         "Zijn hond rent vrolijk achter de eenden aan. "
@@ -33,11 +33,11 @@ async def test_full_pipeline_various_word_types() -> None:
     result = await extractor.extract(text)
 
     assert len(result) > 5, f"Expected many words, got {len(result)}"
-    assert all(isinstance(w, WordEntry) for w in result)
+    assert all(isinstance(w, Word) for w in result)
 
     for w in result:
         assert w.normalized_form, "normalized_form must not be empty"
-        assert w.word_type, "word_type must not be empty"
+        assert isinstance(w.word_type, PartOfSpeech), "word_type must be PartOfSpeech"
 
 
 @pytest.mark.asyncio
@@ -60,16 +60,16 @@ async def test_mixed_markdown_with_compound_expressions() -> None:
     result = await extractor.extract(text)
 
     assert len(result) > 0, "Expected non-empty result for Dutch text with expressions"
-    assert all(isinstance(w, WordEntry) for w in result)
+    assert all(isinstance(w, Word) for w in result)
 
     for w in result:
         assert w.normalized_form, "normalized_form must not be empty"
-        assert w.word_type, "word_type must not be empty"
+        assert isinstance(w.word_type, PartOfSpeech), "word_type must be PartOfSpeech"
 
 
 @pytest.mark.asyncio
 async def test_all_results_have_valid_fields() -> None:
-    """E2e: every returned WordEntry has non-empty normalized_form and word_type."""
+    """E2e: every returned Word has non-empty normalized_form and valid word_type."""
     text = "Nederland is een prachtig land met veel water en fietspaden."
 
     extractor = WordExtractor()
@@ -78,8 +78,7 @@ async def test_all_results_have_valid_fields() -> None:
     assert len(result) > 0, "Expected non-empty result"
 
     for w in result:
-        assert isinstance(w, WordEntry), f"Expected WordEntry, got {type(w)}"
+        assert isinstance(w, Word), f"Expected Word, got {type(w)}"
         assert isinstance(w.normalized_form, str), "normalized_form must be str"
-        assert isinstance(w.word_type, str), "word_type must be str"
+        assert isinstance(w.word_type, PartOfSpeech), "word_type must be PartOfSpeech"
         assert len(w.normalized_form) > 0, "normalized_form must not be empty"
-        assert len(w.word_type) > 0, "word_type must not be empty"

@@ -1,6 +1,6 @@
 import pytest
 
-from nl_processing.core.models import Language, WordEntry
+from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.extract_words_from_text.service import WordExtractor
 from tests.unit.extract_words_from_text.conftest import _AsyncChainMock, make_tool_response
 
@@ -32,7 +32,7 @@ def test_constructor_missing_prompt_file(monkeypatch: pytest.MonkeyPatch) -> Non
 
 @pytest.mark.asyncio
 async def test_extract_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test extract returns correct list of WordEntry objects."""
+    """Test extract returns correct list of Word objects."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     words_data = [
@@ -46,14 +46,16 @@ async def test_extract_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     result = await extractor.extract("De kat loopt.")
     assert len(result) == 2
     assert result[0].normalized_form == "de kat"
-    assert result[0].word_type == "noun"
+    assert result[0].word_type == PartOfSpeech.NOUN
+    assert result[0].language == Language.NL
     assert result[1].normalized_form == "lopen"
-    assert result[1].word_type == "verb"
+    assert result[1].word_type == PartOfSpeech.VERB
+    assert result[1].language == Language.NL
 
 
 @pytest.mark.asyncio
-async def test_extract_returns_word_entry_objects(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that each returned item is a WordEntry instance."""
+async def test_extract_returns_word_objects(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that each returned item is a Word instance."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     words_data = [
@@ -66,10 +68,11 @@ async def test_extract_returns_word_entry_objects(monkeypatch: pytest.MonkeyPatc
     extractor._chain = _AsyncChainMock(make_tool_response(words_data))
 
     result = await extractor.extract("De grote fiets fietst.")
-    assert all(isinstance(w, WordEntry) for w in result)
+    assert all(isinstance(w, Word) for w in result)
     for w in result:
         assert w.normalized_form
-        assert w.word_type
+        assert isinstance(w.word_type, PartOfSpeech)
+        assert w.language == Language.NL
 
 
 @pytest.mark.asyncio

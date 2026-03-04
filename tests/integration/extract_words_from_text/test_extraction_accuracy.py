@@ -2,84 +2,76 @@ import time
 
 import pytest
 
-from nl_processing.core.models import WordEntry
+from nl_processing.core.models import Word
 from nl_processing.extract_words_from_text.service import WordExtractor
+
+
+async def _assert_extraction(text: str, expected: set[tuple[str, str]]) -> None:
+    """Extract words from text and assert exact set match against expected."""
+    extractor = WordExtractor()
+    result = await extractor.extract(text)
+    actual = {(w.normalized_form, w.word_type.value) for w in result}
+    assert actual == expected, f"Mismatch.\nExpected: {expected}\nGot: {actual}"
 
 
 @pytest.mark.asyncio
 async def test_nouns_and_verbs() -> None:
     """Test extraction of nouns (de/het), verbs, adjective, preposition."""
-    text = "De grote kat loopt door de tuin."
-    expected = {
-        ("de kat", "noun"),
-        ("groot", "adjective"),
-        ("lopen", "verb"),
-        ("de tuin", "noun"),
-        ("door", "preposition"),
-    }
-
-    extractor = WordExtractor()
-    result = await extractor.extract(text)
-    actual = {(w.normalized_form, w.word_type) for w in result}
-
-    assert actual == expected, f"Mismatch.\nExpected: {expected}\nGot: {actual}"
+    await _assert_extraction(
+        "De grote kat loopt door de tuin.",
+        {
+            ("de kat", "noun"),
+            ("groot", "adjective"),
+            ("lopen", "verb"),
+            ("de tuin", "noun"),
+            ("door", "preposition"),
+        },
+    )
 
 
 @pytest.mark.asyncio
 async def test_proper_nouns_and_prepositions() -> None:
     """Test extraction of proper nouns (person, country) and prepositions."""
-    text = "Jan woont in Nederland."
-    expected = {
-        ("Jan", "proper_noun_person"),
-        ("wonen", "verb"),
-        ("in", "preposition"),
-        ("Nederland", "proper_noun_country"),
-    }
-
-    extractor = WordExtractor()
-    result = await extractor.extract(text)
-    actual = {(w.normalized_form, w.word_type) for w in result}
-
-    assert actual == expected, f"Mismatch.\nExpected: {expected}\nGot: {actual}"
+    await _assert_extraction(
+        "Jan woont in Nederland.",
+        {
+            ("Jan", "proper_noun_person"),
+            ("wonen", "verb"),
+            ("in", "preposition"),
+            ("Nederland", "proper_noun_country"),
+        },
+    )
 
 
 @pytest.mark.asyncio
 async def test_articles_and_adjectives() -> None:
     """Test extraction with de/het articles and multiple adjectives."""
-    text = "Het kleine kind speelt met de rode bal."
-    expected = {
-        ("het kind", "noun"),
-        ("klein", "adjective"),
-        ("spelen", "verb"),
-        ("met", "preposition"),
-        ("de bal", "noun"),
-        ("rood", "adjective"),
-    }
-
-    extractor = WordExtractor()
-    result = await extractor.extract(text)
-    actual = {(w.normalized_form, w.word_type) for w in result}
-
-    assert actual == expected, f"Mismatch.\nExpected: {expected}\nGot: {actual}"
+    await _assert_extraction(
+        "Het kleine kind speelt met de rode bal.",
+        {
+            ("het kind", "noun"),
+            ("klein", "adjective"),
+            ("spelen", "verb"),
+            ("met", "preposition"),
+            ("de bal", "noun"),
+            ("rood", "adjective"),
+        },
+    )
 
 
 @pytest.mark.asyncio
 async def test_compound_expression() -> None:
     """Test extraction of compound verbal expression."""
-    text = "Zij gaat er vandoor met haar vriend."
-    expected = {
-        ("zij", "pronoun"),
-        ("ervandoor gaan", "verb"),
-        ("met", "preposition"),
-        ("haar", "pronoun"),
-        ("de vriend", "noun"),
-    }
-
-    extractor = WordExtractor()
-    result = await extractor.extract(text)
-    actual = {(w.normalized_form, w.word_type) for w in result}
-
-    assert actual == expected, f"Mismatch.\nExpected: {expected}\nGot: {actual}"
+    await _assert_extraction(
+        "Zij gaat er vandoor met haar vriend.",
+        {
+            ("zij", "pronoun"),
+            ("ervandoor gaan", "verb"),
+            ("met", "preposition"),
+            ("haar", "pronoun"),
+            ("de vriend", "noun"),
+        },
+    )
 
 
 @pytest.mark.asyncio
@@ -117,4 +109,4 @@ async def test_performance_100_words() -> None:
 
     assert elapsed < 30, f"Extraction took {elapsed:.2f}s -- exceeds 30.00s QA gate"
     assert len(result) > 0, "Expected non-empty result for Dutch text"
-    assert all(isinstance(w, WordEntry) for w in result)
+    assert all(isinstance(w, Word) for w in result)
