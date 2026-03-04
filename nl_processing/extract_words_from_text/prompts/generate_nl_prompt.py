@@ -3,11 +3,6 @@
 Usage:
     uv run python nl_processing/extract_words_from_text/prompts/generate_nl_prompt.py
 
-This script:
-1. Defines a system instruction for Dutch word extraction and normalization
-2. Builds few-shot examples as HumanMessage + AIMessage(tool_calls) + ToolMessage triplets
-3. Serializes with dumpd() and saves to nl.json
-
 The script is the source of truth -- nl.json is the generated artifact.
 Re-run this script whenever prompt content changes.
 """
@@ -29,7 +24,7 @@ SYSTEM_INSTRUCTION = (
     "  - Werkwoorden: infinitief, bijv. 'lopen', 'hebben'\n"
     "  - Bijvoeglijke naamwoorden: basisvorm, bijv. 'groot', 'klein'\n"
     "  - Voorzetsels, voegwoorden, bijwoorden: basisvorm\n"
-    "  - Eigennamen (personen): ongewijzigd, type 'proper_noun_person'\n"
+    "  - Eigennamen (personen/merken): ongewijzigd, type 'proper_noun_person'\n"
     "  - Eigennamen (landen): ongewijzigd, type 'proper_noun_country'\n"
     "- Extraheer samengestelde uitdrukkingen en fraseologische constructies als enkele eenheden.\n"
     "- Wijs een plat woordtype toe aan elk woord. Mogelijke types: "
@@ -40,94 +35,85 @@ SYSTEM_INSTRUCTION = (
 )
 
 TOOL_NAME = "_WordList"
-
 OUTPUT_PATH = Path(__file__).parent / "nl.json"
 
+_W = dict[str, str]
 
-def _make_ai_response(words: list[dict[str, str]], call_id: str) -> AIMessage:
-    """Create an AIMessage with tool_calls for _WordList."""
+
+def _w(form: str, wtype: str) -> _W:
+    return {"normalized_form": form, "word_type": wtype}
+
+
+# fmt: off
+EXAMPLES: list[tuple[str, list[_W]]] = [
+    # 1: Simple sentence — noun (de/het), verb, adjective
+    ("De grote kat loopt snel.", [
+        _w("de kat", "noun"), _w("groot", "adjective"),
+        _w("lopen", "verb"), _w("snel", "adverb"),
+    ]),
+    # 2: Proper nouns and prepositions
+    ("Jan woont in Nederland.", [
+        _w("Jan", "proper_noun_person"), _w("wonen", "verb"),
+        _w("in", "preposition"), _w("Nederland", "proper_noun_country"),
+    ]),
+    # 3: Compound expression
+    ("Zij gaat er vandoor met haar vriend.", [
+        _w("zij", "pronoun"), _w("ervandoor gaan", "verb"),
+        _w("met", "preposition"), _w("haar", "pronoun"), _w("de vriend", "noun"),
+    ]),
+    # 4: Non-Dutch text — empty list
+    ("The quick brown fox jumps over the lazy dog.", []),
+    # 5: Mixed markdown with various word types
+    ("# Welkom\n\nHet **kleine** kind speelt vrolijk in de tuin.", [
+        _w("welkom", "adjective"), _w("het kind", "noun"), _w("klein", "adjective"),
+        _w("spelen", "verb"), _w("vrolijk", "adverb"),
+        _w("in", "preposition"), _w("de tuin", "noun"),
+    ]),
+    # 6: Product packaging prose — brand names, adjectives as base form, plurals singularized
+    (
+        "Met De Ruijter kunt u elke dag genieten "
+        "van een breed assortiment smakelijke producten.\n"
+        "Chocoladevlokken Melk en Puur\n"
+        "Chocoladehagel Melk en Puur\n"
+        "Vruchtenhagel\nAnijshagel\nVlokfeest\n"
+        "Gestampte Muisjes\nRose en Witte Muisjes\nBlauwe en Witte Muisjes",
+        [
+            _w("met", "preposition"), _w("De Ruijter", "proper_noun_person"),
+            _w("kunnen", "verb"), _w("u", "pronoun"), _w("elk", "adjective"),
+            _w("de dag", "noun"), _w("genieten", "verb"), _w("van", "preposition"),
+            _w("een", "article"), _w("breed", "adjective"),
+            _w("het assortiment", "noun"), _w("smakelijk", "adjective"),
+            _w("het product", "noun"), _w("de chocoladevlokken", "noun"),
+            _w("de melk", "noun"), _w("en", "conjunction"), _w("puur", "adjective"),
+            _w("de chocoladehagel", "noun"), _w("de vruchtenhagel", "noun"),
+            _w("de anijshagel", "noun"), _w("het vlokfeest", "noun"),
+            _w("gestampt", "adjective"), _w("het muisje", "noun"),
+            _w("roze", "adjective"), _w("wit", "adjective"), _w("blauw", "adjective"),
+        ],
+    ),
+]
+# fmt: on
+
+
+def _make_ai(words: list[_W], call_id: str) -> AIMessage:
     return AIMessage(
         content="",
         tool_calls=[{"name": TOOL_NAME, "args": {"words": words}, "id": call_id}],
     )
 
 
-def _make_tool_ack(words: list[dict[str, str]], call_id: str) -> ToolMessage:
-    """Create a ToolMessage acknowledging the tool call."""
+def _make_ack(words: list[_W], call_id: str) -> ToolMessage:
     return ToolMessage(content=json.dumps({"words": words}, ensure_ascii=False), tool_call_id=call_id)
 
 
 def build_prompt() -> ChatPromptTemplate:
     """Build the Dutch word extraction prompt with few-shot examples."""
-    # Example 1: Simple sentence with noun (de/het), verb, adjective
-    ex1_input = "De grote kat loopt snel."
-    ex1_words = [
-        {"normalized_form": "de kat", "word_type": "noun"},
-        {"normalized_form": "groot", "word_type": "adjective"},
-        {"normalized_form": "lopen", "word_type": "verb"},
-        {"normalized_form": "snel", "word_type": "adverb"},
-    ]
-
-    # Example 2: Proper nouns and prepositions
-    ex2_input = "Jan woont in Nederland."
-    ex2_words = [
-        {"normalized_form": "Jan", "word_type": "proper_noun_person"},
-        {"normalized_form": "wonen", "word_type": "verb"},
-        {"normalized_form": "in", "word_type": "preposition"},
-        {"normalized_form": "Nederland", "word_type": "proper_noun_country"},
-    ]
-
-    # Example 3: Compound expression
-    ex3_input = "Zij gaat er vandoor met haar vriend."
-    ex3_words = [
-        {"normalized_form": "zij", "word_type": "pronoun"},
-        {"normalized_form": "ervandoor gaan", "word_type": "verb"},
-        {"normalized_form": "met", "word_type": "preposition"},
-        {"normalized_form": "haar", "word_type": "pronoun"},
-        {"normalized_form": "de vriend", "word_type": "noun"},
-    ]
-
-    # Example 4: Non-Dutch text -- returns empty list
-    ex4_input = "The quick brown fox jumps over the lazy dog."
-    ex4_words: list[dict[str, str]] = []
-
-    # Example 5: Mixed markdown with various word types
-    ex5_input = "# Welkom\n\nHet **kleine** kind speelt vrolijk in de tuin."
-    ex5_words = [
-        {"normalized_form": "welkom", "word_type": "adjective"},
-        {"normalized_form": "het kind", "word_type": "noun"},
-        {"normalized_form": "klein", "word_type": "adjective"},
-        {"normalized_form": "spelen", "word_type": "verb"},
-        {"normalized_form": "vrolijk", "word_type": "adverb"},
-        {"normalized_form": "in", "word_type": "preposition"},
-        {"normalized_form": "de tuin", "word_type": "noun"},
-    ]
-
-    return ChatPromptTemplate.from_messages([
-        SystemMessage(content=SYSTEM_INSTRUCTION),
-        # Example 1
-        HumanMessage(content=ex1_input),
-        _make_ai_response(ex1_words, "call_ex_1"),
-        _make_tool_ack(ex1_words, "call_ex_1"),
-        # Example 2
-        HumanMessage(content=ex2_input),
-        _make_ai_response(ex2_words, "call_ex_2"),
-        _make_tool_ack(ex2_words, "call_ex_2"),
-        # Example 3
-        HumanMessage(content=ex3_input),
-        _make_ai_response(ex3_words, "call_ex_3"),
-        _make_tool_ack(ex3_words, "call_ex_3"),
-        # Example 4
-        HumanMessage(content=ex4_input),
-        _make_ai_response(ex4_words, "call_ex_4"),
-        _make_tool_ack(ex4_words, "call_ex_4"),
-        # Example 5
-        HumanMessage(content=ex5_input),
-        _make_ai_response(ex5_words, "call_ex_5"),
-        _make_tool_ack(ex5_words, "call_ex_5"),
-        # Placeholder for actual user input
-        MessagesPlaceholder(variable_name="text"),
-    ])
+    messages: list = [SystemMessage(content=SYSTEM_INSTRUCTION)]
+    for i, (text, words) in enumerate(EXAMPLES, 1):
+        cid = f"call_ex_{i}"
+        messages += [HumanMessage(content=text), _make_ai(words, cid), _make_ack(words, cid)]
+    messages.append(MessagesPlaceholder(variable_name="text"))
+    return ChatPromptTemplate.from_messages(messages)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ Sprint ID: `2026-03-03_extract-words-from-text`
 Sprint Goal: `Replace the legacy regex stub with a fully functional LangChain-powered WordExtractor class that extracts and normalizes Dutch words from markdown text.`
 Sprint Type: `module`
 Module: `extract_words_from_text`
-Status: `planning`
+Status: `done`
 ---
 
 ## Goal

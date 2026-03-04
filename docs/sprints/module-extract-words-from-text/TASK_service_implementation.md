@@ -6,7 +6,7 @@ Module: `extract_words_from_text`
 Depends on: `T1`
 Parallelizable: `no`
 Owner: `Developer`
-Status: `planned`
+Status: `done`
 ---
 
 ## Goal / value

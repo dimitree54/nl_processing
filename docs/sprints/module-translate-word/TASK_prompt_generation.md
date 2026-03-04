@@ -6,7 +6,7 @@ Module: `translate_word`
 Depends on: `--`
 Parallelizable: `no`
 Owner: `Developer`
-Status: `planned`
+Status: `done`
 ---
 
 ## Goal / value

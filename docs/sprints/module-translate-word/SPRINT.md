@@ -3,7 +3,7 @@ Sprint ID: `2026-03-03_translate-word`
 Sprint Goal: `Replace the legacy translate_word stub with a fully functional LangChain-powered WordTranslator class that translates batches of Dutch words to Russian.`
 Sprint Type: `module`
 Module: `translate_word`
-Status: `planning`
+Status: `done`
 ---
 
 ## Goal
