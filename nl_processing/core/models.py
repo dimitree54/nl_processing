@@ -44,12 +44,3 @@ class Word(BaseModel):
     normalized_form: str
     word_type: PartOfSpeech
     language: Language
-
-
-class WordEntry(BaseModel):
-    normalized_form: str
-    word_type: str
-
-
-class TranslationResult(BaseModel):
-    translation: str

@@ -1,7 +1,7 @@
 from pydantic import ValidationError
 import pytest
 
-from nl_processing.core.models import ExtractedText, Language, PartOfSpeech, TranslationResult, Word, WordEntry
+from nl_processing.core.models import ExtractedText, Language, PartOfSpeech, Word
 
 
 def test_language_enum_values() -> None:
@@ -45,37 +45,6 @@ def test_extracted_text_missing_field() -> None:
     """Test ExtractedText raises ValidationError on missing text field."""
     with pytest.raises(ValidationError):
         ExtractedText()
-
-
-def test_word_entry_instantiation() -> None:
-    """Test WordEntry can be created and accessed."""
-    word = WordEntry(normalized_form="de fiets", word_type="noun")
-    assert word.normalized_form == "de fiets"
-    assert word.word_type == "noun"
-
-
-def test_word_entry_missing_fields() -> None:
-    """Test WordEntry raises ValidationError on missing fields."""
-    with pytest.raises(ValidationError):
-        WordEntry(normalized_form="de fiets")
-
-    with pytest.raises(ValidationError):
-        WordEntry(word_type="noun")
-
-    with pytest.raises(ValidationError):
-        WordEntry()
-
-
-def test_translation_result_instantiation() -> None:
-    """Test TranslationResult can be created and accessed."""
-    result = TranslationResult(translation="дом")
-    assert result.translation == "дом"
-
-
-def test_translation_result_missing_field() -> None:
-    """Test TranslationResult raises ValidationError on missing field."""
-    with pytest.raises(ValidationError):
-        TranslationResult()
 
 
 def test_part_of_speech_enum_values() -> None:
@@ -163,10 +132,7 @@ def test_word_russian_language() -> None:
 def test_all_models_accept_empty_strings() -> None:
     """Test all models accept empty strings (per architecture)."""
     extracted = ExtractedText(text="")
-    word = WordEntry(normalized_form="", word_type="")
-    result = TranslationResult(translation="")
+    word = Word(normalized_form="", word_type=PartOfSpeech.NOUN, language=Language.NL)
 
     assert extracted.text == ""
     assert word.normalized_form == ""
-    assert word.word_type == ""
-    assert result.translation == ""
