@@ -4,6 +4,7 @@
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import ConfigurationError, DatabaseError
+from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.logging import get_logger
 from nl_processing.database.models import AddWordsResult, ScoredWordPair
 from nl_processing.database.service import DatabaseService
@@ -55,6 +56,10 @@ DatabaseService.add_words  # type: ignore[misc]
 DatabaseService.get_words  # type: ignore[misc]
 DatabaseService.create_tables  # type: ignore[misc]
 
+# ExerciseProgressStore — internal API, used by sampling module (T12+)
+ExerciseProgressStore.increment  # type: ignore[misc]
+ExerciseProgressStore.get_word_pairs_with_scores  # type: ignore[misc]
+
 # classmethod first parameter — required by Python, flagged by vulture
 cls  # noqa: F821
 
@@ -72,6 +77,7 @@ __all__ = [
     "DatabaseService",
     "ConfigurationError",
     "DatabaseError",
+    "ExerciseProgressStore",
     "get_logger",
     "AddWordsResult",
     "ScoredWordPair",
