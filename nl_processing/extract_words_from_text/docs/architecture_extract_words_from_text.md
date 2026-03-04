@@ -25,11 +25,11 @@ parentArchitecture: docs/planning-artifacts/architecture.md
 
 ## Module-Specific Architectural Decisions
 
-### Decision: Flat Word-Type Taxonomy
+### Decision: PartOfSpeech Enum Word-Type Taxonomy
 
-Word types are flat strings (`"noun"`, `"verb"`, `"adjective"`, `"preposition"`, `"conjunction"`, `"proper_noun_person"`, `"proper_noun_country"`, etc.) — not enums, not hierarchical structures.
+Word types use the `PartOfSpeech` Enum from `core/models.py`. Allowed values: `noun`, `verb`, `adjective`, `adverb`, `preposition`, `conjunction`, `pronoun`, `article`, `numeral`, `proper_noun_person`, `proper_noun_country`.
 
-**Rationale:** Flat strings allow the LLM to assign types naturally via the prompt, and callers can filter by simple string comparison. The taxonomy is extensible via prompts — adding a new type (e.g., `"proper_noun_city"`) requires only a prompt update, no code change.
+**Rationale:** Using an Enum instead of free-form strings provides compile-time type safety and Pydantic validation. The LLM returns word types as strings matching the Enum values; Pydantic automatically coerces them. Invalid word types are rejected at validation time (fail fast). The Enum is extensible — adding a new value (e.g., `PROPER_NOUN_CITY`) requires adding it to the Enum and updating the prompt, with no other code changes.
 
 ### Decision: Language-Specific Normalization via Prompt
 
@@ -39,13 +39,13 @@ Normalization rules (Dutch nouns with de/het article, verbs in infinitive form) 
 
 ### Decision: Compound Expressions as Single Units
 
-The prompt instructs the LLM to extract compound expressions and phrasal constructs (e.g., phrasal verbs, idiomatic phrases) as single `WordEntry` items, not individual words.
+The prompt instructs the LLM to extract compound expressions and phrasal constructs (e.g., phrasal verbs, idiomatic phrases) as single `Word` items, not individual words.
 
-**Implication:** The output list may contain multi-word entries. The `normalized_form` field in `WordEntry` can be a phrase, not just a single word.
+**Implication:** The output list may contain multi-word entries. The `normalized_form` field in `Word` can be a phrase, not just a single word.
 
 ### Decision: Empty List for Non-Target Language
 
-When input text contains no words in the target language, the module returns an empty `list[WordEntry]` — no exception. This differs from `extract_text_from_image` which raises `TargetLanguageNotFoundError`.
+When input text contains no words in the target language, the module returns an empty `list[Word]` — no exception. This differs from `extract_text_from_image` which raises `TargetLanguageNotFoundError`.
 
 **Rationale:** For text processing, an empty result is a valid outcome (the text simply had no extractable words in the target language). For image processing, the absence of target-language text is more likely an error condition.
 
@@ -77,6 +77,6 @@ nl_processing/extract_words_from_text/
 
 ## Test Strategy
 
-- **Unit tests:** Mock LangChain chain invocation. Test that module correctly passes text to chain and returns `list[WordEntry]`. Test empty-list behavior for non-target language.
+- **Unit tests:** Mock LangChain chain invocation. Test that module correctly passes text to chain and returns `list[Word]`. Test empty-list behavior for non-target language.
 - **Integration tests:** Real API calls with 5 curated short test cases (1-2 sentences each). Set-based accuracy validation (normalized form + word type). Performance test: ~100 words in <5 seconds.
 - **E2e tests:** Full extraction from markdown text, validating diverse word types across test cases.

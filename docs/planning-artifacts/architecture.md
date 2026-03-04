@@ -42,7 +42,7 @@ _This document covers shared architectural decisions for the `nl_processing` pro
 
 The project defines 20 core FRs (CFR1-20) for the `core` package and 14 shared FRs (SFR1-14) for all pipeline modules. Architecturally, the requirements break down into:
 
-- **Public Interface Pydantic Models (CFR7-11):** `ExtractedText`, `WordEntry`, `TranslationResult`, `Language` enum — defined in `core`. **Important:** only models that form public module interfaces (input/output contracts) live in `core`. Internal models (e.g., intermediate schemas used within a module's LangChain chain) remain in the module.
+- **Public Interface Pydantic Models (CFR7-11):** `ExtractedText`, `Word`, `PartOfSpeech` enum, `Language` enum — defined in `core`. **Important:** only models that form public module interfaces (input/output contracts) live in `core`. Internal models (e.g., intermediate schemas used within a module's LangChain chain) remain in the module.
 - **Exceptions (CFR12-15):** `APIError`, `TargetLanguageNotFoundError`, `UnsupportedImageFormatError` — centralized in `core`.
 - **Prompt Management (CFR16-20):** Prompt loading utility in `core`; prompt content per-module. Prompt authoring helper as a dev-time script.
 - **Shared Module Patterns (SFR1-14):** Structured output enforcement, zero-config defaults, Language enum interface, error wrapping, documentation conventions.
@@ -121,7 +121,7 @@ Each module adds 9-14 module-specific FRs covering its domain logic (see module 
 ```
 nl_processing/core/
 ├── __init__.py          # empty (ruff strictly-empty-init-modules)
-├── models.py            # PUBLIC interface models: ExtractedText, WordEntry, TranslationResult, Language
+├── models.py            # PUBLIC interface models: ExtractedText, Word, PartOfSpeech, Language
 ├── exceptions.py        # APIError, TargetLanguageNotFoundError, UnsupportedImageFormatError
 ├── prompts.py           # prompt loading utility (load ChatPromptTemplate-format JSON)
 └── scripts/
@@ -254,7 +254,7 @@ make check  →  ruff format → ruff check --fix → pylint (200-line, bad buil
 ### Naming Conventions
 
 **Python code (enforced by ruff N8xx rules):**
-- Classes: `PascalCase` — `ImageTextExtractor`, `WordEntry`, `APIError`
+- Classes: `PascalCase` — `ImageTextExtractor`, `Word`, `APIError`
 - Functions/methods: `snake_case` — `extract_from_path`, `load_prompt`
 - Variables: `snake_case` — `source_language`, `prompt_messages`
 - Constants: `UPPER_SNAKE_CASE` — `DEFAULT_MODEL`
@@ -507,9 +507,9 @@ nl_processing/                          # project root
 
 ```
 Image → [extract_text_from_image] → markdown text
-         markdown text → [extract_words_from_text] → list[WordEntry]
+         markdown text → [extract_words_from_text] → list[Word]
          markdown text → [translate_text] → translated text
-         list[str] → [translate_word] → list[TranslationResult]
+         list[Word] → [translate_word] → list[Word]
 
          list[words] + user_id → [database] → word-translation pairs, feedback
                                      ↓ (async, fire-and-forget)
@@ -690,7 +690,7 @@ jobs:
 
 | Requirement | Architecture Support |
 |---|---|
-| CFR7-11 (Pydantic models) | `core/models.py` — public interface models only |
+| CFR7-11 (Pydantic models) | `core/models.py` — `ExtractedText`, `Word`, `PartOfSpeech` enum, `Language` enum |
 | CFR12-15 (Exceptions) | `core/exceptions.py` |
 | CFR16-20 (Prompt management) | `core/prompts.py` + `core/scripts/prompt_author.py` |
 | SFR1-2 (Structured output) | Each module uses LangChain tool calling (recommended: `bind_tools(...)` + `tool_calls`) to enforce schemas |

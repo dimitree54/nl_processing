@@ -33,7 +33,7 @@ The `translate()` method sends all input words in a single LLM call, not one cal
 
 ### Decision: One-to-One Order-Preserving Mapping
 
-The output `list[TranslationResult]` must have exactly `len(output) == len(input)` with the same order. This is enforced by the Pydantic schema and prompt instructions.
+The output `list[Word]` must have exactly `len(output) == len(input)` with the same order. This is enforced by the Pydantic schema and prompt instructions.
 
 **Implication:** The prompt must explicitly instruct the LLM to return exactly one translation per input word, in the same order. The Pydantic output schema enforces the list structure; the prompt enforces ordering and one-to-one correspondence.
 
@@ -45,9 +45,11 @@ Same pattern as `translate_text` — `WordTranslator` requires both `source_lang
 translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 ```
 
-### Decision: `TranslationResult` — Minimal Pydantic Model, Extensible
+### Decision: Unified `Word` Model for Input and Output
 
-`TranslationResult` (from `core`) currently contains only `translation: str`. It is a Pydantic model (not a plain string) to enable future field additions (usage examples, synonyms, alternative translations) without breaking the public interface.
+The translator accepts `list[Word]` as input and returns `list[Word]` as output. Input words have `language=Language.NL`; output words have `language=Language.RU`. Each output `Word` contains `normalized_form` (the Russian translation), `word_type` (a `PartOfSpeech` Enum value determined by the LLM for the target language), and `language` (set programmatically by the service to the target language).
+
+**Rationale:** Using the same `Word` model for both extraction and translation creates a unified pipeline where the output of `extract_words_from_text` flows directly into `translate_word` without type conversion.
 
 ### Decision: Empty List for Empty Input
 
@@ -81,6 +83,6 @@ nl_processing/translate_word/
 
 ## Test Strategy
 
-- **Unit tests:** Mock LangChain chain invocation. Test empty-input handling, one-to-one mapping enforcement, error mapping.
+- **Unit tests:** Mock LangChain chain invocation. Test `list[Word]` input/output, empty-input handling, one-to-one mapping enforcement, error mapping.
 - **Integration tests:** Real API calls. Quality test: 10 unambiguous Dutch words with 100% exact match against ground truth Russian translations. Performance test: 10 words in <1 second.
-- **E2e tests:** Full translation scenarios with word lists from upstream pipeline.
+- **E2e tests:** Full translation scenarios with `list[Word]` inputs representing upstream pipeline output.

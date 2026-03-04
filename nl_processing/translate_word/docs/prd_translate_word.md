@@ -19,12 +19,12 @@ classification:
 
 ## Executive Summary
 
-`translate_word` translates normalized words and short phrases between languages. It accepts a list of normalized source-language words/phrases and returns a list of `TranslationResult` objects (from `core`) — one-to-one, preserving input order. The module uses language-specific few-shot prompt JSONs for high-quality translations. `TranslationResult` currently contains only a `translation` field, designed for future field extensions without breaking the interface. Initial release supports Dutch→Russian only. Performance target: <1 second for 10 words.
+`translate_word` translates normalized words and short phrases between languages. It accepts a list of `Word` objects (from `core`) and returns a list of `Word` objects — one-to-one, preserving input order. The module uses language-specific few-shot prompt JSONs for high-quality translations. Each output `Word` contains the Russian `normalized_form`, a `PartOfSpeech` word type determined by the LLM, and `language=Language.RU`. Initial release supports Dutch→Russian only. Performance target: <1 second for 10 words.
 
 ### What Makes This Special
 
 - **LLM translation quality for individual words:** Captures nuance and context-appropriate meanings that algorithmic services miss at the word level
-- **Extensible result objects:** `TranslationResult` (from `core`) is a Pydantic model ready for future field additions without API changes
+- **Unified pipeline model:** Uses the same `Word` model as `extract_words_from_text`, creating a seamless pipeline from extraction to translation
 - **One-to-one batch processing:** Structured output via Pydantic tool calling guarantees clean input→output mapping — no missing or extra items
 
 ## Success Criteria
@@ -33,7 +33,7 @@ classification:
 
 - **Translation accuracy:** 100% exact match on 1 test case containing 10 unambiguous Dutch words/phrases translated to Russian
 - **Performance:** Translation of 10 words completes in <1 second (wall clock time)
-- **Output structure:** Each input word maps to exactly one `TranslationResult` in the output list, preserving order
+- **Output structure:** Each input `Word` maps to exactly one output `Word` in the output list, preserving order
 - **Error behavior:** Empty input returns empty list; upstream API failures raise `APIError`
 
 ### Measurable Outcomes
@@ -55,7 +55,7 @@ classification:
 
 ### Growth Features (Post-Release)
 
-- Additional fields in `TranslationResult` (usage examples, synonyms, alternative translations)
+- Additional fields in `Word` (usage examples, synonyms, alternative translations)
 - Additional language pairs via new prompt JSONs with few-shot examples
 
 ## User Journeys
@@ -72,11 +72,14 @@ from nl_processing.translate_word.service import WordTranslator
 from nl_processing.core.models import Language
 
 translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
-results = translator.translate(["huis", "lopen", "snel"])
-# results[0].translation → "дом"
+words = [Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL), ...]
+results = translator.translate(words)
+# results[0].normalized_form → "дом"
+# results[0].word_type → PartOfSpeech.NOUN
+# results[0].language → Language.RU
 ```
 
-**Climax:** First call returns a list of `TranslationResult` objects — one per input word, in order, each with a correct Russian translation. No extra setup, no debugging.
+**Climax:** First call returns a list of `Word` objects — one per input word, in order, each with a correct Russian translation. No extra setup, no debugging.
 
 **Resolution:** Integrated in under 10 minutes. Module becomes an invisible, reliable component.
 
@@ -89,7 +92,7 @@ results = translator.translate(["huis", "lopen", "snel"])
 | Capability | Revealed By |
 |---|---|
 | `WordTranslator` class with `Language` enum constructor | Success path |
-| Single translate method: `list[str]` → `list[TranslationResult]` | Success path |
+| Single translate method: `list[Word]` → `list[Word]` | Success path |
 | One-to-one order-preserving mapping | Success path |
 | Empty input → empty output | Error handling |
 | Typed `APIError` (from `core`) | Error handling |
@@ -102,9 +105,9 @@ results = translator.translate(["huis", "lopen", "snel"])
 
 - `WordTranslator` class
   - Constructor: `__init__(source_language: Language, target_language: Language, model: str = "gpt-5-nano")` — `Language` from `core`, optional model override (baseline evaluation starts from GPT-5 Mini, then downgrades to the cheapest model that still passes quality gates)
-  - Method: `translate(words: list[str]) -> list[TranslationResult]` — `TranslationResult` from `core`
+  - Method: `translate(words: list[Word]) -> list[Word]` — `Word` from `core`
 
-`Language`, `TranslationResult`, and `APIError` are imported from `core`.
+`Language`, `Word`, `PartOfSpeech`, and `APIError` are imported from `core`.
 
 **Behavioral Contract:**
 - One-to-one order-preserving mapping: `len(output) == len(input)`, same order
@@ -113,7 +116,7 @@ results = translator.translate(["huis", "lopen", "snel"])
 
 ### Implementation Considerations
 
-- Pydantic `TranslationResult` model defined in `core` — serves dual purpose: public API return type and LangChain tool calling schema
+- Pydantic `Word` model defined in `core` — used as public API input/output type. Internal `_LLMTranslationEntry` model (without `language` field) used for LangChain tool calling
 - Language-specific prompt JSONs with few-shot examples stored in module directory, loaded by `core` utilities
 - No module-specific dependencies beyond `core`
 
@@ -122,9 +125,9 @@ results = translator.translate(["huis", "lopen", "snel"])
 ### Word Translation
 
 - FR1: Developer can instantiate `WordTranslator` with source and target `Language` enums (from `core`)
-- FR2: Developer can call a single translate method with a list of normalized words/phrases and receive a list of `TranslationResult` objects
+- FR2: Developer can call a single translate method with a list of `Word` objects and receive a list of `Word` objects
 - FR3: System translates each input word with one-to-one order-preserving mapping
-- FR4: System returns `TranslationResult` objects (from `core`) containing a `translation` field
+- FR4: System returns `Word` objects (from `core`) containing `normalized_form`, `word_type` (`PartOfSpeech`), and `language`
 
 ### Language Configuration
 

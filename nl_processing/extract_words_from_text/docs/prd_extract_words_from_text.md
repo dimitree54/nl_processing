@@ -19,7 +19,7 @@ classification:
 
 ## Executive Summary
 
-`extract_words_from_text` extracts and normalizes words from Markdown-formatted text. Given Markdown text in a known language, it returns a flat list of `WordEntry` objects (from `core`) containing a normalized form and a word type. Markdown formatting is transparently ignored — the LLM extracts only linguistic content. Language-specific normalization rules are defined by prompt JSONs written in the target language. Initial release supports Dutch only.
+`extract_words_from_text` extracts and normalizes words from Markdown-formatted text. Given Markdown text in a known language, it returns a flat list of `Word` objects (from `core`) containing a normalized form, a `PartOfSpeech` word type, and a language. Markdown formatting is transparently ignored — the LLM extracts only linguistic content. Language-specific normalization rules are defined by prompt JSONs written in the target language. Initial release supports Dutch only.
 
 ### What Makes This Special
 
@@ -61,7 +61,7 @@ All features are required — no phased MVP. The module either works completely 
 
 **Opening Scene:** Alex finds `extract_words_from_text` in the nl_processing project. Reads the docstring — import the class, instantiate with defaults, call one method. Three lines of code.
 
-**Rising Action:** Alex writes a quick test — passes Dutch Markdown text. Gets a flat list of `WordEntry` objects: each word normalized (nouns with de/het, verbs as infinitives), type assigned (noun, verb, proper_noun_person, preposition...). Markdown formatting ignored.
+**Rising Action:** Alex writes a quick test — passes Dutch Markdown text. Gets a flat list of `Word` objects: each word normalized (nouns with de/het, verbs as infinitives), type assigned (noun, verb, proper_noun_person, preposition...). Markdown formatting ignored.
 
 **Climax:** Alex drops the module into his pipeline, replacing manual parsing logic. Works on the first try. Filters by type — removes prepositions, keeps only nouns and verbs.
 
@@ -84,7 +84,7 @@ All features are required — no phased MVP. The module either works completely 
 | Capability | Revealed By |
 |---|---|
 | Zero-config instantiation | Journey 1 |
-| Single extraction method (text in, `WordEntry` objects out) | Journey 1 |
+| Single extraction method (text in, `Word` objects out) | Journey 1 |
 | Flat word-type taxonomy with filtering | Journey 1 |
 | Markdown-transparent extraction | Journey 1 |
 | Language-specific normalization (de/het, infinitives) | Journey 1 |
@@ -108,9 +108,10 @@ words = extractor.extract(text)
 - `model` — LLM model name (default: `gpt-5-nano`). GPT-5 Mini is used as an evaluation baseline; the default is downgraded to the cheapest model that still passes quality gates.
 - `language` — target language as `Language` enum from `core` (default: `Language.NL`)
 
-**Return type:** flat list of `WordEntry` objects (from `core`), each containing:
+**Return type:** flat list of `Word` objects (from `core`), each containing:
 - `normalized_form` — normalized word (e.g., "de fiets", "lopen")
-- `word_type` — flat type string (e.g., noun, verb, adjective, preposition, proper_noun_person, proper_noun_country, conjunction, etc.)
+- `word_type` — `PartOfSpeech` Enum value (e.g., `NOUN`, `VERB`, `ADJECTIVE`, `PREPOSITION`, `PROPER_NOUN_PERSON`, `PROPER_NOUN_COUNTRY`)
+- `language` — `Language` Enum value (set programmatically by the service, e.g., `Language.NL`)
 
 **Exceptions:** `APIError` from `core` for upstream API failures.
 
@@ -135,12 +136,12 @@ words = extractor.extract(text)
 - FR6: Module normalizes each extracted word according to language-specific rules
 - FR7: Module normalizes Dutch nouns with their article (de/het)
 - FR8: Module normalizes Dutch verbs to infinitive form
-- FR9: Each `WordEntry` contains a normalized form and a word type
+- FR9: Each `Word` contains a normalized form, a `PartOfSpeech` word type, and a language
 
 ### Word Type Taxonomy
 
 - FR10: Module assigns a flat word type to each extracted word (noun, verb, adjective, preposition, conjunction, proper_noun_person, proper_noun_country, etc.)
-- FR11: Word types are flat strings — no nested structures or hierarchies
+- FR11: Word types are `PartOfSpeech` Enum values — type-safe, validated by Pydantic
 
 ### Testing & Benchmarking
 
