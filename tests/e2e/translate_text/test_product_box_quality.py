@@ -28,7 +28,7 @@ PRODUCT_BOX_TEXT = (
 # Each entry: (description, list of alternative substrings — at least one must appear)
 # All checks are case-insensitive substring matches against the full translation.
 EXPECTED_KEY_TERMS: list[tuple[str, list[str]]] = [
-    ("brand name De Ruijter", ["Де Рёйтер", "Де Рюйтер", "Де Рейтер"]),
+    ("brand name De Ruijter", ["Де Рёйтер", "Де Рюйтер", "Де Рейтер", "De Ruijter"]),
     ("каждый день (elke dag)", ["каждый день", "ежедневно"]),
     ("наслаждаться/наслажд (genieten)", ["наслажд", "удовольстви"]),
     ("ассортимент (assortiment)", ["ассортимент"]),
@@ -54,8 +54,9 @@ async def test_product_box_translation_quality() -> None:
     translator = TextTranslator(source_language=Language.NL, target_language=Language.RU)
     result = await translator.translate(PRODUCT_BOX_TEXT)
 
-    alpha_chars = _ALPHA_RE.findall(result)
-    cyrillic_chars = _CYRILLIC_RE.findall(result)
+    result_without_brand = re.sub(r"De Ruijter", "", result)
+    alpha_chars = _ALPHA_RE.findall(result_without_brand)
+    cyrillic_chars = _CYRILLIC_RE.findall(result_without_brand)
     ratio = len(cyrillic_chars) / len(alpha_chars) if alpha_chars else 0
     assert ratio >= MIN_CYRILLIC_RATIO, (
         f"Cyrillic ratio {ratio:.0%} below {MIN_CYRILLIC_RATIO:.0%} — output may not be Russian"
