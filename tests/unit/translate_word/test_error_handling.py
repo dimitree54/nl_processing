@@ -1,7 +1,7 @@
 import pytest
 
 from nl_processing.core.exceptions import APIError
-from nl_processing.core.models import Language
+from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.translate_word.service import WordTranslator
 from tests.unit.translate_word.conftest import _AsyncChainMockError
 
@@ -15,7 +15,7 @@ async def test_api_error_wrapping(monkeypatch: pytest.MonkeyPatch) -> None:
     translator._chain = _AsyncChainMockError(RuntimeError("API failed"))
 
     with pytest.raises(APIError) as exc_info:
-        await translator.translate(["huis"])
+        await translator.translate([Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)])
 
     assert exc_info.value.__cause__.__class__ == RuntimeError
     assert str(exc_info.value.__cause__) == "API failed"
@@ -39,7 +39,9 @@ async def test_api_error_various_exceptions(monkeypatch: pytest.MonkeyPatch) -> 
         translator._chain = _AsyncChainMockError(original_exception)
 
         with pytest.raises(APIError) as exc_info:
-            await translator.translate(["huis"])
+            await translator.translate([
+                Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)
+            ])
 
         assert exc_info.value.__cause__ is original_exception
 
@@ -55,7 +57,7 @@ async def test_api_error_preserves_cause(monkeypatch: pytest.MonkeyPatch) -> Non
     translator._chain = _AsyncChainMockError(original)
 
     with pytest.raises(APIError) as exc_info:
-        await translator.translate(["boek"])
+        await translator.translate([Word(normalized_form="boek", word_type=PartOfSpeech.NOUN, language=Language.NL)])
 
     assert exc_info.value.__cause__ is original
     assert str(exc_info.value) == "original cause"

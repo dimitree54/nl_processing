@@ -2,20 +2,20 @@ import time
 
 import pytest
 
-from nl_processing.core.models import Language, TranslationResult
+from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.translate_word.service import WordTranslator
 
-_QUALITY_TEST_CASES = [
-    ("huis", "дом"),
-    ("boek", "книга"),
-    ("water", "вода"),
-    ("zon", "солнце"),
-    ("brood", "хлеб"),
-    ("melk", "молоко"),
-    ("school", "школа"),
-    ("tafel", "стол"),
-    ("stoel", "стул"),
-    ("deur", "дверь"),
+_QUALITY_TEST_CASES: list[tuple[Word, str]] = [
+    (Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL), "дом"),
+    (Word(normalized_form="boek", word_type=PartOfSpeech.NOUN, language=Language.NL), "книга"),
+    (Word(normalized_form="water", word_type=PartOfSpeech.NOUN, language=Language.NL), "вода"),
+    (Word(normalized_form="zon", word_type=PartOfSpeech.NOUN, language=Language.NL), "солнце"),
+    (Word(normalized_form="brood", word_type=PartOfSpeech.NOUN, language=Language.NL), "хлеб"),
+    (Word(normalized_form="melk", word_type=PartOfSpeech.NOUN, language=Language.NL), "молоко"),
+    (Word(normalized_form="school", word_type=PartOfSpeech.NOUN, language=Language.NL), "школа"),
+    (Word(normalized_form="tafel", word_type=PartOfSpeech.NOUN, language=Language.NL), "стол"),
+    (Word(normalized_form="stoel", word_type=PartOfSpeech.NOUN, language=Language.NL), "стул"),
+    (Word(normalized_form="deur", word_type=PartOfSpeech.NOUN, language=Language.NL), "дверь"),
 ]
 
 
@@ -32,25 +32,29 @@ async def test_translation_quality_10_words() -> None:
     assert len(results) == len(words), f"Expected {len(words)} results, got {len(results)}"
 
     for i, (result, expected_translation) in enumerate(zip(results, expected)):
-        assert result.translation == expected_translation, (
-            f"Word #{i} '{words[i]}': expected '{expected_translation}', got '{result.translation}'"
+        assert result.normalized_form == expected_translation, (
+            f"Word #{i} '{words[i].normalized_form}': expected '{expected_translation}', got '{result.normalized_form}'"
         )
 
 
 @pytest.mark.asyncio
 async def test_one_to_one_mapping_5_words() -> None:
-    """5 words produce exactly 5 TranslationResult objects in order."""
+    """5 words produce exactly 5 Word objects in order."""
     translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 
-    words = ["huis", "boek", "water", "zon", "brood"]
+    words = [
+        Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="boek", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="water", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="zon", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="brood", word_type=PartOfSpeech.NOUN, language=Language.NL),
+    ]
     results = await translator.translate(words)
 
     assert len(results) == 5, f"Expected 5 results, got {len(results)}"
     for i, result in enumerate(results):
-        assert isinstance(result, TranslationResult), (
-            f"Result #{i} is {type(result).__name__}, expected TranslationResult"
-        )
-        assert result.translation.strip(), f"Result #{i} has empty translation"
+        assert isinstance(result, Word), f"Result #{i} is {type(result).__name__}, expected Word"
+        assert result.normalized_form.strip(), f"Result #{i} has empty normalized_form"
 
 
 @pytest.mark.asyncio

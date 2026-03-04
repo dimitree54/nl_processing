@@ -23,30 +23,33 @@ SYSTEM_INSTRUCTION = (
     "Вы получаете список нидерландских слов или фраз и должны перевести каждое на русский. "
     "Верните ровно один перевод для каждого входного слова, в том же порядке. "
     "Количество переводов в результате должно равняться количеству слов на входе. "
-    "Каждый перевод должен быть наиболее распространённым, естественным русским эквивалентом. "
+    "Каждый перевод должен содержать нормализованную форму слова на русском языке "
+    "и часть речи (word_type). "
+    "Возможные значения word_type: noun, verb, adjective, adverb, preposition, "
+    "conjunction, pronoun, article, numeral, proper_noun_person, proper_noun_country. "
     "Если входной список пуст, верните пустой список."
 )
 
 EXAMPLE_1_INPUT = "huis\nlopen\nsnel"
 EXAMPLE_1_OUTPUT = [
-    {"translation": "дом"},
-    {"translation": "ходить"},
-    {"translation": "быстро"},
+    {"normalized_form": "дом", "word_type": "noun"},
+    {"normalized_form": "ходить", "word_type": "verb"},
+    {"normalized_form": "быстро", "word_type": "adverb"},
 ]
 
 EXAMPLE_2_INPUT = "de kat\nhet boek\nschrijven\nmooi\nin"
 EXAMPLE_2_OUTPUT = [
-    {"translation": "кошка"},
-    {"translation": "книга"},
-    {"translation": "писать"},
-    {"translation": "красивый"},
-    {"translation": "в"},
+    {"normalized_form": "кошка", "word_type": "noun"},
+    {"normalized_form": "книга", "word_type": "noun"},
+    {"normalized_form": "писать", "word_type": "verb"},
+    {"normalized_form": "красивый", "word_type": "adjective"},
+    {"normalized_form": "в", "word_type": "preposition"},
 ]
 
 EXAMPLE_3_INPUT = "er vandoor gaan\nde fiets"
 EXAMPLE_3_OUTPUT = [
-    {"translation": "сбежать"},
-    {"translation": "велосипед"},
+    {"normalized_form": "сбежать", "word_type": "verb"},
+    {"normalized_form": "велосипед", "word_type": "noun"},
 ]
 
 EXAMPLE_4_INPUT = ""

@@ -1,6 +1,6 @@
 import pytest
 
-from nl_processing.core.models import Language, TranslationResult
+from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.translate_word.service import WordTranslator
 from tests.unit.translate_word.conftest import _AsyncChainMock, make_tool_response
 
@@ -39,18 +39,29 @@ async def test_translate_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 
     mock_translations = [
-        {"translation": "дом"},
-        {"translation": "ходить"},
-        {"translation": "быстро"},
+        {"normalized_form": "дом", "word_type": "noun"},
+        {"normalized_form": "ходить", "word_type": "verb"},
+        {"normalized_form": "быстро", "word_type": "adverb"},
     ]
     translator._chain = _AsyncChainMock(make_tool_response(mock_translations))
 
-    results = await translator.translate(["huis", "lopen", "snel"])
+    input_words = [
+        Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="lopen", word_type=PartOfSpeech.VERB, language=Language.NL),
+        Word(normalized_form="snel", word_type=PartOfSpeech.ADVERB, language=Language.NL),
+    ]
+    results = await translator.translate(input_words)
 
     assert len(results) == 3
-    assert results[0].translation == "дом"
-    assert results[1].translation == "ходить"
-    assert results[2].translation == "быстро"
+    assert results[0].normalized_form == "дом"
+    assert results[0].word_type == PartOfSpeech.NOUN
+    assert results[0].language == Language.RU
+    assert results[1].normalized_form == "ходить"
+    assert results[1].word_type == PartOfSpeech.VERB
+    assert results[1].language == Language.RU
+    assert results[2].normalized_form == "быстро"
+    assert results[2].word_type == PartOfSpeech.ADVERB
+    assert results[2].language == Language.RU
 
 
 @pytest.mark.asyncio
@@ -60,13 +71,19 @@ async def test_translate_one_to_one_mapping(monkeypatch: pytest.MonkeyPatch) -> 
 
     translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 
-    words = ["huis", "boek", "water", "zon", "brood"]
+    words = [
+        Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="boek", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="water", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="zon", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="brood", word_type=PartOfSpeech.NOUN, language=Language.NL),
+    ]
     mock_translations = [
-        {"translation": "дом"},
-        {"translation": "книга"},
-        {"translation": "вода"},
-        {"translation": "солнце"},
-        {"translation": "хлеб"},
+        {"normalized_form": "дом", "word_type": "noun"},
+        {"normalized_form": "книга", "word_type": "noun"},
+        {"normalized_form": "вода", "word_type": "noun"},
+        {"normalized_form": "солнце", "word_type": "noun"},
+        {"normalized_form": "хлеб", "word_type": "noun"},
     ]
     translator._chain = _AsyncChainMock(make_tool_response(mock_translations))
 
@@ -99,31 +116,38 @@ async def test_translate_preserves_order(monkeypatch: pytest.MonkeyPatch) -> Non
     translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 
     mock_translations = [
-        {"translation": "кошка"},
-        {"translation": "книга"},
+        {"normalized_form": "кошка", "word_type": "noun"},
+        {"normalized_form": "книга", "word_type": "noun"},
     ]
     translator._chain = _AsyncChainMock(make_tool_response(mock_translations))
 
-    results = await translator.translate(["de kat", "het boek"])
+    input_words = [
+        Word(normalized_form="de kat", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="het boek", word_type=PartOfSpeech.NOUN, language=Language.NL),
+    ]
+    results = await translator.translate(input_words)
 
-    assert results[0].translation == "кошка"
-    assert results[1].translation == "книга"
+    assert results[0].normalized_form == "кошка"
+    assert results[1].normalized_form == "книга"
 
 
 @pytest.mark.asyncio
-async def test_translate_returns_translation_result_objects(
+async def test_translate_returns_word_objects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Each item is a TranslationResult with a translation field."""
+    """Each item is a Word with normalized_form, word_type, and language fields."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 
-    mock_translations = [{"translation": "дом"}]
+    mock_translations = [{"normalized_form": "дом", "word_type": "noun"}]
     translator._chain = _AsyncChainMock(make_tool_response(mock_translations))
 
-    results = await translator.translate(["huis"])
+    input_words = [Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)]
+    results = await translator.translate(input_words)
 
     assert len(results) == 1
-    assert isinstance(results[0], TranslationResult)
-    assert results[0].translation == "дом"
+    assert isinstance(results[0], Word)
+    assert results[0].normalized_form == "дом"
+    assert results[0].word_type == PartOfSpeech.NOUN
+    assert results[0].language == Language.RU

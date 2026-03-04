@@ -1,6 +1,6 @@
 import pytest
 
-from nl_processing.core.models import Language, TranslationResult
+from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.translate_word.service import WordTranslator
 
 
@@ -9,15 +9,21 @@ async def test_realistic_pipeline_input() -> None:
     """Translate a list of normalized Dutch words like output from extract_words_from_text."""
     translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 
-    words = ["de kat", "lopen", "mooi", "in", "Nederland"]
+    words = [
+        Word(normalized_form="de kat", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="lopen", word_type=PartOfSpeech.VERB, language=Language.NL),
+        Word(normalized_form="mooi", word_type=PartOfSpeech.ADJECTIVE, language=Language.NL),
+        Word(normalized_form="in", word_type=PartOfSpeech.PREPOSITION, language=Language.NL),
+        Word(normalized_form="Nederland", word_type=PartOfSpeech.PROPER_NOUN_COUNTRY, language=Language.NL),
+    ]
     results = await translator.translate(words)
 
     assert len(results) == len(words), f"Expected {len(words)} results, got {len(results)}"
     for i, result in enumerate(results):
-        assert isinstance(result, TranslationResult), (
-            f"Result #{i} is {type(result).__name__}, expected TranslationResult"
+        assert isinstance(result, Word), f"Result #{i} is {type(result).__name__}, expected Word"
+        assert result.normalized_form.strip(), (
+            f"Result #{i} has empty normalized_form for word '{words[i].normalized_form}'"
         )
-        assert result.translation.strip(), f"Result #{i} has empty translation for word '{words[i]}'"
 
 
 @pytest.mark.asyncio
@@ -25,15 +31,17 @@ async def test_one_to_one_mapping_verification() -> None:
     """Pass N words, verify exactly N results in the same order."""
     translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 
-    words = ["huis", "boek", "water"]
+    words = [
+        Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="boek", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        Word(normalized_form="water", word_type=PartOfSpeech.NOUN, language=Language.NL),
+    ]
     results = await translator.translate(words)
 
     assert len(results) == len(words), f"Expected {len(words)} results, got {len(results)}"
     for i, result in enumerate(results):
-        assert isinstance(result, TranslationResult), (
-            f"Result #{i} is {type(result).__name__}, expected TranslationResult"
-        )
-        assert result.translation.strip(), f"Result #{i} has empty translation"
+        assert isinstance(result, Word), f"Result #{i} is {type(result).__name__}, expected Word"
+        assert result.normalized_form.strip(), f"Result #{i} has empty normalized_form"
 
 
 @pytest.mark.asyncio
@@ -53,11 +61,13 @@ def test_unsupported_pair_at_init() -> None:
 
 @pytest.mark.asyncio
 async def test_single_word_translation() -> None:
-    """Translate a single word, verify output is a list with 1 TranslationResult."""
+    """Translate a single word, verify output is a list with 1 Word."""
     translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 
-    results = await translator.translate(["huis"])
+    input_words = [Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)]
+    results = await translator.translate(input_words)
 
     assert len(results) == 1, f"Expected 1 result, got {len(results)}"
-    assert isinstance(results[0], TranslationResult)
-    assert results[0].translation.strip(), "Translation should not be empty"
+    assert isinstance(results[0], Word)
+    assert results[0].normalized_form.strip(), "Translation should not be empty"
+    assert results[0].language == Language.RU
