@@ -89,6 +89,9 @@ EXAMPLE_4_EXPECTED = (
 EXAMPLE_5_TEXT = "The quick brown fox jumps over the lazy dog"
 EXAMPLE_5_EXPECTED = ""
 
+EXAMPLE_6_TEXT = "Please take your shoes off before entering the house"
+EXAMPLE_6_EXPECTED = ""
+
 OUTPUT_PATH = Path(__file__).parent / "nl.json"
 
 
@@ -125,12 +128,13 @@ def _make_example_ai(expected_text: str, call_id: str) -> AIMessage:
 
 
 def build_prompt() -> ChatPromptTemplate:
-    """Build the Dutch extraction prompt with 5 few-shot examples."""
+    """Build the Dutch extraction prompt with 6 few-shot examples."""
     img1 = _generate_image_b64(EXAMPLE_1_TEXT)
     img2 = _generate_image_b64(EXAMPLE_2_TEXT)
     img3 = _encode_existing_image_b64(EXAMPLE_3_IMAGE)
     img4 = _encode_existing_image_b64(EXAMPLE_4_IMAGE)
     img5 = _generate_image_b64(EXAMPLE_5_TEXT)
+    img6 = _generate_image_b64(EXAMPLE_6_TEXT)
 
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=SYSTEM_INSTRUCTION),
@@ -149,6 +153,9 @@ def build_prompt() -> ChatPromptTemplate:
         _make_example_human(img5),
         _make_example_ai(EXAMPLE_5_EXPECTED, "call_example_5"),
         ToolMessage(content=EXAMPLE_5_EXPECTED, tool_call_id="call_example_5"),
+        _make_example_human(img6),
+        _make_example_ai(EXAMPLE_6_EXPECTED, "call_example_6"),
+        ToolMessage(content=EXAMPLE_6_EXPECTED, tool_call_id="call_example_6"),
         MessagesPlaceholder(variable_name="images"),
     ])
 
