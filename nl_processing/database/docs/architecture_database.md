@@ -121,6 +121,34 @@ User word associations are stored in a junction table (`user_words`) that links 
 
 **Rationale:** (1) Simple, flat structure — no user registration needed. (2) `user_id` is a plain string, provided by the caller. (3) `language` column identifies which language table the `word_id` refers to. (4) `added_at` enables future features (chronological ordering, recent words).
 
+### Decision: Per-User Exercise Progress Tables (Per Language Pair)
+
+For adaptive practice, the module stores per-user, per-exercise integer scores for words. Scores are tracked independently per exercise type and per language pair.
+
+**Key:** (`user_id`, `source_word_id`, `exercise_type`) -> `score`
+
+**Table naming:** One table per language pair, matching the translation link table strategy:
+
+- `user_word_exercise_scores_nl_ru`
+- `user_word_exercise_scores_ru_nl` (if RU->NL is supported later)
+
+**Table schema (per language pair):**
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | SERIAL | PRIMARY KEY |
+| `user_id` | VARCHAR | NOT NULL |
+| `source_word_id` | INTEGER | NOT NULL, FOREIGN KEY -> source language word table |
+| `exercise_type` | VARCHAR | NOT NULL |
+| `score` | INTEGER | NOT NULL, DEFAULT 0 |
+| `updated_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() |
+| | | UNIQUE(user_id, source_word_id, exercise_type) |
+
+**Rationale:**
+- Keeping the table per language pair matches the project's symmetric table strategy.
+- Keeping `exercise_type` as a string avoids schema changes when new exercises are introduced.
+- Using an integer balance (+1 correct, -1 incorrect) makes v1 trivial and leaves room for future richer logic (decay, thresholds) without throwing away the table.
+
 ### Decision: Abstract Backend Interface
 
 Database operations are defined behind an abstract base class (`AbstractBackend`). The initial implementation (`NeonBackend`) targets Neon PostgreSQL via `asyncpg`.
@@ -143,6 +171,23 @@ class AbstractBackend(ABC):
     async def get_user_words(self, user_id: str, language: str, **filters) -> list[dict]: ...
     @abstractmethod
     async def add_user_word(self, user_id: str, word_id: int, language: str) -> None: ...
+    @abstractmethod
+    async def increment_user_exercise_score(
+        self,
+        table: str,
+        user_id: str,
+        source_word_id: int,
+        exercise_type: str,
+        delta: int,
+    ) -> int: ...
+    @abstractmethod
+    async def get_user_exercise_scores(
+        self,
+        table: str,
+        user_id: str,
+        source_word_ids: list[int],
+        exercise_types: list[str],
+    ) -> list[dict]: ...
     @abstractmethod
     async def create_tables(self, languages: list[str], pairs: list[tuple[str, str]]) -> None: ...
 ```
@@ -225,7 +270,8 @@ nl_processing/database/
 │   ├── __init__.py
 │   ├── abstract.py              # AbstractBackend (ABC)
 │   └── neon.py                  # NeonBackend (asyncpg implementation)
-├── models.py                    # AddWordsResult, WordPair (module-internal models, NOT Word — that's in core)
+├── models.py                    # AddWordsResult, WordPair, ScoredWordPair (module-internal models, NOT Word — that's in core)
+├── exercise_progress.py          # internal progress API for sampling/exercises
 ├── exceptions.py                # ConfigurationError, DatabaseError
 ├── logging.py                   # Structured logging setup
 ├── testing.py                   # Test utilities: drop_all_tables, reset_database, count helpers (NOT production code)
@@ -245,7 +291,7 @@ Mock the abstract backend. Test `DatabaseService` logic: deduplication, user-wor
 
 ### Integration Tests
 
-Real `asyncpg` connection to a Neon database (dev environment). Test: table creation, word addition with deduplication, translation link creation, user word list operations, latency benchmarks (200ms threshold).
+Real `asyncpg` connection to a Neon database (dev environment). Test: table creation, word addition with deduplication, translation link creation, user word list operations, exercise score increment + retrieval, latency benchmarks (200ms threshold).
 
 ### E2E Tests — Full Real-World Flow
 
@@ -253,13 +299,14 @@ E2e tests exercise the complete module against a real Neon database with real wo
 
 **E2E Test Scenarios:**
 
-1. **Table lifecycle:** `create_tables()` creates all required tables (language tables, link tables, user_words). Verify tables exist and have correct schema. Then `drop_all_tables()` removes them cleanly.
+1. **Table lifecycle:** `create_tables()` creates all required tables (language tables, link tables, user_words, exercise score tables). Verify tables exist and have correct schema. Then `drop_all_tables()` removes them cleanly.
 2. **Word addition flow:** Add a batch of real Dutch words → verify they appear in `words_nl` → verify feedback correctly identifies new vs. existing → add same words again → verify all reported as existing, no duplicates in table.
 3. **Async translation flow:** Add new Dutch words → verify `translate_word` is triggered → wait for translation to complete → verify translations appear in `words_ru` → verify translation links created in `translations_nl_ru`.
 4. **User word list:** Add words as user "test_user_1" → verify user-word associations created → add words as user "test_user_2" (some overlapping) → verify each user sees only their words → verify shared corpus contains all words from both users.
 5. **Get words with filtering:** Add words of various types (nouns, verbs, adjectives) → `get_words(word_type="noun")` returns only nouns → `get_words(limit=3, random=True)` returns exactly 3 → `get_words()` returns all with translations.
 6. **Untranslated word exclusion:** Add new words → immediately call `get_words()` before translation completes → verify untranslated words are excluded → verify warning is logged → wait for translation → call `get_words()` again → verify all words now returned with translations.
 7. **Latency benchmark:** Measure add/check operation latency across 50 word operations → assert p95 ≤ 200ms.
+8. **Exercise progress:** Increment per-user per-exercise scores (+1/-1) for a subset of words → verify score persistence → verify score-aware retrieval returns expected per-exercise scores.
 
 ### Backdoor / Test Utility Functions
 
@@ -269,7 +316,7 @@ E2e tests require the ability to reset the database to a clean state before and 
 # nl_processing/database/testing.py — test utilities only, not for production use
 
 async def drop_all_tables(languages: list[str], pairs: list[tuple[str, str]]) -> None:
-    """Drop all word tables, translation link tables, and user_words table. Irreversible."""
+    """Drop all word tables, translation link tables, user_words table, and exercise score tables. Irreversible."""
 
 async def reset_database(languages: list[str], pairs: list[tuple[str, str]]) -> None:
     """Drop all tables and recreate them empty. Equivalent to drop_all + create_tables."""
@@ -310,16 +357,19 @@ tests/
 │   ├── __init__.py
 │   ├── test_service.py              # DatabaseService logic with mocked backend
 │   ├── test_deduplication.py        # Word deduplication logic
-│   └── test_feedback.py             # AddWordsResult generation
+│   ├── test_feedback.py             # AddWordsResult generation
+│   └── test_exercise_progress.py    # ExerciseProgressStore with mocked backend
 ├── integration/database/
 │   ├── __init__.py
 │   ├── test_neon_backend.py         # NeonBackend CRUD operations against real Neon
 │   ├── test_table_creation.py       # create_tables() and drop_all_tables()
-│   └── test_latency.py             # 200ms latency benchmark
+│   ├── test_latency.py             # 200ms latency benchmark
+│   └── test_exercise_scores.py      # score table CRUD + upsert behavior
 └── e2e/database/
     ├── __init__.py
     ├── conftest.py                  # reset_database() in setup, drop_all_tables() in teardown
     ├── test_word_addition_flow.py   # Scenarios 2, 3 (add words, verify translation)
     ├── test_user_word_lists.py      # Scenarios 4, 5 (multi-user, filtering)
-    └── test_untranslated_words.py   # Scenario 6 (exclusion, logging)
+    ├── test_untranslated_words.py   # Scenario 6 (exclusion, logging)
+    └── test_exercise_progress.py    # Scenario 8 (scores)
 ```

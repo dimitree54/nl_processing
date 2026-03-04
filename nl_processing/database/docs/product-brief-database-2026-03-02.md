@@ -21,6 +21,8 @@ parentBrief: docs/planning-artifacts/product-brief.md
 
 `database` is a highly independent persistence module for the `nl_processing` project. It provides a class-based async interface for storing, linking, and retrieving words across multiple languages using a shared relational database. The module operates on the unified `Word` model from `core.models` — the same Pydantic model used by `extract_words_from_text` (output) and `translate_word` (input/output), enabling zero-conversion data flow across the entire pipeline. It manages per-language word tables, cross-language translation link tables, and per-user word lists — all behind a minimal public API where the developer instantiates a client with a `user_id` and immediately starts working.
 
+In addition, the module persists **per-user, per-exercise progress scores** for word-based exercises (tracked independently per exercise type and per language pair). This enables adaptive practice modules (e.g., `sampling`) to select words based on what the user struggles with.
+
 The module has a direct dependency on `translate_word` — when new words are added, translation is triggered asynchronously. The user receives immediate feedback on which `Word` objects were new vs. already known, without waiting for translations to complete.
 
 The module follows the project's zero-config philosophy: environment variables for database connection are the only required setup (with a clear error and setup instructions if missing), and all other parameters use sensible defaults. A convenience function creates all required database tables in a single call.
@@ -32,6 +34,7 @@ Initial implementation targets Neon (serverless PostgreSQL) as the database back
 - **Symmetric language architecture:** No language is treated as "source" or "target" — each language has its own word table, and translation links are stored separately per language pair. This makes the system naturally extensible to any language combination.
 - **Fire-and-forget translation:** When new words are added, translation is triggered asynchronously via `translate_word`. The user gets immediate feedback on which words were new vs. already known, without waiting for translations to complete.
 - **User-scoped word lists:** Each user has a personal list of "known words" referencing the shared global word tables. Adding words is a personal action; the word corpus is shared.
+- **Per-exercise progress tracking:** User performance is stored as a per-word integer score per exercise type (v1: +1/-1 balance) to support adaptive sampling without coupling scoring logic to callers.
 - **Local caching layer:** A cache wrapper keeps recently-accessed data local for fast reads, with the remote database as the source of truth.
 - **Backend abstraction:** Core database operations are defined behind abstract interfaces, allowing future backend swaps. The initial implementation targets Neon PostgreSQL with a hard 200ms latency threshold — if exceeded during development, the backend choice is reconsidered.
 - **Structured logging:** Logging is abstracted for easy future Sentry integration, with console output as the initial backend.
@@ -63,6 +66,7 @@ The `nl_processing` pipeline modules (`extract_words_from_text`, `translate_word
 An async Python module that:
 - Provides a `DatabaseService` class instantiated with `user_id` (string) and minimal optional configuration
 - Manages per-language word tables storing `Word` objects (from `core.models`: `normalized_form`, `word_type` as `PartOfSpeech`, `language` as `Language`), per-language-pair translation link tables, and per-user word lists
+- Manages per-language word tables storing `Word` objects (from `core.models`: `normalized_form`, `word_type` as `PartOfSpeech`, `language` as `Language`), per-language-pair translation link tables, per-user word lists, and per-user per-exercise score tables (per language pair)
 - Exposes two primary methods: `add_words(list[Word])` — adds words, triggers async translation via `translate_word`, returns `AddWordsResult` with new/existing `Word` lists; `get_words(...)` — retrieves `list[WordPair]` (source `Word` + translated `Word`) with optional filtering (by `PartOfSpeech`, limit, random sampling)
 - Provides a one-time `create_tables()` convenience function for initial setup
 - Uses abstract backend interface with Neon PostgreSQL as the first implementation
@@ -71,6 +75,8 @@ An async Python module that:
 - Requires database connection via environment variables — fails fast with clear setup instructions if missing
 - Uses structured logging abstraction (console now, Sentry-ready)
 - Depends directly on `translate_word` for automatic translation of newly added words
+- Depends directly on `translate_word` for automatic translation of newly added words
+- Provides a small internal progress API for logging exercise results (+1/-1) and reading scores for adaptive sampling
 
 ---
 
@@ -111,6 +117,8 @@ This module has no MVP/phased delivery — it is a single, indivisible unit.
 11. **Async-first** — all public methods are async
 12. **Environment variable configuration** — fail-fast with setup instructions if missing
 13. **Test utilities** — `drop_all_tables()`, `reset_database()`, count helpers for e2e test setup/teardown (separate `testing.py`, not production code)
+14. **Exercise progress scores** — per-user, per-exercise per-word integer score tables (per language pair), updated via +1/-1 increments
+15. **Scores-aware retrieval** — internal query helpers to fetch a user's translated word pairs together with requested exercise scores (for `sampling`)
 
 ### Module-Specific Dependencies
 
@@ -132,3 +140,5 @@ This module has no MVP/phased delivery — it is a single, indivisible unit.
 - Database migration tooling if schema evolves
 - More sophisticated caching strategies (TTL, LRU, distributed cache)
 - Additional query methods (search, statistics, frequency analysis)
+- Additional query methods (search, statistics, frequency analysis)
+- Richer progress tracking (time decay, attempt history, per-exercise thresholds) built on top of the v1 score tables

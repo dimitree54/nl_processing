@@ -19,13 +19,18 @@ classification:
 
 ## Executive Summary
 
-`database` is an async persistence module that stores, links, and retrieves words across multiple languages using a shared relational database (Neon PostgreSQL). It manages per-language word tables, per-language-pair translation link tables, and per-user word lists. The developer instantiates `DatabaseService` with a `user_id`, then calls async methods to add words and retrieve word-translation pairs. New words trigger automatic asynchronous translation via direct integration with `translate_word`. The module requires database connection environment variables — no defaults, fails fast with setup instructions if missing.
+`database` is an async persistence module that stores, links, and retrieves words across multiple languages using a shared relational database (Neon PostgreSQL). It manages per-language word tables, per-language-pair translation link tables, and per-user word lists.
+
+In addition, it stores **per-user, per-exercise progress scores** for word-based exercises (tracked independently per exercise type and per language pair). This enables adaptive practice modules (e.g., `sampling`) to select words based on what the user struggles with.
+
+The developer instantiates `DatabaseService` with a `user_id`, then calls async methods to add words and retrieve word-translation pairs. New words trigger automatic asynchronous translation via direct integration with `translate_word`. The module requires database connection environment variables — no defaults, fails fast with setup instructions if missing.
 
 ### What Makes This Special
 
 - **Symmetric multilingual persistence** with no privileged language — each language has its own table, translation links are per-pair
 - **Fire-and-forget translation** — add_words returns immediately, translation happens asynchronously
 - **Growing shared corpus** — the more users add words, the richer the shared vocabulary; translations are paid for once globally
+- **Per-exercise progress scores** — per-user scores are stored per word and per exercise type, enabling adaptive sampling while keeping v1 simple (+1/-1 balance)
 - **Hard 200ms latency contract** enforced during development, not as an afterthought
 
 ## Success Criteria
@@ -36,6 +41,7 @@ classification:
 - Words are never duplicated in shared tables — deduplication is correct
 - Translation links correctly associate words across language tables
 - User word lists accurately reference the shared corpus
+- Exercise score updates and reads are per-user only and independent per exercise type
 - Async translation fires without blocking add_words return
 - get_words excludes untranslated words with a logged warning
 - Module fails fast with clear setup instructions when environment variables are missing
@@ -62,6 +68,7 @@ All features are required — no phased MVP. The module either works completely 
 **Growth (Post-Release):**
 - Additional language tables and translation link tables as the project expands
 - More sophisticated caching and query capabilities
+- Richer exercise progress tracking (time decay, attempt history, per-exercise thresholds) built on top of the v1 score tables
 
 ## User Journeys
 
@@ -87,6 +94,16 @@ All features are required — no phased MVP. The module either works completely 
 
 Later, the Neon service is temporarily unavailable. `add_words()` raises `DatabaseError` with a clear message. Alex catches it, retries later.
 
+### Journey 4: Practice Feedback Loop (Exercises + Sampling)
+
+**Alex** runs a small study flow:
+
+1. He retrieves a set of words to practice (via `sampling`, which reads from `database`).
+2. He asks the user an exercise (e.g., "translate NL -> RU").
+3. After the user answers, he reports the result to `database` as a +1 (correct) or -1 (incorrect) increment for that exercise type.
+
+Over time, the user's weak words (non-positive balance) are sampled more frequently.
+
 ### Journey Requirements Summary
 
 | Capability | Revealed By |
@@ -99,6 +116,8 @@ Later, the Neon service is temporarily unavailable. `add_words()` raises `Databa
 | `get_words()` with filtering (word_type, limit, random) | Journey 2 |
 | `ConfigurationError` for missing env vars | Journey 3 |
 | `DatabaseError` for database failures | Journey 3 |
+| Per-exercise score increment (+1/-1) | Journey 4 |
+| Scores-aware retrieval for sampling | Journey 4 |
 
 ## Developer Tool Specific Requirements
 
@@ -135,11 +154,25 @@ pairs = await db.get_words(
 # pairs[0].target  → Word(normalized_form="велосипед", word_type=NOUN, language=RU)
 ```
 
+**Internal interface (used by `sampling` and exercise flows):**
+
+```python
+from nl_processing.database.exercise_progress import ExerciseProgressStore
+from nl_processing.core.models import Language
+
+progress = ExerciseProgressStore(user_id="alex", source_language=Language.NL, target_language=Language.RU)
+await progress.increment(source_word=words[0], exercise_type="nl_to_ru", delta=-1)
+
+scored_pairs = await progress.get_word_pairs_with_scores(exercise_types=["nl_to_ru", "multiple_choice"])
+# scored_pairs[0].pair -> WordPair, scored_pairs[0].scores[exercise_type] -> int
+```
+
 **Core model used:** `Word` from `nl_processing.core.models` — unified model with `normalized_form: str`, `word_type: PartOfSpeech`, `language: Language`. Same model used by `extract_words_from_text` (output) and `translate_word` (input/output). The `database` module stores and returns `Word` instances directly — no conversion needed between modules.
 
 **Module-internal models** (in `database/models.py`):
 - `AddWordsResult` — feedback from `add_words()`: `new_words: list[Word]`, `existing_words: list[Word]`
 - `WordPair` — a source `Word` paired with its translated `Word`: `source: Word`, `target: Word`
+- `ScoredWordPair` — a `WordPair` plus requested exercise scores: `pair: WordPair`, `scores: dict[str, int]`
 
 **Constructor:**
 - `user_id: str` — required, identifies the user
@@ -161,12 +194,13 @@ pairs = await db.get_words(
 - Local caching layer for recently-accessed data
 - Structured logging (Python `logging` module with console handler, Sentry-attachable)
 - All public methods are `async`
+- Exercise scores are stored as integer balances in per-language-pair score tables and updated atomically via upsert
 
 ## Functional Requirements
 
 ### Database Setup
 
-- FR1: Module provides `create_tables()` async class method that creates all required tables (empty) in a single call
+ - FR1: Module provides `create_tables()` async class method that creates all required tables (word tables, translation links, user words, and exercise score tables) in a single call
 - FR2: Module creates per-language word tables (e.g., `words_nl`, `words_ru`) with columns: `id` (SERIAL PK), `normalized_form` (VARCHAR UNIQUE), `word_type` (VARCHAR) — mapped from `Word.normalized_form` and `Word.word_type.value`
 - FR3: Module creates per-language-pair translation link tables (e.g., `translations_nl_ru`) referencing both language tables
 - FR4: Module creates per-user word list tables referencing the shared language tables
@@ -203,11 +237,22 @@ pairs = await db.get_words(
 
 ### Testing Utilities
 
-- FR23: Module provides a `drop_all_tables()` async function that drops all module-managed tables (word tables, link tables, user_words). Irreversible.
+- FR23: Module provides a `drop_all_tables()` async function that drops all module-managed tables (word tables, link tables, user_words, exercise score tables). Irreversible.
 - FR24: Module provides a `reset_database()` async function that drops all tables and recreates them empty (equivalent to drop_all + create_tables)
 - FR25: Module provides `count_words(table)`, `count_user_words(user_id, language)`, and `count_translation_links(table)` async helper functions for test assertions
 - FR26: All testing utilities live in a separate `testing.py` file, clearly separated from production code — never imported by production modules
 - FR27: `create_tables()` uses `IF NOT EXISTS` semantics — safe to call in any environment without risk of data loss
+
+### Exercise Progress Tracking (for sampling/exercises)
+
+- FR28: Module creates per-language-pair user exercise score tables (e.g., `user_word_exercise_scores_nl_ru`) with unique key `(user_id, source_word_id, exercise_type)` and integer `score`
+- FR29: Exercise types are stored as strings (`exercise_type: str`) and tracked independently (no schema changes for new exercise types)
+- FR30: Module provides an internal `ExerciseProgressStore` class that is instantiated with `user_id`, `source_language`, and `target_language`
+- FR31: `ExerciseProgressStore.increment(source_word: Word, exercise_type: str, delta: int)` updates the score by `delta` and creates the row if missing (upsert)
+- FR32: `delta` is restricted to `+1` and `-1` in v1 (invalid values raise a descriptive exception)
+- FR33: Missing score is treated as `0` when reading
+- FR34: `ExerciseProgressStore.get_word_pairs_with_scores(exercise_types: list[str])` returns all translated `WordPair` items for the user along with integer scores for each requested exercise type
+- FR35: Exercise scores are per-user only (never global) and never affect the shared corpus tables
 
 ## Non-Functional Requirements (Module-Specific)
 
@@ -217,6 +262,7 @@ pairs = await db.get_words(
 - NFR2: If 200ms threshold is exceeded during development — halt development and report to Dima for backend re-evaluation
 - NFR3: Local caching layer reduces read latency for recently-accessed data
 - NFR4: Batch operations (multiple words) should leverage database batch capabilities where possible
+- NFR17: Exercise score increments and score-aware reads should meet the same ≤200ms latency ceiling per operation where applicable
 
 ### Async
 
