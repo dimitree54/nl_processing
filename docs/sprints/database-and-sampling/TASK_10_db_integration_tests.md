@@ -6,7 +6,7 @@ Module: `database`
 Depends on: `T8`
 Parallelizable: `yes, with T9`
 Owner: `Developer`
-Status: `planned`
+Status: `done`
 ---
 
 ## Goal / value
