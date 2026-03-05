@@ -12,16 +12,11 @@ _LOPEN = Word(normalized_form="lopen", word_type=PartOfSpeech.VERB, language=Lan
 
 
 async def _seed_word_pair(backend: MockBackend) -> None:
-    """Insert huis→HUIS word pair with user association and translation link.
-
-    Stores source word under both 'nl' (used by get_word in increment)
-    and 'words_nl' (used by get_user_words join logic).
-    """
-    src_id = await backend.add_word("words_nl", "huis", "noun")
-    tgt_id = await backend.add_word("words_ru", "HUIS", "noun")
+    """Insert huis→HUIS word pair with user association and translation link."""
+    src_id = await backend.add_word("nl", "huis", "noun")
+    tgt_id = await backend.add_word("ru", "HUIS", "noun")
     assert src_id is not None
     assert tgt_id is not None
-    backend._words.setdefault("nl", {})["huis"] = {"id": src_id, "normalized_form": "huis", "word_type": "noun"}
     await backend.add_user_word("u1", src_id, "nl")
     await backend.add_translation_link("nl_ru", src_id, tgt_id)
 

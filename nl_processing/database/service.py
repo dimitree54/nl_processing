@@ -52,8 +52,8 @@ class DatabaseService:
         self._target_language = target_language
         src = source_language.value
         tgt = target_language.value
-        self._source_table = f"words_{src}"
-        self._target_table = f"words_{tgt}"
+        self._source_table = src
+        self._target_table = tgt
         self._translations_table = f"{src}_{tgt}"
 
     async def add_words(self, words: list[Word]) -> AddWordsResult:

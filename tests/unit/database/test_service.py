@@ -68,7 +68,7 @@ async def test_add_words_triggers_translation(db_service: DatabaseService, mock_
     """New words trigger background translation task."""
     await db_service.add_words([_HUIS])
     await asyncio.sleep(0.05)
-    assert "HUIS" in mock_backend._words.get("words_ru", {}), "Translation should have stored uppercased word"
+    assert "HUIS" in mock_backend._words.get("ru", {}), "Translation should have stored uppercased word"
 
 
 # ---- DatabaseService.get_words ----

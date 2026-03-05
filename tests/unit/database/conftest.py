@@ -51,9 +51,9 @@ class MockBackend(AbstractBackend):
         random: bool = False,
     ) -> list[dict[str, str | int]]:
         # jscpd:ignore-end
-        src_table = f"words_{language}"
+        src_table = language
         tgt_lang = "ru" if language == "nl" else "nl"
-        tgt_table = f"words_{tgt_lang}"
+        tgt_table = tgt_lang
         trans_table = f"{language}_{tgt_lang}"
         rows: list[dict[str, str | int]] = []
         for uid, wid, lang in self._user_words:

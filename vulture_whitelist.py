@@ -21,6 +21,7 @@ from nl_processing.extract_text_from_image.benchmark import run_benchmark
 from nl_processing.extract_words_from_text.service import WordExtractor
 from nl_processing.translate_text.service import TextTranslator
 from nl_processing.translate_word.service import WordTranslator
+from tests.e2e.database.conftest import db_ready, wait_for_translations
 
 # AbstractBackend ABC — methods are abstract, implemented by concrete backends (T4+)
 AbstractBackend.add_word  # type: ignore[misc]
@@ -104,4 +105,6 @@ __all__ = [
     "count_user_words",
     "count_words",
     "reset_database",
+    "db_ready",
+    "wait_for_translations",
 ]
