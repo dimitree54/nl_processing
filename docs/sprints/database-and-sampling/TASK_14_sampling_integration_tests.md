@@ -6,7 +6,7 @@ Module: `sampling`
 Depends on: `T12, T10`
 Parallelizable: `no`
 Owner: `Developer`
-Status: `planned`
+Status: `done`
 ---
 
 ## Goal / value
