@@ -10,6 +10,7 @@ All environment variables are managed via **Doppler CLI**.
 | Variable | Type | Description | Set by |
 |---|---|---|---|
 | `OPENAI_API_KEY` | Secret | OpenAI API authentication key for all LLM calls | Developer (via Doppler) |
+| `DATABASE_URL` | Secret | Neon PostgreSQL connection string (per environment) | Developer (via Doppler) |
 
 ## Usage
 

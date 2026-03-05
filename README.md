@@ -18,7 +18,8 @@ pip install nl_processing
 | `extract_words_from_text` | `WordExtractor` | Extract and normalize words from markdown text | [docs](nl_processing/extract_words_from_text/docs/) |
 | `translate_text` | `TextTranslator` | Translate text (NL → RU) with markdown preservation | [docs](nl_processing/translate_text/docs/) |
 | `translate_word` | `WordTranslator` | Batch-translate words (NL → RU) | [docs](nl_processing/translate_word/docs/) |
-| `database` | `save_translation()` | Persist translation mappings | [docs](nl_processing/database/docs/) |
+| `database` | `DatabaseService` | Persist words and translations to Neon PostgreSQL | [docs](nl_processing/database/docs/) |
+| `sampling` | `WordSampler` | Weighted word sampling with adversarial distractors | [docs](nl_processing/sampling/docs/) |
 
 Each module's `docs/` folder contains a product brief, PRD, and architecture doc.
 
@@ -30,4 +31,4 @@ make check             # full lint + test pipeline
 uv run pytest tests/unit   # unit tests only (free, no API key)
 ```
 
-See [docs/ENV_VARS.md](docs/ENV_VARS.md) for required environment variables.
+See [docs/ENV_VARS.md](docs/ENV_VARS.md) for required environment variables and [NEON.md](NEON.md) for database setup.
