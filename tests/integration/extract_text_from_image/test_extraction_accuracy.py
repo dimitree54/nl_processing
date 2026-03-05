@@ -112,11 +112,5 @@ async def test_english_only_raises_target_language_not_found(
 
     extractor = ImageTextExtractor(language=Language.NL)
 
-    max_attempts = 3
-    for attempt in range(1, max_attempts + 1):
-        try:
-            await extractor.extract_from_path(image_path)
-        except TargetLanguageNotFoundError:
-            return  # expected error was raised — test passes
-        if attempt == max_attempts:
-            pytest.fail(f"TargetLanguageNotFoundError was not raised after {max_attempts} attempts")
+    with pytest.raises(TargetLanguageNotFoundError):
+        await extractor.extract_from_path(image_path)
