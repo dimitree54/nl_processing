@@ -19,6 +19,7 @@ from nl_processing.database.testing import (
 # Benchmark utilities used by integration tests at runtime (not detected by static analysis)
 from nl_processing.extract_text_from_image.benchmark import run_benchmark
 from nl_processing.extract_words_from_text.service import WordExtractor
+from nl_processing.sampling.service import WordSampler
 from nl_processing.translate_text.service import TextTranslator
 from nl_processing.translate_word.service import WordTranslator
 from tests.e2e.database.conftest import db_ready, wait_for_translations
@@ -73,6 +74,10 @@ CachedDatabaseService.create_tables  # type: ignore[misc]
 ExerciseProgressStore.increment  # type: ignore[misc]
 ExerciseProgressStore.get_word_pairs_with_scores  # type: ignore[misc]
 
+# WordSampler — public API of sampling module, consumed by exercise runner (T13+)
+WordSampler.sample  # type: ignore[misc]
+WordSampler.sample_adversarial  # type: ignore[misc]
+
 # classmethod first parameter — required by Python, flagged by vulture
 cls  # noqa: F821
 
@@ -105,6 +110,7 @@ __all__ = [
     "count_user_words",
     "count_words",
     "reset_database",
+    "WordSampler",
     "db_ready",
     "wait_for_translations",
 ]
