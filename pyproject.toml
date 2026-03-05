@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nl_processing"
-version = "0.2.0"
+version = "0.2.1"
 description = "Natural language processing playground"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,6 +20,12 @@ dependencies = [
 where = ["."]
 include = ["nl_processing*"]
 exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"nl_processing.extract_text_from_image.prompts" = ["*.json"]
+"nl_processing.extract_words_from_text.prompts" = ["*.json"]
+"nl_processing.translate_text.prompts" = ["*.json"]
+"nl_processing.translate_word.prompts" = ["*.json"]
 
 [dependency-groups]
 dev = [
