@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.so
+
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+.mypy_cache/
+
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+.DS_Store

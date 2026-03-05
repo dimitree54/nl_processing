@@ -151,3 +151,20 @@ async def test_translate_returns_word_objects(
     assert results[0].normalized_form == "дом"
     assert results[0].word_type == PartOfSpeech.NOUN
     assert results[0].language == Language.RU
+
+
+@pytest.mark.asyncio
+async def test_translate_accepts_interjection_word_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM-provided interjections should validate as PartOfSpeech values."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
+    translator._chain = _AsyncChainMock(make_tool_response([{"normalized_form": "ой", "word_type": "interjection"}]))
+
+    input_words = [Word(normalized_form="hé", word_type=PartOfSpeech.NOUN, language=Language.NL)]
+    results = await translator.translate(input_words)
+
+    assert len(results) == 1
+    assert results[0].normalized_form == "ой"
+    assert results[0].word_type == PartOfSpeech.INTERJECTION
+    assert results[0].language == Language.RU

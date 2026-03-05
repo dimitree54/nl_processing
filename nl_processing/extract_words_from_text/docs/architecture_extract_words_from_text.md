@@ -27,7 +27,7 @@ parentArchitecture: docs/planning-artifacts/architecture.md
 
 ### Decision: PartOfSpeech Enum Word-Type Taxonomy
 
-Word types use the `PartOfSpeech` Enum from `core/models.py`. Allowed values: `noun`, `verb`, `adjective`, `adverb`, `preposition`, `conjunction`, `pronoun`, `article`, `numeral`, `proper_noun_person`, `proper_noun_country`.
+Word types use the `PartOfSpeech` Enum from `core/models.py`. Allowed values: `noun`, `verb`, `adjective`, `adverb`, `preposition`, `conjunction`, `pronoun`, `article`, `numeral`, `interjection`, `proper_noun_person`, `proper_noun_country`.
 
 **Rationale:** Using an Enum instead of free-form strings provides compile-time type safety and Pydantic validation. The LLM returns word types as strings matching the Enum values; Pydantic automatically coerces them. Invalid word types are rejected at validation time (fail fast). The Enum is extensible — adding a new value (e.g., `PROPER_NOUN_CITY`) requires adding it to the Enum and updating the prompt, with no other code changes.
 

@@ -4,7 +4,6 @@ import zipfile
 
 import pytest
 
-
 _PROMPT_ARTIFACTS = [
     "nl_processing/extract_text_from_image/prompts/nl.json",
     "nl_processing/extract_words_from_text/prompts/nl.json",
@@ -17,7 +16,7 @@ def _build_wheel(tmp_path: Path) -> Path:
     repo_root = Path(__file__).resolve().parents[3]
     dist_dir = tmp_path / "dist"
 
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         ["uv", "build", "--wheel", "--out-dir", str(dist_dir)],
         check=True,
         cwd=repo_root,

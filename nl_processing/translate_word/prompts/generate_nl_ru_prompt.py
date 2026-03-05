@@ -26,7 +26,8 @@ SYSTEM_INSTRUCTION = (
     "Каждый перевод должен содержать нормализованную форму слова на русском языке "
     "и часть речи (word_type). "
     "Возможные значения word_type: noun, verb, adjective, adverb, preposition, "
-    "conjunction, pronoun, article, numeral, proper_noun_person, proper_noun_country. "
+    "conjunction, pronoun, article, numeral, interjection, proper_noun_person, "
+    "proper_noun_country. "
     "Если входной список пуст, верните пустой список."
 )
 

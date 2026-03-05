@@ -25,6 +25,7 @@ class PartOfSpeech(Enum):
     PRONOUN = "pronoun"
     ARTICLE = "article"
     NUMERAL = "numeral"
+    INTERJECTION = "interjection"
     PROPER_NOUN_PERSON = "proper_noun_person"
     PROPER_NOUN_COUNTRY = "proper_noun_country"
 

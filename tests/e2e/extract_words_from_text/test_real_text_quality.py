@@ -96,7 +96,7 @@ ROTATED_VOCABULARY_EXPECTED: set[tuple[str, str]] = {
     ("naar", "preposition"),
     ("de nationaliteit", "noun"),
     ("nazeggen", "verb"),
-    ("nee", "adverb"),
+    ("nee", "interjection"),
     ("neutraal", "adjective"),
     ("niet", "adverb"),
     ("nieuw", "adjective"),

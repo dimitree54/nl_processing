@@ -29,6 +29,7 @@ SYSTEM_INSTRUCTION = (
     "- Extraheer samengestelde uitdrukkingen en fraseologische constructies als enkele eenheden.\n"
     "- Wijs een plat woordtype toe aan elk woord. Mogelijke types: "
     "noun, verb, adjective, adverb, preposition, conjunction, pronoun, article, numeral, "
+    "interjection, "
     "proper_noun_person, proper_noun_country.\n"
     "- Retourneer het resultaat als een lijst van woord-objecten in een _WordList wrapper.\n"
     "- Als de tekst geen Nederlandse woorden bevat, retourneer dan een lege lijst."
