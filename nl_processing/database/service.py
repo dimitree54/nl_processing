@@ -69,7 +69,7 @@ class DatabaseService:
         existing_words: list[Word] = []
 
         for word in words:
-            table = self._source_table
+            table = word.language.value
             word_id = await self._backend.add_word(table, word.normalized_form, word.word_type.value)
             if word_id is None:
                 existing_words.append(word)
@@ -77,7 +77,7 @@ class DatabaseService:
                 word_id = int(row["id"])  # type: ignore[index]
             else:
                 new_words.append(word)
-            await self._backend.add_user_word(self._user_id, word_id, self._source_language.value)
+            await self._backend.add_user_word(self._user_id, word_id, word.language.value)
 
         if new_words:
             asyncio.create_task(self._translate_and_store(new_words))
