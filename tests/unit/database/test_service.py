@@ -14,6 +14,7 @@ from tests.unit.database.conftest import MockBackend
 _HUIS = Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)
 _LOPEN = Word(normalized_form="lopen", word_type=PartOfSpeech.VERB, language=Language.NL)
 _SNEL = Word(normalized_form="snel", word_type=PartOfSpeech.ADVERB, language=Language.NL)
+_DOM = Word(normalized_form="dom", word_type=PartOfSpeech.NOUN, language=Language.RU)
 
 
 # ---- DatabaseService.add_words ----
@@ -69,6 +70,17 @@ async def test_add_words_triggers_translation(db_service: DatabaseService, mock_
     await db_service.add_words([_HUIS])
     await asyncio.sleep(0.05)
     assert "HUIS" in mock_backend._words.get("ru", {}), "Translation should have stored uppercased word"
+
+
+@pytest.mark.asyncio
+async def test_add_words_uses_word_language_for_storage(
+    db_service: DatabaseService,
+    mock_backend: MockBackend,
+) -> None:
+    """Words are stored and associated under their own language."""
+    await db_service.add_words([_DOM])
+    assert "dom" in mock_backend._words.get("ru", {})
+    assert any(lang == "ru" for _uid, _wid, lang in mock_backend._user_words)
 
 
 # ---- DatabaseService.get_words ----

@@ -32,3 +32,7 @@ uv run pytest tests/unit   # unit tests only (free, no API key)
 ```
 
 See [docs/ENV_VARS.md](docs/ENV_VARS.md) for required environment variables and [NEON.md](NEON.md) for database setup.
+
+## Contributing
+
+See [docs/REALEASE_WORKFLOW.md](docs/REALEASE_WORKFLOW.md) for the release process and publishing considerations.
