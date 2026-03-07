@@ -90,24 +90,39 @@ Business logic stays above an abstract backend. The initial implementation remai
 
 **Rationale:** translation is part of the remote persistence flow, not a plugin concern.
 
-### Decision: Cache Support Happens Through Explicit Internal APIs
+### Decision: Cache Support Happens Through ExerciseProgressStore
 
-To support `database_cache`, `database` exposes internal remote-only operations:
+To support `database_cache`, `database` exposes cache-facing operations as instance methods on `ExerciseProgressStore`:
 
 ```python
-class DatabaseCacheSyncBackend(Protocol):
-    async def export_user_word_pairs(...) -> list[RemoteWordPairRecord]: ...
-    async def export_user_scores(...) -> list[RemoteScoreRecord]: ...
-    async def apply_score_delta(event_id: str, ...) -> None: ...
+progress = ExerciseProgressStore(
+    user_id="alex",
+    source_language=Language.NL,
+    target_language=Language.RU,
+    exercise_types=["nl_to_ru", "multiple_choice"],
+)
+
+# Snapshot export (word pairs + scores combined):
+snapshot: list[ScoredWordPair] = await progress.export_remote_snapshot()
+
+# Idempotent score delta replay (atomic, transactional):
+await progress.apply_score_delta(
+    event_id="uuid-here",
+    source_word_id=101,
+    exercise_type="nl_to_ru",
+    delta=-1,  # must be +1 or -1
+)
 ```
 
-**Rationale:** cache refresh and cache flush must depend on explicit remote contracts, not on ad hoc direct SQL from another module.
+**Rationale:** cache refresh and cache flush depend on explicit remote contracts. `ExerciseProgressStore` already scopes user, languages, and exercise types at initialization. No separate Protocol is needed because there is exactly one implementation, and test isolation is achieved by injecting a mock backend into the store.
 
-### Decision: Idempotent Score Replay
+### Decision: Atomic Idempotent Score Replay
 
-`apply_score_delta(event_id, ...)` treats `event_id` as an idempotency key and records that the event was already applied.
+`apply_score_delta(event_id, ...)` treats `event_id` as an idempotency key and records that the event was already applied. The check-increment-mark operation is atomic: all three steps (check if event was applied, increment score, mark event) execute inside a single database transaction via `AbstractBackend.apply_score_delta_atomic(...)`.
 
-**Rationale:** `database_cache` must be able to retry failed or uncertain flushes without double-incrementing remote scores.
+**Rationale:** `database_cache` must be able to retry failed or uncertain flushes without double-incrementing remote scores. Without a transaction, a crash between increment and mark could cause a lost idempotency record or a double-apply on retry. The atomic method guarantees all-or-nothing semantics.
+
+`delta` is validated to be exactly `+1` or `-1` before any database operation (FR32).
 
 ### Decision: Structured Logging with Sync Visibility
 
@@ -123,16 +138,17 @@ class DatabaseCacheSyncBackend(Protocol):
 nl_processing/database/
 ├── __init__.py
 ├── service.py                   # DatabaseService
-├── cached_service.py            # legacy prototype helper; superseded by planned database_cache module
+├── exercise_progress.py         # ExerciseProgressStore + cache-support helpers
 ├── backend/
 │   ├── __init__.py
-│   ├── abstract.py
-│   └── neon.py
+│   ├── abstract.py              # AbstractBackend ABC
+│   ├── neon.py                  # NeonBackend (asyncpg)
+│   ├── _neon_exercise.py        # Exercise-related backend operations
+│   └── _queries.py              # SQL query templates
 ├── models.py                    # AddWordsResult, WordPair, ScoredWordPair
-├── exercise_progress.py         # ExerciseProgressStore + cache-support helpers
-├── exceptions.py
-├── logging.py
-├── testing.py
+├── exceptions.py                # ConfigurationError, DatabaseError
+├── logging.py                   # get_logger
+├── testing.py                   # Test-only utilities (NOT production)
 └── docs/
     ├── product-brief-database-2026-03-02.md
     ├── prd_database.md
