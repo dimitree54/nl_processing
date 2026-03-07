@@ -99,14 +99,8 @@ async def test_mixed_dutch_russian_extracts_only_dutch(tmp_path: pathlib.Path) -
 async def test_english_only_raises_target_language_not_found(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Image with English-only text — should raise TargetLanguageNotFoundError (FR7).
-
-    The LLM is non-deterministic and may occasionally return text for an
-    English-only image even when configured for Dutch.  We retry up to 3
-    times so that a single spurious LLM response does not cause a false
-    failure.
-    """
-    english_text = "Remember to bring your umbrella tomorrow"
+    """Image with English-only text should raise TargetLanguageNotFoundError (FR7)."""
+    english_text = "Remember to charge your phone before leaving tomorrow"
     image_path = str(tmp_path / "english_only.png")
     generate_test_image(english_text, image_path, font_scale=1.2, width=800, height=100)
 
