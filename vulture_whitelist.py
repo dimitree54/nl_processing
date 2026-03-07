@@ -3,7 +3,6 @@
 # Functions that are owned by future sprints but flagged as unused
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
-from nl_processing.database.cached_service import CachedDatabaseService
 from nl_processing.database.exceptions import ConfigurationError, DatabaseError
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.logging import get_logger
@@ -70,11 +69,6 @@ DatabaseService.add_words  # type: ignore[misc]
 DatabaseService.get_words  # type: ignore[misc]
 DatabaseService.create_tables  # type: ignore[misc]
 
-# CachedDatabaseService — wraps DatabaseService with LRU cache (T7)
-CachedDatabaseService.add_words  # type: ignore[misc]
-CachedDatabaseService.get_words  # type: ignore[misc]
-CachedDatabaseService.create_tables  # type: ignore[misc]
-
 # ExerciseProgressStore — internal API, used by sampling module (T12+)
 ExerciseProgressStore.increment  # type: ignore[misc]
 ExerciseProgressStore.get_word_pairs_with_scores  # type: ignore[misc]
@@ -101,7 +95,6 @@ NeonBackend.check_event_applied  # type: ignore[misc]
 NeonBackend.mark_event_applied  # type: ignore[misc]
 
 __all__ = [
-    "CachedDatabaseService",
     "DatabaseService",
     "ConfigurationError",
     "DatabaseError",

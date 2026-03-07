@@ -6,7 +6,6 @@ import pytest
 
 from nl_processing.core.models import Language, Word
 from nl_processing.database.backend.abstract import AbstractBackend
-from nl_processing.database.cached_service import CachedDatabaseService
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.service import DatabaseService
 
@@ -161,16 +160,6 @@ def db_service(monkeypatch: pytest.MonkeyPatch, mock_backend: MockBackend) -> Da
     svc = DatabaseService(user_id="u1")
     svc._backend = mock_backend  # type: ignore[assignment]
     svc._translator = MockTranslator(target_language=Language.RU)  # type: ignore[assignment]
-    return svc
-
-
-@pytest.fixture
-def cached_service(monkeypatch: pytest.MonkeyPatch, mock_backend: MockBackend) -> CachedDatabaseService:
-    monkeypatch.setenv("DATABASE_URL", "mock://test")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    svc = CachedDatabaseService(user_id="u1")
-    svc._inner._backend = mock_backend  # type: ignore[assignment]
-    svc._inner._translator = MockTranslator(target_language=Language.RU)  # type: ignore[assignment]
     return svc
 
 

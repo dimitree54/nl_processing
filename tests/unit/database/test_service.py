@@ -1,11 +1,10 @@
-"""Unit tests for DatabaseService and CachedDatabaseService."""
+"""Unit tests for DatabaseService."""
 
 import asyncio
 
 import pytest
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
-from nl_processing.database.cached_service import CachedDatabaseService
 from nl_processing.database.exceptions import ConfigurationError
 from nl_processing.database.models import WordPair
 from nl_processing.database.service import DatabaseService
@@ -125,36 +124,3 @@ def test_constructor_raises_without_database_url(monkeypatch: pytest.MonkeyPatch
     monkeypatch.delenv("DATABASE_URL", raising=False)
     with pytest.raises(ConfigurationError):
         DatabaseService(user_id="u1")
-
-
-# ---- CachedDatabaseService ----
-
-
-@pytest.mark.asyncio
-async def test_cached_service_caches_results(cached_service: CachedDatabaseService) -> None:
-    """Second get_words call returns cached result without backend call."""
-    await cached_service.add_words([_HUIS])
-    await asyncio.sleep(0.05)
-    first = await cached_service.get_words()
-    second = await cached_service.get_words()
-    assert first == second
-
-
-@pytest.mark.asyncio
-async def test_cached_service_clears_on_add(cached_service: CachedDatabaseService) -> None:
-    """add_words clears the cache."""
-    await cached_service.add_words([_HUIS])
-    await asyncio.sleep(0.05)
-    await cached_service.get_words()
-    assert len(cached_service._cache) == 1
-    await cached_service.add_words([_LOPEN])
-    assert len(cached_service._cache) == 0
-
-
-@pytest.mark.asyncio
-async def test_cached_service_no_cache_random(cached_service: CachedDatabaseService) -> None:
-    """random=True queries bypass cache."""
-    await cached_service.add_words([_HUIS])
-    await asyncio.sleep(0.05)
-    await cached_service.get_words(random=True)
-    assert len(cached_service._cache) == 0
