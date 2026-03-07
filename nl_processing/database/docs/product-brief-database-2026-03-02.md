@@ -4,11 +4,7 @@ inputDocuments:
   - docs/planning-artifacts/product-brief.md
   - docs/planning-artifacts/prd.md
   - docs/planning-artifacts/architecture.md
-  - nl_processing/extract_text_from_image/docs/planning-artifacts/product-brief-extract_text_from_image-2026-03-01.md
-  - nl_processing/extract_words_from_text/docs/product-brief-extract_words_from_text-2026-03-01.md
-  - nl_processing/translate_text/docs/product-brief-translate_text-2026-03-01.md
-  - nl_processing/translate_word/docs/product-brief-translate_word-2026-03-01.md
-date: 2026-03-02
+date: 2026-03-07
 author: Dima
 parentBrief: docs/planning-artifacts/product-brief.md
 ---
@@ -19,25 +15,20 @@ parentBrief: docs/planning-artifacts/product-brief.md
 
 ## Executive Summary
 
-`database` is a highly independent persistence module for the `nl_processing` project. It provides a class-based async interface for storing, linking, and retrieving words across multiple languages using a shared relational database. The module operates on the unified `Word` model from `core.models` — the same Pydantic model used by `extract_words_from_text` (output) and `translate_word` (input/output), enabling zero-conversion data flow across the entire pipeline. It manages per-language word tables, cross-language translation link tables, and per-user word lists — all behind a minimal public API where the developer instantiates a client with a `user_id` and immediately starts working.
+`database` is the remote source-of-truth persistence module for `nl_processing`. It stores the shared multilingual word corpus, per-language translation links, per-user word lists, and per-user exercise progress in Neon PostgreSQL. The module operates directly on the unified `Word` model from `core.models`, so it remains the canonical persistence boundary for the whole pipeline.
 
-In addition, the module persists **per-user, per-exercise progress scores** for word-based exercises (tracked independently per exercise type and per language pair). This enables adaptive practice modules (e.g., `sampling`) to select words based on what the user struggles with.
+The module is intentionally responsible for **correctness, durable persistence, and clean relational structure**, not for ultra-low-latency interactive access. Low-latency reads and local-first progress writes are planned as a separate concern in the new `database_cache` module, which will consume `database` as its remote backend.
 
-The module has a direct dependency on `translate_word` — when new words are added, translation is triggered asynchronously. The user receives immediate feedback on which `Word` objects were new vs. already known, without waiting for translations to complete.
-
-The module follows the project's zero-config philosophy: environment variables for database connection are the only required setup (with a clear error and setup instructions if missing), and all other parameters use sensible defaults. A convenience function creates all required database tables in a single call.
-
-Initial implementation targets Neon (serverless PostgreSQL) as the database backend, with abstract interfaces to support future backend swaps.
+Exercise progress is now modeled as **multiple dedicated statistics tables**: one table per language pair and per exercise type. This keeps progress for different exercises isolated, makes table ownership explicit, and gives `database_cache` a clear synchronization contract for each exercise it is initialized with.
 
 ### What Makes This Module Special
 
-- **Symmetric language architecture:** No language is treated as "source" or "target" — each language has its own word table, and translation links are stored separately per language pair. This makes the system naturally extensible to any language combination.
-- **Fire-and-forget translation:** When new words are added, translation is triggered asynchronously via `translate_word`. The user gets immediate feedback on which words were new vs. already known, without waiting for translations to complete.
-- **User-scoped word lists:** Each user has a personal list of "known words" referencing the shared global word tables. Adding words is a personal action; the word corpus is shared.
-- **Per-exercise progress tracking:** User performance is stored as a per-word integer score per exercise type (v1: +1/-1 balance) to support adaptive sampling without coupling scoring logic to callers.
-- **Local caching layer:** A cache wrapper keeps recently-accessed data local for fast reads, with the remote database as the source of truth.
-- **Backend abstraction:** Core database operations are defined behind abstract interfaces, allowing future backend swaps. The initial implementation targets Neon PostgreSQL with a hard 200ms latency threshold — if exceeded during development, the backend choice is reconsidered.
-- **Structured logging:** Logging is abstracted for easy future Sentry integration, with console output as the initial backend.
+- **Symmetric language architecture:** each language has its own word table; translation links are stored separately per language pair.
+- **Fire-and-forget translation:** `add_words()` returns immediately while background translation persists missing target-language entries.
+- **Per-exercise isolation:** statistics are stored in separate tables per exercise type, not mixed in one generic bucket.
+- **Remote source of truth:** `database` owns durable state and exposes the snapshot / sync primitives that `database_cache` can build on.
+- **Backend abstraction:** the business layer stays separate from the Neon-specific backend implementation.
+- **Structured logging:** remote persistence, translation failures, and sync-facing internals are observable without coupling to a specific logging backend.
 
 ---
 
@@ -45,38 +36,32 @@ Initial implementation targets Neon (serverless PostgreSQL) as the database back
 
 ### Problem Statement
 
-The `nl_processing` pipeline modules (`extract_words_from_text`, `translate_word`, etc.) process words and translations but have no persistence layer. Results are ephemeral — every pipeline run starts from scratch. There is no shared word corpus that grows over time, no way to track which words a specific user has encountered, and no mechanism to avoid redundant translation of already-known words.
+The pipeline needs one authoritative place where words, translations, user vocabulary, and exercise outcomes are stored durably across runs and across devices. Without that layer:
 
-### Problem Impact
+- words are re-added and re-translated unnecessarily;
+- user vocabulary is not shared across sessions;
+- exercise progress is fragmented or lost;
+- downstream modules cannot synchronize against a stable canonical dataset.
 
-- Every pipeline execution re-processes words that were already extracted and translated in previous runs
-- No accumulation of a growing multilingual word corpus across users
-- No per-user tracking of learned/encountered vocabulary
-- No way to know which words still need translation vs. which are already translated
-- Translation API costs scale linearly with repeated runs instead of only paying for genuinely new words
+### Why `database` Is Still Needed After Introducing `database_cache`
 
-### Why Existing Solutions Fall Short
+`database_cache` solves a different problem: local latency. It should not become the source of truth. The project still needs a durable remote store that:
 
-- **In-memory storage (current `service.py`):** Data is lost between runs. No persistence, no multi-user support, no structure.
-- **Generic ORMs / database libraries:** Require significant boilerplate to set up the specific table structure, relationships, caching, and async patterns needed. The developer would need to understand the data model deeply.
-- **External dictionary/vocabulary services:** Don't integrate with the project's specific word models and translation pipeline.
+- survives device loss and process restarts;
+- merges data from multiple sessions and clients;
+- owns the shared corpus and translation links;
+- provides authoritative exercise statistics per user and per exercise.
 
 ### Proposed Solution
 
 An async Python module that:
-- Provides a `DatabaseService` class instantiated with `user_id` (string) and minimal optional configuration
-- Manages per-language word tables storing `Word` objects (from `core.models`: `normalized_form`, `word_type` as `PartOfSpeech`, `language` as `Language`), per-language-pair translation link tables, and per-user word lists
-- Manages per-language word tables storing `Word` objects (from `core.models`: `normalized_form`, `word_type` as `PartOfSpeech`, `language` as `Language`), per-language-pair translation link tables, per-user word lists, and per-user per-exercise score tables (per language pair)
-- Exposes two primary methods: `add_words(list[Word])` — adds words, triggers async translation via `translate_word`, returns `AddWordsResult` with new/existing `Word` lists; `get_words(...)` — retrieves `list[WordPair]` (source `Word` + translated `Word`) with optional filtering (by `PartOfSpeech`, limit, random sampling)
-- Provides a one-time `create_tables()` convenience function for initial setup
-- Uses abstract backend interface with Neon PostgreSQL as the first implementation
-- Includes a local caching layer for performance optimization
-- Enforces ≤200ms latency per add/check operation as a hard development-time constraint
-- Requires database connection via environment variables — fails fast with clear setup instructions if missing
-- Uses structured logging abstraction (console now, Sentry-ready)
-- Depends directly on `translate_word` for automatic translation of newly added words
-- Depends directly on `translate_word` for automatic translation of newly added words
-- Provides a small internal progress API for logging exercise results (+1/-1) and reading scores for adaptive sampling
+
+- provides `DatabaseService` for adding words and reading translated word pairs from PostgreSQL;
+- stores per-user progress in **separate score tables per exercise type** for each language pair;
+- exposes an internal `ExerciseProgressStore` configured with the exercise types relevant to the caller;
+- remains the only module that writes authoritative remote state;
+- exposes internal snapshot-export and idempotent score-apply primitives for the planned `database_cache` module;
+- uses environment-variable configuration only and fails fast when `DATABASE_URL` is missing.
 
 ---
 
@@ -84,61 +69,54 @@ An async Python module that:
 
 ### Acceptance Criteria
 
-1. **Add/check latency:** ≤200ms per single word add/existence-check operation against Neon PostgreSQL (wall clock time). If exceeded during development — stop and report.
-2. **Correctness:** Words added once are never duplicated. Translation links are created correctly. User word lists reference the shared corpus accurately.
-3. **Async translation:** Adding words returns feedback immediately; translation happens asynchronously without blocking the caller.
-4. **Get words:** Returns word-translation pairs for the user. Words not yet translated are excluded with a warning logged.
+1. **Correctness:** words are deduplicated, translation links are valid, and per-user word lists stay consistent with the shared corpus.
+2. **Exercise isolation:** each configured exercise type persists into its own dedicated statistics table for the selected language pair.
+3. **Async translation:** `add_words()` returns immediately; translation persistence continues in the background.
+4. **Cache readiness:** the module exposes enough internal remote APIs for `database_cache` to refresh snapshots and replay per-exercise increments safely.
 
 ### Readiness Criteria
 
-- All database operations complete within 200ms latency threshold
-- Convenience `create_tables()` function creates all required tables
-- Module fails fast with clear instructions when environment variables are missing
-- Integration tests pass against a real Neon database
+- `create_tables()` creates corpus, translation, user-word, and per-exercise score tables.
+- `ExerciseProgressStore` is explicitly aware of the exercise set it manages.
+- Snapshot export and idempotent delta-apply interfaces are specified for `database_cache`.
+- Integration and e2e tests pass against a real Neon database.
 
 ---
 
 ## Scope
 
-This module has no MVP/phased delivery — it is a single, indivisible unit.
+This module has no phased MVP. It is the canonical remote persistence layer.
 
 ### Core Features
 
-1. **`DatabaseService` class** with `user_id` constructor, minimal optional parameters, sensible defaults
-2. **Per-language word tables** — separate table per language (e.g., `words_nl`, `words_ru`), storing `Word` model fields (`normalized_form`, `word_type` as `PartOfSpeech.value`). `language` is not stored — determined by the table.
-3. **Translation link tables** — separate table per language pair (e.g., `translations_nl_ru`), links `Word` entries across language tables
-4. **Per-user word lists** — user's known words referencing the shared word tables
-5. **`add_words(words)`** — adds words to shared table (deduplication), triggers async translation via `translate_word`, records user-word associations, returns feedback (new vs. existing)
-6. **`get_words(...)`** — retrieves user's word-translation pairs with optional filtering: `word_type`, `limit`, random sampling
-7. **`create_tables()`** — one-time convenience function to create all required tables (empty)
-8. **Backend abstraction** — abstract interfaces for database operations, first implementation: Neon PostgreSQL
-9. **Local caching layer** — wrapper for fast reads of recently-accessed data
-10. **Structured logging** — abstraction for console logging now, Sentry-ready later
-11. **Async-first** — all public methods are async
-12. **Environment variable configuration** — fail-fast with setup instructions if missing
-13. **Test utilities** — `drop_all_tables()`, `reset_database()`, count helpers for e2e test setup/teardown (separate `testing.py`, not production code)
-14. **Exercise progress scores** — per-user, per-exercise per-word integer score tables (per language pair), updated via +1/-1 increments
-15. **Scores-aware retrieval** — internal query helpers to fetch a user's translated word pairs together with requested exercise scores (for `sampling`)
+1. **`DatabaseService`** with `user_id`, language-pair configuration, and async public methods.
+2. **Per-language word tables** storing `Word.normalized_form` and `Word.word_type`.
+3. **Per-language-pair translation link tables** connecting source and target words.
+4. **Per-user word lists** referencing the shared corpus.
+5. **`add_words(words)`** with deduplication, user association, and async translation.
+6. **`get_words(...)`** returning translated `WordPair` items for the current user.
+7. **`create_tables()`** and test-only reset/drop helpers.
+8. **Per-exercise score tables** per language pair and exercise type.
+9. **`ExerciseProgressStore`** configured with a set of exercise types at initialization.
+10. **Snapshot export + idempotent delta apply** as internal support APIs for `database_cache`.
+11. **Structured logging** and backend abstraction.
 
 ### Module-Specific Dependencies
 
 - `asyncpg` — async PostgreSQL driver for Neon
-- `translate_word` — direct dependency for automatic translation of new words
+- `translate_word` — automatic translation of newly added words
 
 ### Out of Scope
 
-- User authentication or registration (user_id is a plain string)
-- Database migrations or schema versioning
-- Full-text search or fuzzy matching
-- Bulk import/export functionality
-- Admin interface or database management UI
-- Languages other than Dutch and Russian (interface supports them, only NL/RU tables are created and tested)
+- Local low-latency caching
+- Local-first offline progress writes
+- Distributed cache invalidation
+- User authentication / registration
+- Admin UI or schema migration tooling
 
 ### Future Vision
 
-- Additional language tables and translation link tables as new languages are added to the project
-- Database migration tooling if schema evolves
-- More sophisticated caching strategies (TTL, LRU, distributed cache)
-- Additional query methods (search, statistics, frequency analysis)
-- Additional query methods (search, statistics, frequency analysis)
-- Richer progress tracking (time decay, attempt history, per-exercise thresholds) built on top of the v1 score tables
+- Additional languages and language pairs
+- Incremental snapshot export for cache refreshes
+- Richer exercise analytics beyond integer balance
+- Remote compaction / archival for idempotent score event logs
