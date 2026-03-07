@@ -20,6 +20,7 @@ class MockBackend(AbstractBackend):
         self._user_words: list[tuple[str, int, str]] = []
         self._scores: dict[tuple[str, str, int], int] = {}
         self._applied_events: set[tuple[str, str]] = set()
+        self.count_user_words_calls = 0
 
     async def add_word(self, table: str, normalized_form: str, word_type: str) -> int | None:
         bucket = self._words.setdefault(table, {})
@@ -77,6 +78,20 @@ class MockBackend(AbstractBackend):
             rows = rows[:limit]
         return rows
 
+    async def count_user_words(self, user_id: str, language: str, word_type: str | None = None) -> int:
+        self.count_user_words_calls += 1
+        count = 0
+        for uid, wid, lang in self._user_words:
+            if uid != user_id or lang != language:
+                continue
+            src = self._find_word_by_id(language, wid)
+            if src is None:
+                continue
+            if word_type is not None and src["word_type"] != word_type:
+                continue
+            count += 1
+        return count
+
     async def increment_user_exercise_score(
         self,
         table: str,
@@ -106,13 +121,7 @@ class MockBackend(AbstractBackend):
         self._applied_events.add((table, event_id))
 
     async def apply_score_delta_atomic(
-        self,
-        score_table: str,
-        events_table: str,
-        user_id: str,
-        event_id: str,
-        source_word_id: int,
-        delta: int,
+        self, score_table: str, events_table: str, user_id: str, event_id: str, source_word_id: int, delta: int
     ) -> bool:
         if (events_table, event_id) in self._applied_events:
             return False
@@ -183,10 +192,7 @@ def db_service(monkeypatch: pytest.MonkeyPatch, mock_backend: MockBackend) -> Da
 def progress_store(monkeypatch: pytest.MonkeyPatch, mock_backend: MockBackend) -> ExerciseProgressStore:
     monkeypatch.setenv("DATABASE_URL", "mock://test")
     store = ExerciseProgressStore(
-        user_id="u1",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        exercise_types=["flashcard"],
+        user_id="u1", source_language=Language.NL, target_language=Language.RU, exercise_types=["flashcard"]
     )
     store._backend = mock_backend  # type: ignore[assignment]
     return store

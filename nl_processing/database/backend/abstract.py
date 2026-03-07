@@ -54,6 +54,15 @@ class AbstractBackend(ABC):
         """
 
     @abstractmethod
+    async def count_user_words(
+        self,
+        user_id: str,
+        language: str,
+        word_type: str | None = None,
+    ) -> int:
+        """Return total user-word associations for the given user and language."""
+
+    @abstractmethod
     async def add_user_word(
         self,
         user_id: str,

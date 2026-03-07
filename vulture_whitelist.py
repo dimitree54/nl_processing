@@ -1,3 +1,4 @@
+# pyright: reportAttributeAccessIssue=false, reportMissingImports=false, reportUndefinedVariable=false, reportUnknownVariableType=false
 # Vulture whitelist — list false-positive "unused" symbols here.
 
 # Functions that are owned by future sprints but flagged as unused
@@ -28,6 +29,7 @@ AbstractBackend.add_word  # type: ignore[misc]
 AbstractBackend.get_word  # type: ignore[misc]
 AbstractBackend.add_translation_link  # type: ignore[misc]
 AbstractBackend.get_user_words  # type: ignore[misc]
+AbstractBackend.count_user_words  # type: ignore[misc]
 AbstractBackend.add_user_word  # type: ignore[misc]
 AbstractBackend.increment_user_exercise_score  # type: ignore[misc]
 AbstractBackend.get_user_exercise_scores  # type: ignore[misc]
@@ -91,6 +93,7 @@ NeonBackend.add_word  # type: ignore[misc]
 NeonBackend.get_word  # type: ignore[misc]
 NeonBackend.add_translation_link  # type: ignore[misc]
 NeonBackend.get_user_words  # type: ignore[misc]
+NeonBackend.count_user_words  # type: ignore[misc]
 NeonBackend.add_user_word  # type: ignore[misc]
 NeonBackend.increment_user_exercise_score  # type: ignore[misc]
 NeonBackend.get_user_exercise_scores  # type: ignore[misc]

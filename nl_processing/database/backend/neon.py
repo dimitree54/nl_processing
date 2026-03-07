@@ -1,4 +1,4 @@
-"""NeonBackend — asyncpg implementation of AbstractBackend for Neon PostgreSQL."""
+"""NeonBackend asyncpg implementation for Neon PostgreSQL."""
 
 import asyncpg
 
@@ -15,6 +15,7 @@ from nl_processing.database.backend._queries import (
     CREATE_USER_WORDS,
     add_translation_link_query,
     add_word_query,
+    count_user_words_query,
     create_translations_table,
     create_words_table,
     get_user_words_query,
@@ -35,7 +36,6 @@ class NeonBackend(AbstractBackend):
         self._connection: asyncpg.Connection | None = None  # type: ignore[type-arg]
 
     async def _connect(self) -> asyncpg.Connection:  # type: ignore[type-arg]
-        """Return cached connection, creating it lazily on first call."""
         if self._connection is None:
             try:
                 self._connection = await asyncpg.connect(dsn=self._database_url)
@@ -44,13 +44,12 @@ class NeonBackend(AbstractBackend):
                 raise DatabaseError(str(exc)) from exc
             except OSError as exc:
                 raise DatabaseError(str(exc)) from exc
+        if self._connection is None:
+            raise DatabaseError("Database connection was not initialized")
         return self._connection
 
     async def create_tables(
-        self,
-        languages: list[str],
-        pairs: list[tuple[str, str]],
-        exercise_slugs: list[str],
+        self, languages: list[str], pairs: list[tuple[str, str]], exercise_slugs: list[str]
     ) -> None:
         conn = await self._connect()
         try:
@@ -79,11 +78,7 @@ class NeonBackend(AbstractBackend):
             return None
         return int(row["id"])
 
-    async def get_word(
-        self,
-        table: str,
-        normalized_form: str,
-    ) -> dict[str, str | int] | None:
+    async def get_word(self, table: str, normalized_form: str) -> dict[str, str | int] | None:
         conn = await self._connect()
         try:
             row = await conn.fetchrow(get_word_query(table), normalized_form)
@@ -97,24 +92,14 @@ class NeonBackend(AbstractBackend):
             "word_type": row["word_type"],
         }
 
-    async def add_translation_link(
-        self,
-        table: str,
-        source_id: int,
-        target_id: int,
-    ) -> None:
+    async def add_translation_link(self, table: str, source_id: int, target_id: int) -> None:
         conn = await self._connect()
         try:
             await conn.execute(add_translation_link_query(table), source_id, target_id)
         except asyncpg.PostgresError as exc:
             raise DatabaseError(str(exc)) from exc
 
-    async def add_user_word(
-        self,
-        user_id: str,
-        word_id: int,
-        language: str,
-    ) -> None:
+    async def add_user_word(self, user_id: str, word_id: int, language: str) -> None:
         conn = await self._connect()
         try:
             await conn.execute(ADD_USER_WORD, user_id, word_id, language)
@@ -145,6 +130,19 @@ class NeonBackend(AbstractBackend):
             raise DatabaseError(str(exc)) from exc
         return [dict(row) for row in rows]
 
+    async def count_user_words(self, user_id: str, language: str, word_type: str | None = None) -> int:
+        conn = await self._connect()
+        args: list[str] = [user_id, language]
+        if word_type is not None:
+            args.append(word_type)
+        try:
+            count = await conn.fetchval(count_user_words_query(language, word_type), *args)
+        except asyncpg.PostgresError as exc:
+            raise DatabaseError(str(exc)) from exc
+        if count is None:
+            return 0
+        return int(count)
+
     async def increment_user_exercise_score(
         self,
         table: str,
@@ -156,27 +154,16 @@ class NeonBackend(AbstractBackend):
         return await increment_score(conn, table, user_id, source_word_id, delta)
 
     async def get_user_exercise_scores(
-        self,
-        table: str,
-        user_id: str,
-        source_word_ids: list[int],
+        self, table: str, user_id: str, source_word_ids: list[int]
     ) -> list[dict[str, str | int]]:
         conn = await self._connect()
         return await get_scores(conn, table, user_id, source_word_ids)
 
-    async def check_event_applied(
-        self,
-        table: str,
-        event_id: str,
-    ) -> bool:
+    async def check_event_applied(self, table: str, event_id: str) -> bool:
         conn = await self._connect()
         return await check_event(conn, table, event_id)
 
-    async def mark_event_applied(
-        self,
-        table: str,
-        event_id: str,
-    ) -> None:
+    async def mark_event_applied(self, table: str, event_id: str) -> None:
         conn = await self._connect()
         await mark_event(conn, table, event_id)
 
@@ -189,10 +176,7 @@ class NeonBackend(AbstractBackend):
 
 
 def _infer_target_language(source_language: str) -> str:
-    """Infer the target language for translation lookups.
-
-    With only two languages (nl, ru), the target is always the other one.
-    """
+    """Infer the other language in the nl/ru pair."""
     if source_language == "nl":
         return "ru"
     return "nl"

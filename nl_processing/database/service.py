@@ -140,6 +140,19 @@ class DatabaseService:
                 language=self._target_language,
             )
             pairs.append(WordPair(source=source, target=target))
+        if limit is None and not random:
+            total_count = await self._backend.count_user_words(
+                self._user_id,
+                self._source_language.value,
+                word_type=word_type.value if word_type else None,
+            )
+            if total_count > len(pairs):
+                excluded_count = total_count - len(pairs)
+                _logger.warning(
+                    "%d of %d words excluded from get_words() due to missing translations",
+                    excluded_count,
+                    total_count,
+                )
         return pairs
 
     @classmethod

@@ -133,6 +133,19 @@ def get_user_words_query(
     return query
 
 
+def count_user_words_query(language: str, word_type: str | None) -> str:
+    # Table name from Language enum value, not user input  # noqa: S608
+    query = f"""
+        SELECT COUNT(*) AS cnt
+        FROM user_words uw
+        JOIN words_{language} w ON uw.word_id = w.id
+        WHERE uw.user_id = $1 AND uw.language = $2
+    """  # noqa: S608
+    if word_type is not None:
+        query += " AND w.word_type = $3"
+    return query
+
+
 def increment_score_query(table: str) -> str:
     # Table name from Language enum values, not user input  # noqa: S608
     return f"""

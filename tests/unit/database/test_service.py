@@ -116,6 +116,63 @@ async def test_get_words_with_limit(db_service: DatabaseService) -> None:
     assert len(pairs) == 2
 
 
+@pytest.mark.asyncio
+async def test_get_words_logs_warning_for_missing_translations(
+    db_service: DatabaseService,
+    mock_backend: MockBackend,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """get_words warns when untranslated user words are excluded."""
+    await db_service.add_words([_HUIS])
+    untranslated_id = await mock_backend.add_word("nl", "fiets", PartOfSpeech.NOUN.value)
+    assert untranslated_id is not None
+    await mock_backend.add_user_word("u1", untranslated_id, "nl")
+    await asyncio.sleep(0.05)
+
+    with caplog.at_level("WARNING", logger="nl_processing.database.service"):
+        pairs = await db_service.get_words()
+
+    assert len(pairs) == 1
+    assert "1 of 2 words excluded from get_words() due to missing translations" in caplog.text
+    assert mock_backend.count_user_words_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_get_words_no_warning_when_all_words_are_translated(
+    db_service: DatabaseService,
+    mock_backend: MockBackend,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """get_words stays quiet when all user words have translations."""
+    await db_service.add_words([_HUIS, _LOPEN])
+    await asyncio.sleep(0.05)
+
+    with caplog.at_level("WARNING", logger="nl_processing.database.service"):
+        pairs = await db_service.get_words()
+
+    assert len(pairs) == 2
+    assert "excluded from get_words()" not in caplog.text
+    assert mock_backend.count_user_words_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_get_words_skips_count_when_limit_or_random(
+    db_service: DatabaseService,
+    mock_backend: MockBackend,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """get_words skips untranslated comparison for partial or random reads."""
+    await db_service.add_words([_HUIS, _LOPEN])
+    await asyncio.sleep(0.05)
+
+    with caplog.at_level("WARNING", logger="nl_processing.database.service"):
+        await db_service.get_words(limit=1)
+        await db_service.get_words(random=True)
+
+    assert "excluded from get_words()" not in caplog.text
+    assert mock_backend.count_user_words_calls == 0
+
+
 # ---- DatabaseService constructor ----
 
 
