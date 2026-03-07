@@ -9,6 +9,7 @@ from nl_processing.database.backend.neon import NeonBackend
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]
+_EXERCISE_SLUGS = ["flashcard"]
 
 
 @pytest_asyncio.fixture
@@ -29,7 +30,7 @@ async def neon_backend() -> AsyncIterator[NeonBackend]:
     # Shared lock: multiple CRUD tests can hold it concurrently.
     # Blocks only when the lifecycle test holds an exclusive lock.
     await conn.execute("SELECT pg_advisory_lock_shared(12345)")
-    await backend.create_tables(_LANGUAGES, _PAIRS)
+    await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
     await conn.fetchrow("SELECT 1")
     try:
         yield backend

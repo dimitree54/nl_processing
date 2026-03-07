@@ -41,17 +41,26 @@ CREATE_USER_WORDS = """
 """
 
 
-def create_exercise_scores_table(src: str, tgt: str) -> str:
+def create_exercise_scores_table(src: str, tgt: str, exercise_slug: str) -> str:
     # Table names from Language enum values, not user input  # noqa: S608
     return f"""
-        CREATE TABLE IF NOT EXISTS user_word_exercise_scores_{src}_{tgt} (
+        CREATE TABLE IF NOT EXISTS user_word_exercise_scores_{src}_{tgt}_{exercise_slug} (
             id SERIAL PRIMARY KEY,
             user_id VARCHAR NOT NULL,
             source_word_id INTEGER NOT NULL,
-            exercise_type VARCHAR NOT NULL,
             score INTEGER NOT NULL DEFAULT 0,
             updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-            UNIQUE(user_id, source_word_id, exercise_type)
+            UNIQUE(user_id, source_word_id)
+        )
+    """  # noqa: S608
+
+
+def create_applied_events_table(src: str, tgt: str) -> str:
+    # Table names from Language enum values, not user input  # noqa: S608
+    return f"""
+        CREATE TABLE IF NOT EXISTS applied_events_{src}_{tgt} (
+            event_id VARCHAR PRIMARY KEY,
+            applied_at TIMESTAMP NOT NULL DEFAULT NOW()
         )
     """  # noqa: S608
 
@@ -128,11 +137,11 @@ def increment_score_query(table: str) -> str:
     # Table name from Language enum values, not user input  # noqa: S608
     return f"""
         INSERT INTO user_word_exercise_scores_{table}
-            (user_id, source_word_id, exercise_type, score, updated_at)
-        VALUES ($1, $2, $3, $4, NOW())
-        ON CONFLICT (user_id, source_word_id, exercise_type)
+            (user_id, source_word_id, score, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id, source_word_id)
         DO UPDATE SET
-            score = user_word_exercise_scores_{table}.score + $4,
+            score = user_word_exercise_scores_{table}.score + $3,
             updated_at = NOW()
         RETURNING score
     """  # noqa: S608
@@ -141,9 +150,25 @@ def increment_score_query(table: str) -> str:
 def get_scores_query(table: str) -> str:
     # Table name from Language enum values, not user input  # noqa: S608
     return f"""
-        SELECT source_word_id, exercise_type, score
+        SELECT source_word_id, score
         FROM user_word_exercise_scores_{table}
         WHERE user_id = $1
         AND source_word_id = ANY($2)
-        AND exercise_type = ANY($3)
+    """  # noqa: S608
+
+
+def check_event_applied_query(table: str) -> str:
+    # Table name from Language enum values, not user input  # noqa: S608
+    return f"""
+        SELECT 1 FROM {table}
+        WHERE event_id = $1
+    """  # noqa: S608
+
+
+def mark_event_applied_query(table: str) -> str:
+    # Table name from Language enum values, not user input  # noqa: S608
+    return f"""
+        INSERT INTO {table} (event_id)
+        VALUES ($1)
+        ON CONFLICT (event_id) DO NOTHING
     """  # noqa: S608

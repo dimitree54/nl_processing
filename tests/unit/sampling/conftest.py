@@ -13,7 +13,7 @@ class MockProgressStore:
     def __init__(self, scored_pairs: list[ScoredWordPair]) -> None:
         self._scored_pairs = scored_pairs
 
-    async def get_word_pairs_with_scores(self, _exercise_types: list[str]) -> list[ScoredWordPair]:
+    async def get_word_pairs_with_scores(self) -> list[ScoredWordPair]:
         return self._scored_pairs
 
 
@@ -22,11 +22,14 @@ def make_scored_pair(
     target_form: str,
     word_type: PartOfSpeech = PartOfSpeech.NOUN,
     scores: dict[str, int] | None = None,
+    source_word_id: int = 1,
 ) -> ScoredWordPair:
     """Create a ScoredWordPair with minimal boilerplate."""
     source = Word(normalized_form=source_form, word_type=word_type, language=Language.NL)
     target = Word(normalized_form=target_form, word_type=word_type, language=Language.RU)
-    return ScoredWordPair(pair=WordPair(source=source, target=target), scores=scores or {})
+    return ScoredWordPair(
+        pair=WordPair(source=source, target=target), scores=scores or {}, source_word_id=source_word_id
+    )
 
 
 def make_word(

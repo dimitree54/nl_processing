@@ -22,24 +22,28 @@ from nl_processing.database.testing import (
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]
+_EXERCISE_SLUGS = ["flashcard"]
 
 _EXPECTED_TABLES = [
     "words_nl",
     "words_ru",
     "translations_nl_ru",
     "user_words",
-    "user_word_exercise_scores_nl_ru",
+    "user_word_exercise_scores_nl_ru_flashcard",
+    "applied_events_nl_ru",
 ]
 
 # Isolated language codes for destructive DDL tests — never collide with CRUD tests.
 _ISO_LANGUAGES = ["de", "fr"]
 _ISO_PAIRS = [("de", "fr")]
+_ISO_EXERCISE_SLUGS = ["flashcard"]
 _ISO_EXPECTED = [
     "words_de",
     "words_fr",
     "translations_de_fr",
     "user_words",
-    "user_word_exercise_scores_de_fr",
+    "user_word_exercise_scores_de_fr_flashcard",
+    "applied_events_de_fr",
 ]
 
 
@@ -57,7 +61,7 @@ async def _table_exists(backend: NeonBackend, table_name: str) -> bool:
 async def test_create_tables_creates_all_expected_tables() -> None:
     """create_tables creates all expected tables (IF NOT EXISTS)."""
     backend = NeonBackend(os.environ["DATABASE_URL"])
-    await backend.create_tables(_LANGUAGES, _PAIRS)
+    await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
 
     for table_name in _EXPECTED_TABLES:
         exists = await _table_exists(backend, table_name)
@@ -68,8 +72,8 @@ async def test_create_tables_creates_all_expected_tables() -> None:
 async def test_create_tables_is_idempotent() -> None:
     """Calling create_tables twice does not raise an error."""
     backend = NeonBackend(os.environ["DATABASE_URL"])
-    await backend.create_tables(_LANGUAGES, _PAIRS)
-    await backend.create_tables(_LANGUAGES, _PAIRS)
+    await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
+    await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
 
     for table_name in _EXPECTED_TABLES:
         exists = await _table_exists(backend, table_name)
@@ -78,7 +82,7 @@ async def test_create_tables_is_idempotent() -> None:
 
 @pytest.mark.asyncio
 async def test_drop_and_reset_full_lifecycle() -> None:
-    """Table lifecycle: create → drop → verify gone → reset → verify clean.
+    """Table lifecycle: create -> drop -> verify gone -> reset -> verify clean.
 
     Uses isolated language codes (de/fr) so language-specific tables never
     collide with parallel CRUD tests on nl/ru. A PostgreSQL advisory lock
@@ -93,18 +97,18 @@ async def test_drop_and_reset_full_lifecycle() -> None:
     await conn.execute("SELECT pg_advisory_lock(12345)")
     try:
         # 1. Ensure isolated tables exist
-        await backend.create_tables(_ISO_LANGUAGES, _ISO_PAIRS)
+        await backend.create_tables(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS)
         for name in _ISO_EXPECTED:
             assert await _table_exists(backend, name), f"Setup: '{name}' should exist"
 
         # 2. Drop all isolated tables and verify they are gone
-        await drop_all_tables(_ISO_LANGUAGES, _ISO_PAIRS)
+        await drop_all_tables(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS)
         for name in _ISO_EXPECTED:
             exists = await _table_exists(backend, name)
             assert not exists, f"'{name}' should NOT exist after drop_all_tables"
 
         # 3. Reset database: creates clean empty tables
-        await reset_database(_ISO_LANGUAGES, _ISO_PAIRS)
+        await reset_database(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS)
         for name in _ISO_EXPECTED:
             exists = await _table_exists(backend, name)
             assert exists, f"'{name}' should exist after reset_database"
@@ -114,12 +118,12 @@ async def test_drop_and_reset_full_lifecycle() -> None:
         await backend.add_word("de", word, "noun")
         assert await count_words("de") >= 1
 
-        await reset_database(_ISO_LANGUAGES, _ISO_PAIRS)
+        await reset_database(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS)
         assert await count_words("de") == 0, "words_de should be empty after reset"
 
         # 5. Clean up isolated tables and restore shared ones (still under lock).
         # drop_all_tables also drops user_words; create_tables restores it.
-        await drop_all_tables(_ISO_LANGUAGES, _ISO_PAIRS)
-        await backend.create_tables(_LANGUAGES, _PAIRS)
+        await drop_all_tables(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS)
+        await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
     finally:
         await conn.execute("SELECT pg_advisory_unlock(12345)")

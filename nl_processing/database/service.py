@@ -143,8 +143,15 @@ class DatabaseService:
         return pairs
 
     @classmethod
-    async def create_tables(cls) -> None:
+    async def create_tables(
+        cls,
+        exercise_slugs: list[str] | None = None,
+    ) -> None:
         """Create all required database tables (idempotent)."""
         database_url = _read_database_url()
         backend = NeonBackend(database_url)
-        await backend.create_tables(languages=["nl", "ru"], pairs=[("nl", "ru")])
+        await backend.create_tables(
+            languages=["nl", "ru"],
+            pairs=[("nl", "ru")],
+            exercise_slugs=exercise_slugs or [],
+        )

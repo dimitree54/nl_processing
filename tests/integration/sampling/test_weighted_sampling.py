@@ -29,10 +29,10 @@ async def test_sample_returns_requested_count(
 async def test_sample_with_all_zero_scores_returns_items(
     populated_db: dict[str, str | int | list[str] | dict[str, int]],
 ) -> None:
-    """sample returns items even when all scores are zero (uniform weight)."""
+    """sample returns items when scores are zero for a configured exercise type."""
     sampler = WordSampler(
         user_id=str(populated_db["user_id"]),
-        exercise_types=["nonexistent_exercise"],
+        exercise_types=["nl_to_ru"],
     )
     result = await sampler.sample(3)
     assert len(result) == 3

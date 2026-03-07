@@ -1,4 +1,8 @@
-"""CachedDatabaseService — wraps DatabaseService with in-memory LRU cache."""
+"""CachedDatabaseService — wraps DatabaseService with in-memory LRU cache.
+
+.. deprecated::
+    Legacy prototype helper; superseded by planned database_cache module.
+"""
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.database.models import AddWordsResult, WordPair
@@ -6,7 +10,11 @@ from nl_processing.database.service import DatabaseService
 
 
 class CachedDatabaseService:
-    """Wraps DatabaseService with an in-memory LRU cache for get_words."""
+    """Wraps DatabaseService with an in-memory LRU cache for get_words.
+
+    .. deprecated::
+        Legacy prototype helper; superseded by planned database_cache module.
+    """
 
     def __init__(
         self,

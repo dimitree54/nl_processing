@@ -32,6 +32,8 @@ AbstractBackend.get_user_words  # type: ignore[misc]
 AbstractBackend.add_user_word  # type: ignore[misc]
 AbstractBackend.increment_user_exercise_score  # type: ignore[misc]
 AbstractBackend.get_user_exercise_scores  # type: ignore[misc]
+AbstractBackend.check_event_applied  # type: ignore[misc]
+AbstractBackend.mark_event_applied  # type: ignore[misc]
 AbstractBackend.create_tables  # type: ignore[misc]
 
 # Abstract method parameters — unused in ABC bodies, used by concrete implementations
@@ -52,11 +54,14 @@ source_word_ids  # noqa: F821
 exercise_types  # noqa: F821
 languages  # noqa: F821
 pairs  # noqa: F821
+exercise_slugs  # noqa: F821
+event_id  # noqa: F821
 
 # Database model fields — used by subsequent tasks (T3-T14)
 AddWordsResult.new_words  # type: ignore[misc]
 AddWordsResult.existing_words  # type: ignore[misc]
 ScoredWordPair.scores  # type: ignore[misc]
+ScoredWordPair.source_word_id  # type: ignore[misc]
 ScoredWordPair.pair.source  # type: ignore[union-attr]
 ScoredWordPair.pair.target  # type: ignore[union-attr]
 
@@ -73,6 +78,8 @@ CachedDatabaseService.create_tables  # type: ignore[misc]
 # ExerciseProgressStore — internal API, used by sampling module (T12+)
 ExerciseProgressStore.increment  # type: ignore[misc]
 ExerciseProgressStore.get_word_pairs_with_scores  # type: ignore[misc]
+ExerciseProgressStore.export_remote_snapshot  # type: ignore[misc]
+ExerciseProgressStore.apply_score_delta  # type: ignore[misc]
 
 # WordSampler — public API of sampling module, consumed by exercise runner (T13+)
 WordSampler.sample  # type: ignore[misc]
@@ -90,6 +97,8 @@ NeonBackend.get_user_words  # type: ignore[misc]
 NeonBackend.add_user_word  # type: ignore[misc]
 NeonBackend.increment_user_exercise_score  # type: ignore[misc]
 NeonBackend.get_user_exercise_scores  # type: ignore[misc]
+NeonBackend.check_event_applied  # type: ignore[misc]
+NeonBackend.mark_event_applied  # type: ignore[misc]
 
 __all__ = [
     "CachedDatabaseService",

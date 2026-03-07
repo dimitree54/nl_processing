@@ -16,3 +16,4 @@ class WordPair(BaseModel):
 class ScoredWordPair(BaseModel):
     pair: WordPair
     scores: dict[str, int]
+    source_word_id: int

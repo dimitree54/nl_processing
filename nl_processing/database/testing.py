@@ -9,23 +9,29 @@ from nl_processing.database.exceptions import DatabaseError
 async def drop_all_tables(
     languages: list[str],
     pairs: list[tuple[str, str]],
+    exercise_slugs: list[str],
 ) -> None:
     """Drop all module-managed tables in FK-respecting order. IRREVERSIBLE.
 
     This is a **test-only** utility — never import from production code.
 
     Drop order (respects foreign key constraints):
-    1. ``user_word_exercise_scores_{src}_{tgt}`` for each pair
-    2. ``translations_{src}_{tgt}`` for each pair
-    3. ``user_words``
-    4. ``words_{lang}`` for each language
+    1. ``user_word_exercise_scores_{src}_{tgt}_{slug}`` for each pair/slug
+    2. ``applied_events_{src}_{tgt}`` for each pair
+    3. ``translations_{src}_{tgt}`` for each pair
+    4. ``user_words``
+    5. ``words_{lang}`` for each language
     """
     backend = NeonBackend(os.environ["DATABASE_URL"])
     conn = await backend._connect()  # noqa: SLF001
     try:
         for src, tgt in pairs:
+            for slug in exercise_slugs:
+                await conn.execute(
+                    f"DROP TABLE IF EXISTS user_word_exercise_scores_{src}_{tgt}_{slug}",  # noqa: S608
+                )
             await conn.execute(
-                f"DROP TABLE IF EXISTS user_word_exercise_scores_{src}_{tgt}",  # noqa: S608
+                f"DROP TABLE IF EXISTS applied_events_{src}_{tgt}",  # noqa: S608
             )
         for src, tgt in pairs:
             await conn.execute(
@@ -43,15 +49,16 @@ async def drop_all_tables(
 async def reset_database(
     languages: list[str],
     pairs: list[tuple[str, str]],
+    exercise_slugs: list[str],
 ) -> None:
     """Drop all tables and recreate them empty. IRREVERSIBLE.
 
     This is a **test-only** utility — never import from production code.
     Equivalent to ``drop_all_tables`` followed by ``create_tables``.
     """
-    await drop_all_tables(languages, pairs)
+    await drop_all_tables(languages, pairs, exercise_slugs)
     backend = NeonBackend(os.environ["DATABASE_URL"])
-    await backend.create_tables(languages, pairs)
+    await backend.create_tables(languages, pairs, exercise_slugs)
 
 
 async def count_words(table: str) -> int:

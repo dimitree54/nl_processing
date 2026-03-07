@@ -11,6 +11,7 @@ from nl_processing.database.testing import drop_all_tables, reset_database
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]
+_EXERCISE_SLUGS = ["nl_to_ru"]
 
 _WORDS_DATA = [
     ("huis", "noun", "дом"),
@@ -46,10 +47,9 @@ async def _insert_words_and_scores(
     for nl_form in _POSITIVE_SCORED:
         for _i in range(3):
             await backend.increment_user_exercise_score(
-                "nl_ru",
+                "nl_ru_nl_to_ru",
                 user_id,
                 word_ids_nl[nl_form],
-                "nl_to_ru",
                 1,
             )
     return word_ids_nl
@@ -62,7 +62,7 @@ async def populated_db() -> AsyncIterator[dict[str, str | int | list[str] | dict
     conn = await backend._connect()  # noqa: SLF001
     await conn.execute("SELECT pg_advisory_lock(12345)")
     try:
-        await reset_database(_LANGUAGES, _PAIRS)
+        await reset_database(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
         user_id = f"sampling_test_{uuid4()}"
         word_ids_nl = await _insert_words_and_scores(backend, user_id)
         yield {
@@ -72,7 +72,7 @@ async def populated_db() -> AsyncIterator[dict[str, str | int | list[str] | dict
             "positive_scored_words": _POSITIVE_SCORED,
             "zero_scored_words": _ZERO_SCORED,
         }
-        await drop_all_tables(_LANGUAGES, _PAIRS)
-        await backend.create_tables(_LANGUAGES, _PAIRS)
+        await drop_all_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
+        await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
     finally:
         await conn.execute("SELECT pg_advisory_unlock(12345)")

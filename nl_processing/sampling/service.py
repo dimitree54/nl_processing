@@ -29,6 +29,7 @@ class WordSampler:
             user_id=user_id,
             source_language=source_language,
             target_language=target_language,
+            exercise_types=exercise_types,
         )
         self._exercise_types = exercise_types
         self._positive_balance_weight = positive_balance_weight
@@ -47,7 +48,7 @@ class WordSampler:
         """
         if limit <= 0:
             return []
-        scored = await self._progress_store.get_word_pairs_with_scores(self._exercise_types)
+        scored = await self._progress_store.get_word_pairs_with_scores()
         if not scored:
             return []
         weights = [self._compute_weight(sp) for sp in scored]
@@ -80,7 +81,7 @@ class WordSampler:
             raise ValueError(msg)
         if limit <= 0:
             return []
-        scored = await self._progress_store.get_word_pairs_with_scores([])
+        scored = await self._progress_store.get_word_pairs_with_scores()
         candidates = [
             sp.pair
             for sp in scored

@@ -8,11 +8,8 @@ import os
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.database.backend.neon import NeonBackend
-from nl_processing.database.exceptions import ConfigurationError, DatabaseError
-from nl_processing.database.logging import get_logger
+from nl_processing.database.exceptions import ConfigurationError
 from nl_processing.database.models import ScoredWordPair, WordPair
-
-_logger = get_logger("exercise_progress")
 
 _DATABASE_URL_MISSING = (
     "DATABASE_URL environment variable is required. "
@@ -38,7 +35,11 @@ class ExerciseProgressStore:
         user_id: str,
         source_language: Language,
         target_language: Language,
+        exercise_types: list[str],
     ) -> None:
+        if not exercise_types:
+            msg = "exercise_types must be a non-empty list"
+            raise ValueError(msg)
         database_url = _read_database_url()
         self._backend = NeonBackend(database_url)
         self._user_id = user_id
@@ -46,43 +47,33 @@ class ExerciseProgressStore:
         self._target_language = target_language
         src = source_language.value
         tgt = target_language.value
-        self._source_table = f"words_{src}"
-        self._score_table = f"{src}_{tgt}"
+        self._exercise_types = list(exercise_types)
+        self._score_tables: dict[str, str] = {et: f"{src}_{tgt}_{et}" for et in exercise_types}
+        self._applied_events_table = f"applied_events_{src}_{tgt}"
 
     async def increment(
         self,
-        source_word: Word,
+        source_word_id: int,
         exercise_type: str,
         delta: int,
     ) -> None:
         """Update the score for a word+exercise by delta (+1 or -1).
 
-        Raises ValueError if delta is not +1 or -1.
-        Raises DatabaseError if the source word is not found.
+        Raises ValueError if delta is not +1 or -1, or exercise_type is unknown.
         """
         if delta not in (1, -1):
             msg = f"delta must be +1 or -1, got {delta}"
             raise ValueError(msg)
-        row = await self._backend.get_word(
-            self._source_language.value,
-            source_word.normalized_form,
-        )
-        if row is None:
-            msg = f"Cannot increment score: word '{source_word.normalized_form}' not found in {self._source_table}"
-            raise DatabaseError(msg)
-        word_id = int(row["id"])
+        self._validate_exercise_type(exercise_type)
+        table = self._score_tables[exercise_type]
         await self._backend.increment_user_exercise_score(
-            self._score_table,
+            table,
             self._user_id,
-            word_id,
-            exercise_type,
+            source_word_id,
             delta,
         )
 
-    async def get_word_pairs_with_scores(
-        self,
-        exercise_types: list[str],
-    ) -> list[ScoredWordPair]:
+    async def get_word_pairs_with_scores(self) -> list[ScoredWordPair]:
         """Return all translated word pairs for the user with exercise scores.
 
         Missing scores default to 0 (FR33).
@@ -94,25 +85,66 @@ class ExerciseProgressStore:
         if not rows:
             return []
         source_word_ids = [int(row["source_id"]) for row in rows]
-        score_rows = await self._backend.get_user_exercise_scores(
-            self._score_table,
-            self._user_id,
-            source_word_ids,
-            exercise_types,
-        )
         scores_by_word: dict[int, dict[str, int]] = {}
-        for score_row in score_rows:
-            wid = int(score_row["source_word_id"])
-            etype = str(score_row["exercise_type"])
-            scores_by_word.setdefault(wid, {})[etype] = int(score_row["score"])
+        for et, table in self._score_tables.items():
+            score_rows = await self._backend.get_user_exercise_scores(
+                table,
+                self._user_id,
+                source_word_ids,
+            )
+            for score_row in score_rows:
+                wid = int(score_row["source_word_id"])
+                scores_by_word.setdefault(wid, {})[et] = int(score_row["score"])
         result: list[ScoredWordPair] = []
         for row in rows:
             pair = self._row_to_word_pair(row)
             wid = int(row["source_id"])
             word_scores = scores_by_word.get(wid, {})
-            scores = {et: word_scores.get(et, 0) for et in exercise_types}
-            result.append(ScoredWordPair(pair=pair, scores=scores))
+            scores = {et: word_scores.get(et, 0) for et in self._exercise_types}
+            result.append(
+                ScoredWordPair(pair=pair, scores=scores, source_word_id=wid),
+            )
         return result
+
+    async def export_remote_snapshot(self) -> list[ScoredWordPair]:
+        """Thin wrapper around get_word_pairs_with_scores for cache consumers."""
+        return await self.get_word_pairs_with_scores()
+
+    async def apply_score_delta(
+        self,
+        event_id: str,
+        source_word_id: int,
+        exercise_type: str,
+        delta: int,
+    ) -> None:
+        """Apply a score delta idempotently, guarded by event deduplication.
+
+        Validates exercise_type. Skips if event_id was already applied.
+        """
+        self._validate_exercise_type(exercise_type)
+        already_applied = await self._backend.check_event_applied(
+            self._applied_events_table,
+            event_id,
+        )
+        if already_applied:
+            return
+        table = self._score_tables[exercise_type]
+        await self._backend.increment_user_exercise_score(
+            table,
+            self._user_id,
+            source_word_id,
+            delta,
+        )
+        await self._backend.mark_event_applied(
+            self._applied_events_table,
+            event_id,
+        )
+
+    def _validate_exercise_type(self, exercise_type: str) -> None:
+        """Raise ValueError if exercise_type is not in the configured set."""
+        if exercise_type not in self._score_tables:
+            msg = f"Unknown exercise_type '{exercise_type}'; expected one of {sorted(self._score_tables)}"
+            raise ValueError(msg)
 
     def _word_from_row(
         self,

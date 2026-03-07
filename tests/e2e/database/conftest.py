@@ -15,6 +15,7 @@ from nl_processing.database.testing import (
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]
+_EXERCISE_SLUGS = ["flashcard"]
 
 
 async def wait_for_translations(expected_count: int, table: str = "nl_ru", timeout: float = 15.0) -> None:
@@ -42,9 +43,9 @@ async def db_ready() -> AsyncIterator[None]:
     conn = await backend._connect()  # noqa: SLF001
     await conn.execute("SELECT pg_advisory_lock(12345)")
     try:
-        await reset_database(_LANGUAGES, _PAIRS)
+        await reset_database(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
         yield
-        await drop_all_tables(_LANGUAGES, _PAIRS)
-        await backend.create_tables(_LANGUAGES, _PAIRS)
+        await drop_all_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
+        await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
     finally:
         await conn.execute("SELECT pg_advisory_unlock(12345)")

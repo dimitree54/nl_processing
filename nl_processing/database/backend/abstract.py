@@ -68,10 +68,12 @@ class AbstractBackend(ABC):
         table: str,
         user_id: str,
         source_word_id: int,
-        exercise_type: str,
         delta: int,
     ) -> int:
-        """Upsert exercise score by delta, return new score value."""
+        """Upsert exercise score by delta, return new score value.
+
+        The exercise type is implicit in the table name (per-exercise-type tables).
+        """
 
     @abstractmethod
     async def get_user_exercise_scores(
@@ -79,17 +81,37 @@ class AbstractBackend(ABC):
         table: str,
         user_id: str,
         source_word_ids: list[int],
-        exercise_types: list[str],
     ) -> list[dict[str, str | int]]:
-        """Return exercise score rows for the given user, words, and exercise types."""
+        """Return exercise score rows for the given user and words.
+
+        The exercise type is implicit in the table name (per-exercise-type tables).
+        """
+
+    @abstractmethod
+    async def check_event_applied(
+        self,
+        table: str,
+        event_id: str,
+    ) -> bool:
+        """Check if event_id exists in the applied_events table."""
+
+    @abstractmethod
+    async def mark_event_applied(
+        self,
+        table: str,
+        event_id: str,
+    ) -> None:
+        """Insert event_id into the applied_events table."""
 
     @abstractmethod
     async def create_tables(
         self,
         languages: list[str],
         pairs: list[tuple[str, str]],
+        exercise_slugs: list[str],
     ) -> None:
         """Create all required database tables for the given languages and pairs.
 
+        Creates per-exercise-type score tables and applied_events tables.
         Uses IF NOT EXISTS semantics — safe to call multiple times.
         """

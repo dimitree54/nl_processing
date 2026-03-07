@@ -19,7 +19,8 @@ class MockBackend(AbstractBackend):
         self._words: dict[str, dict[str, dict[str, str | int]]] = {}
         self._links: list[tuple[str, int, int]] = []
         self._user_words: list[tuple[str, int, str]] = []
-        self._scores: dict[tuple[str, str, int, str], int] = {}
+        self._scores: dict[tuple[str, str, int], int] = {}
+        self._applied_events: set[tuple[str, str]] = set()
 
     async def add_word(self, table: str, normalized_form: str, word_type: str) -> int | None:
         bucket = self._words.setdefault(table, {})
@@ -78,24 +79,36 @@ class MockBackend(AbstractBackend):
         return rows
 
     async def increment_user_exercise_score(
-        self, table: str, user_id: str, source_word_id: int, exercise_type: str, delta: int
+        self,
+        table: str,
+        user_id: str,
+        source_word_id: int,
+        delta: int,
     ) -> int:
-        key = (table, user_id, source_word_id, exercise_type)
+        key = (table, user_id, source_word_id)
         self._scores[key] = self._scores.get(key, 0) + delta
         return self._scores[key]
 
     async def get_user_exercise_scores(
-        self, table: str, user_id: str, source_word_ids: list[int], exercise_types: list[str]
+        self, table: str, user_id: str, source_word_ids: list[int]
     ) -> list[dict[str, str | int]]:
-        if not source_word_ids or not exercise_types:
+        if not source_word_ids:
             return []
         result: list[dict[str, str | int]] = []
-        for (tbl, uid, wid, etype), score in self._scores.items():
-            if tbl == table and uid == user_id and wid in source_word_ids and etype in exercise_types:
-                result.append({"source_word_id": wid, "exercise_type": etype, "score": score})
+        for (tbl, uid, wid), score in self._scores.items():
+            if tbl == table and uid == user_id and wid in source_word_ids:
+                result.append({"source_word_id": wid, "score": score})
         return result
 
-    async def create_tables(self, languages: list[str], pairs: list[tuple[str, str]]) -> None:
+    async def check_event_applied(self, table: str, event_id: str) -> bool:
+        return (table, event_id) in self._applied_events
+
+    async def mark_event_applied(self, table: str, event_id: str) -> None:
+        self._applied_events.add((table, event_id))
+
+    async def create_tables(
+        self, languages: list[str], pairs: list[tuple[str, str]], exercise_slugs: list[str]
+    ) -> None:
         pass
 
     # ---- helpers ----
@@ -164,6 +177,11 @@ def cached_service(monkeypatch: pytest.MonkeyPatch, mock_backend: MockBackend) -
 @pytest.fixture
 def progress_store(monkeypatch: pytest.MonkeyPatch, mock_backend: MockBackend) -> ExerciseProgressStore:
     monkeypatch.setenv("DATABASE_URL", "mock://test")
-    store = ExerciseProgressStore(user_id="u1", source_language=Language.NL, target_language=Language.RU)
+    store = ExerciseProgressStore(
+        user_id="u1",
+        source_language=Language.NL,
+        target_language=Language.RU,
+        exercise_types=["flashcard"],
+    )
     store._backend = mock_backend  # type: ignore[assignment]
     return store
