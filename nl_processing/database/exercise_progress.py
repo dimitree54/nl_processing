@@ -122,6 +122,9 @@ class ExerciseProgressStore:
         Validates exercise_type. Skips if event_id was already applied.
         """
         self._validate_exercise_type(exercise_type)
+        if delta not in (1, -1):
+            msg = f"delta must be +1 or -1, got {delta}"
+            raise ValueError(msg)
         already_applied = await self._backend.check_event_applied(
             self._applied_events_table,
             event_id,

@@ -116,6 +116,20 @@ async def test_apply_score_delta_applies_once(
     assert mock_backend._scores[key] == 1
 
 
+@pytest.mark.asyncio
+async def test_apply_score_delta_rejects_zero(progress_store: ExerciseProgressStore) -> None:
+    """apply_score_delta raises ValueError when delta is 0."""
+    with pytest.raises(ValueError, match="delta must be"):
+        await progress_store.apply_score_delta("evt-zero", 1, "flashcard", 0)
+
+
+@pytest.mark.asyncio
+async def test_apply_score_delta_rejects_two(progress_store: ExerciseProgressStore) -> None:
+    """apply_score_delta raises ValueError when delta is 2."""
+    with pytest.raises(ValueError, match="delta must be"):
+        await progress_store.apply_score_delta("evt-two", 1, "flashcard", 2)
+
+
 # ---- export_remote_snapshot ----
 
 
