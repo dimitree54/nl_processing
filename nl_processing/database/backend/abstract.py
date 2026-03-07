@@ -104,6 +104,22 @@ class AbstractBackend(ABC):
         """Insert event_id into the applied_events table."""
 
     @abstractmethod
+    async def apply_score_delta_atomic(
+        self,
+        score_table: str,
+        events_table: str,
+        user_id: str,
+        event_id: str,
+        source_word_id: int,
+        delta: int,
+    ) -> bool:
+        """Atomically check-apply-mark a score delta in one transaction.
+
+        Returns True if the delta was applied, False if event_id was already applied.
+        The entire operation (check + increment + mark) runs in a single transaction.
+        """
+
+    @abstractmethod
     async def create_tables(
         self,
         languages: list[str],

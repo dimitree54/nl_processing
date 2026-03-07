@@ -90,3 +90,30 @@ async def mark_event(
         await conn.execute(mark_event_applied_query(table), event_id)
     except asyncpg.PostgresError as exc:
         raise DatabaseError(str(exc)) from exc
+
+
+async def atomic_apply_delta(
+    conn: asyncpg.Connection,  # type: ignore[type-arg]
+    score_table: str,
+    events_table: str,
+    user_id: str,
+    event_id: str,
+    source_word_id: int,
+    delta: int,
+) -> bool:
+    """Atomically check-apply-mark a score delta in one transaction."""
+    try:
+        async with conn.transaction():
+            already = await conn.fetchrow(check_event_applied_query(events_table), event_id)
+            if already is not None:
+                return False
+            await conn.fetchrow(
+                increment_score_query(score_table),
+                user_id,
+                source_word_id,
+                delta,
+            )
+            await conn.execute(mark_event_applied_query(events_table), event_id)
+            return True
+    except asyncpg.PostgresError as exc:
+        raise DatabaseError(str(exc)) from exc

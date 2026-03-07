@@ -3,6 +3,7 @@
 import asyncpg
 
 from nl_processing.database.backend._neon_exercise import (
+    atomic_apply_delta,
     check_event,
     create_exercise_tables,
     get_scores,
@@ -178,6 +179,13 @@ class NeonBackend(AbstractBackend):
     ) -> None:
         conn = await self._connect()
         await mark_event(conn, table, event_id)
+
+    async def apply_score_delta_atomic(
+        self, score_table: str, events_table: str,
+        user_id: str, event_id: str, source_word_id: int, delta: int,
+    ) -> bool:  # fmt: skip
+        conn = await self._connect()
+        return await atomic_apply_delta(conn, score_table, events_table, user_id, event_id, source_word_id, delta)
 
 
 def _infer_target_language(source_language: str) -> str:

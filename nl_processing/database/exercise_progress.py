@@ -119,28 +119,21 @@ class ExerciseProgressStore:
     ) -> None:
         """Apply a score delta idempotently, guarded by event deduplication.
 
-        Validates exercise_type. Skips if event_id was already applied.
+        Validates exercise_type and delta. Skips if event_id was already applied.
+        The check-increment-mark operation is atomic (single transaction).
         """
         self._validate_exercise_type(exercise_type)
         if delta not in (1, -1):
             msg = f"delta must be +1 or -1, got {delta}"
             raise ValueError(msg)
-        already_applied = await self._backend.check_event_applied(
-            self._applied_events_table,
-            event_id,
-        )
-        if already_applied:
-            return
         table = self._score_tables[exercise_type]
-        await self._backend.increment_user_exercise_score(
-            table,
-            self._user_id,
-            source_word_id,
-            delta,
-        )
-        await self._backend.mark_event_applied(
-            self._applied_events_table,
-            event_id,
+        await self._backend.apply_score_delta_atomic(
+            score_table=table,
+            events_table=self._applied_events_table,
+            user_id=self._user_id,
+            event_id=event_id,
+            source_word_id=source_word_id,
+            delta=delta,
         )
 
     def _validate_exercise_type(self, exercise_type: str) -> None:

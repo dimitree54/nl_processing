@@ -33,6 +33,7 @@ AbstractBackend.increment_user_exercise_score  # type: ignore[misc]
 AbstractBackend.get_user_exercise_scores  # type: ignore[misc]
 AbstractBackend.check_event_applied  # type: ignore[misc]
 AbstractBackend.mark_event_applied  # type: ignore[misc]
+AbstractBackend.apply_score_delta_atomic  # type: ignore[misc]
 AbstractBackend.create_tables  # type: ignore[misc]
 
 # Abstract method parameters — unused in ABC bodies, used by concrete implementations
@@ -55,6 +56,8 @@ languages  # noqa: F821
 pairs  # noqa: F821
 exercise_slugs  # noqa: F821
 event_id  # noqa: F821
+score_table  # noqa: F821
+events_table  # noqa: F821
 
 # Database model fields — used by subsequent tasks (T3-T14)
 AddWordsResult.new_words  # type: ignore[misc]
@@ -93,6 +96,7 @@ NeonBackend.increment_user_exercise_score  # type: ignore[misc]
 NeonBackend.get_user_exercise_scores  # type: ignore[misc]
 NeonBackend.check_event_applied  # type: ignore[misc]
 NeonBackend.mark_event_applied  # type: ignore[misc]
+NeonBackend.apply_score_delta_atomic  # type: ignore[misc]
 
 __all__ = [
     "DatabaseService",

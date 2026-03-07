@@ -105,6 +105,22 @@ class MockBackend(AbstractBackend):
     async def mark_event_applied(self, table: str, event_id: str) -> None:
         self._applied_events.add((table, event_id))
 
+    async def apply_score_delta_atomic(
+        self,
+        score_table: str,
+        events_table: str,
+        user_id: str,
+        event_id: str,
+        source_word_id: int,
+        delta: int,
+    ) -> bool:
+        if (events_table, event_id) in self._applied_events:
+            return False
+        key = (score_table, user_id, source_word_id)
+        self._scores[key] = self._scores.get(key, 0) + delta
+        self._applied_events.add((events_table, event_id))
+        return True
+
     async def create_tables(
         self, languages: list[str], pairs: list[tuple[str, str]], exercise_slugs: list[str]
     ) -> None:
