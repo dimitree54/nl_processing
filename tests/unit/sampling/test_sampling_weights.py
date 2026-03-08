@@ -151,3 +151,43 @@ async def test_sample_statistical_weighting(monkeypatch: pytest.MonkeyPatch) -> 
         result = await ws.sample(1)
         counts[result[0].source.normalized_form] += 1
     assert counts["low"] > counts["high"] * 5
+
+
+def test_constructor_with_scored_store_skips_env(sampler_injected: WordSampler) -> None:
+    """When scored_store is provided, DATABASE_URL is not required."""
+    # sampler_injected fixture creates a sampler WITHOUT setting DATABASE_URL.
+    # If construction reached ExerciseProgressStore, it would raise ConfigurationError.
+    assert sampler_injected._positive_balance_weight == 0.01
+
+
+def test_mock_progress_store_satisfies_protocol() -> None:
+    """MockProgressStore structurally satisfies ScoredPairProvider."""
+    from nl_processing.sampling.service import ScoredPairProvider
+    from tests.unit.sampling.conftest import MockProgressStore
+
+    mock = MockProgressStore([])
+    assert isinstance(mock, ScoredPairProvider)
+
+
+def test_database_cache_service_satisfies_protocol() -> None:
+    """DatabaseCacheService structurally satisfies ScoredPairProvider."""
+    from nl_processing.database_cache.service import DatabaseCacheService
+    from nl_processing.sampling.service import ScoredPairProvider
+
+    assert issubclass(DatabaseCacheService, ScoredPairProvider)
+
+
+@pytest.mark.asyncio
+async def test_sample_via_injected_store() -> None:
+    """Sampling works when store is injected via scored_store parameter."""
+    from tests.unit.sampling.conftest import MockProgressStore, make_scored_pair
+
+    pairs = [make_scored_pair(f"w{i}", f"t{i}", scores={"flashcard": 0}) for i in range(5)]
+    mock_store = MockProgressStore(pairs)
+    ws = WordSampler(
+        user_id="u1",
+        exercise_types=["flashcard"],
+        scored_store=mock_store,
+    )
+    result = await ws.sample(3)
+    assert len(result) == 3

@@ -49,6 +49,17 @@ def sampler(monkeypatch: pytest.MonkeyPatch) -> WordSampler:
     return ws
 
 
+@pytest.fixture
+def sampler_injected() -> WordSampler:
+    """Create a WordSampler with an injected mock store (no DATABASE_URL needed)."""
+    mock_store = MockProgressStore([])
+    return WordSampler(
+        user_id="u1",
+        exercise_types=["flashcard"],
+        scored_store=mock_store,
+    )
+
+
 def patch_store(sampler: WordSampler, scored_pairs: list[ScoredWordPair]) -> None:
     """Replace the sampler's progress store with a mock returning the given pairs."""
-    sampler._progress_store = MockProgressStore(scored_pairs)  # type: ignore[assignment]
+    sampler._progress_store = MockProgressStore(scored_pairs)

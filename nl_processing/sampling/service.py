@@ -1,10 +1,18 @@
 """WordSampler — weighted random sampling of practice items for language exercises."""
 
 import random
+from typing import Protocol, runtime_checkable
 
 from nl_processing.core.models import Language, Word
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.models import ScoredWordPair, WordPair
+
+
+@runtime_checkable
+class ScoredPairProvider(Protocol):
+    """Data source that provides scored word pairs for sampling."""
+
+    async def get_word_pairs_with_scores(self) -> list[ScoredWordPair]: ...
 
 
 class WordSampler:
@@ -18,6 +26,7 @@ class WordSampler:
         target_language: Language = Language.RU,
         exercise_types: list[str],
         positive_balance_weight: float = 0.01,
+        scored_store: ScoredPairProvider | None = None,
     ) -> None:
         if not exercise_types:
             msg = "exercise_types must be a non-empty list"
@@ -25,12 +34,15 @@ class WordSampler:
         if not (0 < positive_balance_weight <= 1):
             msg = f"positive_balance_weight must be in (0, 1], got {positive_balance_weight}"
             raise ValueError(msg)
-        self._progress_store = ExerciseProgressStore(
-            user_id=user_id,
-            source_language=source_language,
-            target_language=target_language,
-            exercise_types=exercise_types,
-        )
+        if scored_store is not None:
+            self._progress_store: ScoredPairProvider = scored_store
+        else:
+            self._progress_store = ExerciseProgressStore(
+                user_id=user_id,
+                source_language=source_language,
+                target_language=target_language,
+                exercise_types=exercise_types,
+            )
         self._exercise_types = exercise_types
         self._positive_balance_weight = positive_balance_weight
         self._source_language = source_language
