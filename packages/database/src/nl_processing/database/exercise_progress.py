@@ -1,12 +1,12 @@
 """ExerciseProgressStore — per-user, per-exercise score tracking.
 
-Internal API consumed by the sampling module to determine which
-words to practice based on exercise-specific scores.
+Default implementation of the shared scored-pair and remote-progress
+sync contracts used by sampling and database_cache.
 """
 
 import os
 
-from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair
+from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair, WordPairSnapshot
 
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
@@ -28,7 +28,7 @@ def _read_database_url() -> str:
 
 
 class ExerciseProgressStore:
-    """Per-user, per-exercise score tracking and score-aware word pair retrieval."""
+    """Per-user progress store for score-aware reads and remote cache sync."""
 
     def __init__(
         self,
@@ -83,23 +83,9 @@ class ExerciseProgressStore:
 
         Missing scores default to 0 (FR33).
         """
-        rows = await self._backend.get_user_words(
-            self._user_id,
-            self._source_language.value,
-        )
+        rows, scores_by_word = await self._get_rows_with_scores()
         if not rows:
             return []
-        source_word_ids = [int(row["source_id"]) for row in rows]
-        scores_by_word: dict[int, dict[str, int]] = {}
-        for et, table in self._score_tables.items():
-            score_rows = await self._backend.get_user_exercise_scores(
-                table,
-                self._user_id,
-                source_word_ids,
-            )
-            for score_row in score_rows:
-                wid = int(score_row["source_word_id"])
-                scores_by_word.setdefault(wid, {})[et] = int(score_row["score"])
         result: list[ScoredWordPair] = []
         for row in rows:
             pair = self._row_to_word_pair(row)
@@ -111,9 +97,27 @@ class ExerciseProgressStore:
             )
         return result
 
-    async def export_remote_snapshot(self) -> list[ScoredWordPair]:
-        """Thin wrapper around get_word_pairs_with_scores for cache consumers."""
-        return await self.get_word_pairs_with_scores()
+    async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
+        """Return score-aware pairs with stable remote IDs for cache consumers."""
+        rows, scores_by_word = await self._get_rows_with_scores()
+        if not rows:
+            return []
+        snapshots: list[WordPairSnapshot] = []
+        for row in rows:
+            pair = self._row_to_word_pair(row)
+            source_word_id = int(row["source_id"])
+            target_word_id = int(row["target_id"])
+            word_scores = scores_by_word.get(source_word_id, {})
+            scores = {et: word_scores.get(et, 0) for et in self._exercise_types}
+            snapshots.append(
+                WordPairSnapshot(
+                    pair=pair,
+                    scores=scores,
+                    source_word_id=source_word_id,
+                    target_word_id=target_word_id,
+                ),
+            )
+        return snapshots
 
     async def apply_score_delta(
         self,
@@ -146,6 +150,29 @@ class ExerciseProgressStore:
         if exercise_type not in self._score_tables:
             msg = f"Unknown exercise_type '{exercise_type}'; expected one of {sorted(self._score_tables)}"
             raise ValueError(msg)
+
+    async def _get_rows_with_scores(
+        self,
+    ) -> tuple[list[dict[str, str | int]], dict[int, dict[str, int]]]:
+        """Fetch translated rows and per-exercise scores for the current user."""
+        rows = await self._backend.get_user_words(
+            self._user_id,
+            self._source_language.value,
+        )
+        if not rows:
+            return [], {}
+        source_word_ids = [int(row["source_id"]) for row in rows]
+        scores_by_word: dict[int, dict[str, int]] = {}
+        for exercise_type, table in self._score_tables.items():
+            score_rows = await self._backend.get_user_exercise_scores(
+                table,
+                self._user_id,
+                source_word_ids,
+            )
+            for score_row in score_rows:
+                wid = int(score_row["source_word_id"])
+                scores_by_word.setdefault(wid, {})[exercise_type] = int(score_row["score"])
+        return rows, scores_by_word
 
     def _word_from_row(
         self,

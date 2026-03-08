@@ -1,6 +1,6 @@
 """Unit tests for ExerciseProgressStore."""
 
-from nl_processing.core.models import Language, PartOfSpeech, Word
+from nl_processing.core.models import Language, PartOfSpeech, Word, WordPairSnapshot
 import pytest
 
 from nl_processing.database.exceptions import ConfigurationError
@@ -138,11 +138,14 @@ async def test_export_remote_snapshot(
     progress_store: ExerciseProgressStore,
     mock_backend: MockBackend,
 ) -> None:
-    """export_remote_snapshot delegates to get_word_pairs_with_scores."""
+    """export_remote_snapshot returns cache-ready snapshots with stable IDs."""
     await _seed_word_pair(mock_backend)
     snapshot = await progress_store.export_remote_snapshot()
     assert len(snapshot) == 1
+    assert isinstance(snapshot[0], WordPairSnapshot)
     assert snapshot[0].scores["flashcard"] == 0
+    assert snapshot[0].source_word_id == 1
+    assert snapshot[0].target_word_id == 1
 
 
 # ---- constructor ----

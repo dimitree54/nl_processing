@@ -1,17 +1,10 @@
-"""WordSampler — weighted random sampling of practice items for language exercises."""
+"""WordSampler — weighted random sampling over any compatible scored-pair provider."""
 
 import random
-from typing import Protocol, runtime_checkable
 
 from nl_processing.core.models import Language, ScoredWordPair, Word, WordPair
+from nl_processing.core.ports import ScoredPairProvider
 from nl_processing.database.exercise_progress import ExerciseProgressStore
-
-
-@runtime_checkable
-class ScoredPairProvider(Protocol):
-    """Data source that provides scored word pairs for sampling."""
-
-    async def get_word_pairs_with_scores(self) -> list[ScoredWordPair]: ...
 
 
 class WordSampler:

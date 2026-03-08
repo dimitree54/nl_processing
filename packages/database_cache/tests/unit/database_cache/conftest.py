@@ -1,15 +1,14 @@
 """Shared fixtures for database_cache unit tests."""
 
+import asyncio
 from datetime import timedelta
 from pathlib import Path
 
-from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair
-import pytest
+from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair, WordPairSnapshot
 import pytest_asyncio
 
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.service import DatabaseCacheService
-from nl_processing.database_cache.sync import CacheSyncer
 
 
 def make_word(form: str, pos: PartOfSpeech = PartOfSpeech.NOUN, lang: Language = Language.NL) -> Word:
@@ -22,27 +21,28 @@ def make_scored_pair(
     target_form: str,
     source_word_id: int,
     scores: dict[str, int] | None = None,
-) -> ScoredWordPair:
-    """Create a ScoredWordPair with NL->RU defaults."""
-    return ScoredWordPair(
+) -> WordPairSnapshot:
+    """Create a snapshot payload with NL->RU defaults."""
+    return WordPairSnapshot(
         pair=WordPair(
             source=make_word(source_form, lang=Language.NL),
             target=make_word(target_form, lang=Language.RU),
         ),
         scores=scores or {},
         source_word_id=source_word_id,
+        target_word_id=source_word_id + 1000,
     )
 
 
 class MockProgressStore:
-    """Fake ExerciseProgressStore for testing."""
+    """Fake remote progress sync port for testing."""
 
-    def __init__(self, snapshot: list[ScoredWordPair] | None = None) -> None:
-        self.snapshot: list[ScoredWordPair] = snapshot or []
+    def __init__(self, snapshot: list[WordPairSnapshot] | None = None) -> None:
+        self.snapshot: list[WordPairSnapshot] = snapshot or []
         self.applied_deltas: list[dict[str, str | int]] = []
         self.apply_error: Exception | None = None
 
-    async def export_remote_snapshot(self) -> list[ScoredWordPair]:
+    async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
         return list(self.snapshot)
 
     async def apply_score_delta(
@@ -72,9 +72,9 @@ async def local_store() -> LocalStore:
 
 
 @pytest_asyncio.fixture
-async def cache_service(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> DatabaseCacheService:
+async def cache_service(tmp_path: Path) -> DatabaseCacheService:
     """Fully-initialized DatabaseCacheService with mock remote."""
-    monkeypatch.setenv("DATABASE_URL", "mock://test")
+    local_store = LocalStore(str(tmp_path / "test.db"))
     svc = DatabaseCacheService(
         user_id="test_user",
         source_language=Language.NL,
@@ -82,18 +82,15 @@ async def cache_service(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Data
         exercise_types=["flashcard"],
         cache_ttl=timedelta(minutes=30),
         cache_dir=str(tmp_path),
+        remote_progress=MockProgressStore(
+            snapshot=[
+                make_scored_pair("huis", "dom", 1, {"flashcard": 0}),
+                make_scored_pair("boek", "kniga", 2, {"flashcard": 0}),
+            ]
+        ),
+        local_store=local_store,
     )
-    svc._local = LocalStore(str(tmp_path / "test.db"))
-    await svc._local.open()
-    mock_remote = MockProgressStore(
-        snapshot=[
-            make_scored_pair("huis", "dom", 1, {"flashcard": 0}),
-            make_scored_pair("boek", "kniga", 2, {"flashcard": 0}),
-        ]
-    )
-    svc._syncer = CacheSyncer(svc._local, mock_remote)
-    await svc._local.ensure_metadata(["flashcard"])
-    await svc._syncer.refresh()
-    svc._initialized = True
+    await svc.init()
     yield svc  # type: ignore[misc]
-    await svc._local.close()
+    await asyncio.sleep(0)
+    await local_store.close()

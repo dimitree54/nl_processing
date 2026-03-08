@@ -3,7 +3,7 @@
 import asyncio
 from datetime import UTC, datetime
 
-from nl_processing.database.exercise_progress import ExerciseProgressStore
+from nl_processing.core.ports import RemoteProgressSyncPort
 
 from nl_processing.database_cache.exceptions import CacheSyncError
 from nl_processing.database_cache.local_store import LocalStore
@@ -15,7 +15,7 @@ _log = get_logger("sync")
 class CacheSyncer:
     """Coordinates full refresh from remote and flush of pending events back to remote."""
 
-    def __init__(self, local_store: LocalStore, progress_store: ExerciseProgressStore) -> None:
+    def __init__(self, local_store: LocalStore, progress_store: RemoteProgressSyncPort) -> None:
         self._local = local_store
         self._remote = progress_store
         self._refresh_lock = asyncio.Lock()
@@ -35,7 +35,7 @@ class CacheSyncer:
                         sp.source_word_id,
                         sp.pair.source.normalized_form,
                         sp.pair.source.word_type.value,
-                        0,
+                        sp.target_word_id,
                         sp.pair.target.normalized_form,
                         sp.pair.target.word_type.value,
                     )

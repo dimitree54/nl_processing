@@ -134,18 +134,10 @@ async def test_auto_flush_delivers_events_after_record(db_path: Path) -> None:
         exercise_types=["flashcard"],
         cache_ttl=timedelta(minutes=30),
         cache_dir=str(db_path.parent),
+        remote_progress=remote,
+        local_store=LocalStore(str(db_path)),
     )
-
-    # Wire internals manually — bypass init() which needs a real DATABASE_URL.
-    store = LocalStore(str(db_path))
-    await store.open()
-    await store.ensure_metadata(["flashcard"])
-    syncer = CacheSyncer(store, remote)
-    await syncer.refresh()
-
-    svc._local = store
-    svc._syncer = syncer
-    svc._initialized = True
+    await svc.init()
 
     word = Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)
     await svc.record_exercise_result(source_word=word, exercise_type="flashcard", delta=1)
@@ -158,4 +150,5 @@ async def test_auto_flush_delivers_events_after_record(db_path: Path) -> None:
     status = await svc.get_status()
     assert status.pending_events == 0
 
-    await store.close()
+    assert svc._local is not None
+    await svc._local.close()

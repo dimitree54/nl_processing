@@ -35,6 +35,8 @@ class LocalStore:
 
     async def open(self) -> None:
         """Open the SQLite connection and create tables."""
+        if self._db is not None:
+            return
         try:
             self._db = await aiosqlite.connect(self._db_path)
             self._db.row_factory = aiosqlite.Row
@@ -113,13 +115,7 @@ class LocalStore:
         except sqlite3.Error as exc:
             raise CacheStorageError(str(exc)) from exc
 
-    async def record_score_and_event(
-        self,
-        source_word_id: int,
-        exercise_type: str,
-        delta: int,
-        event_id: str,
-    ) -> None:
+    async def record_score_and_event(self, source_word_id: int, exercise_type: str, delta: int, event_id: str) -> None:
         """Atomically upsert a cached score and insert a pending event."""
         now = _now()
         try:

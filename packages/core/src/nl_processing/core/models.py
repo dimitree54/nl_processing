@@ -53,6 +53,14 @@ class WordPair(BaseModel):
 
 
 class ScoredWordPair(BaseModel):
+    """Translated pair with per-exercise scores and a stable source-word ID."""
+
     pair: WordPair
     scores: dict[str, int]
     source_word_id: int
+
+
+class WordPairSnapshot(ScoredWordPair):
+    """Remote sync snapshot with stable source and target IDs for cache rebuilds."""
+
+    target_word_id: int

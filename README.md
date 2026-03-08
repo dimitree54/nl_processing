@@ -41,14 +41,14 @@ Each package has its own:
 
 | Module | Class | Description | Docs |
 |---|---|---|---|
-| `core` | N/A | Shared models, exceptions, prompt helpers | [docs](packages/core) |
-| `extract_text_from_image` | `ImageTextExtractor` | Extract Dutch text from images via Vision API | [docs](packages/extract_text_from_image/docs/) |
-| `extract_words_from_text` | `WordExtractor` | Extract and normalize words from markdown text | [docs](packages/extract_words_from_text/docs/) |
-| `translate_text` | `TextTranslator` | Translate text (NL -> RU) with markdown preservation | [docs](packages/translate_text/docs/) |
-| `translate_word` | `WordTranslator` | Batch-translate words (NL -> RU) | [docs](packages/translate_word/docs/) |
-| `database` | `DatabaseService` | Remote persistence for words, translations, and exercise scores | [docs](packages/database/docs/) |
-| `database_cache` | `DatabaseCacheService` | Local-first SQLite cache over the remote database module | [docs](packages/database_cache/docs/) |
-| `sampling` | `WordSampler` | Weighted word sampling with adversarial distractors | [docs](packages/sampling/docs/) |
+| `core` | N/A | Shared models, ports, exceptions, and prompt helpers | [docs](packages/core/docs/module-spec.md) |
+| `extract_text_from_image` | `ImageTextExtractor` | Extract Dutch text from images via Vision API | [docs](packages/extract_text_from_image/docs/module-spec.md) |
+| `extract_words_from_text` | `WordExtractor` | Extract and normalize words from markdown text | [docs](packages/extract_words_from_text/docs/module-spec.md) |
+| `translate_text` | `TextTranslator` | Translate text (NL -> RU) with markdown preservation | [docs](packages/translate_text/docs/module-spec.md) |
+| `translate_word` | `WordTranslator` | Batch-translate words (NL -> RU) | [docs](packages/translate_word/docs/module-spec.md) |
+| `database` | `DatabaseService` | Remote source of truth and default progress/sync provider | [docs](packages/database/docs/module-spec.md) |
+| `database_cache` | `DatabaseCacheService` | Local-first SQLite cache with injectable remote progress sync | [docs](packages/database_cache/docs/module-spec.md) |
+| `sampling` | `WordSampler` | Weighted word sampling over any compatible scored-pair provider | [docs](packages/sampling/docs/module-spec.md) |
 
 ## Development
 
@@ -80,6 +80,8 @@ doppler run -- uv run pytest tests/integration/database
 
 Modules are independent packages. Cross-module dependencies must be explicit in the consuming package's `pyproject.toml`.
 
+Shared cross-module storage contracts live in `nl_processing.core.ports`. `database` and `database_cache` are concrete implementations and adapters, not the owners of those shared interfaces.
+
 One intentional design change in this layout: `database` no longer imports `translate_word` directly. If you want automatic translation on `add_words()`, compose it explicitly:
 
 ```python
@@ -98,8 +100,6 @@ db = DatabaseService(
 
 ## Docs
 
-- Shared overview: [docs/product-brief.md](docs/product-brief.md)
-- Shared requirements: [docs/prd.md](docs/prd.md)
-- Shared architecture: [docs/architecture.md](docs/architecture.md)
+- Repository module spec: [docs/module-spec.md](docs/module-spec.md)
 - Environment variables: [docs/ENV_VARS.md](docs/ENV_VARS.md)
 - Release workflow: [docs/REALEASE_WORKFLOW.md](docs/REALEASE_WORKFLOW.md)

@@ -2,13 +2,16 @@
 
 import asyncio
 from datetime import timedelta
+from pathlib import Path
 
 from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair
 import pytest
 
 from nl_processing.database_cache.exceptions import CacheNotReadyError
+from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.models import CacheStatus
 from nl_processing.database_cache.service import DatabaseCacheService
+from tests.unit.database_cache.conftest import MockProgressStore, make_scored_pair
 
 
 def test_constructor_validates_exercise_types(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -50,6 +53,26 @@ async def test_get_word_pairs_before_init_raises() -> None:
     )
     with pytest.raises(CacheNotReadyError):
         await svc.get_word_pairs_with_scores()
+
+
+@pytest.mark.asyncio
+async def test_init_with_injected_remote_skips_database_url(tmp_path: Path) -> None:
+    """Injected remote_progress avoids DATABASE_URL lookup during init()."""
+    svc = DatabaseCacheService(
+        user_id="u1",
+        source_language=Language.NL,
+        target_language=Language.RU,
+        exercise_types=["flashcard"],
+        cache_ttl=timedelta(minutes=30),
+        remote_progress=MockProgressStore(
+            snapshot=[make_scored_pair("huis", "dom", 1, {"flashcard": 0})],
+        ),
+        local_store=LocalStore(str(tmp_path / "cache.db")),
+    )
+
+    status = await svc.init()
+
+    assert status.is_ready is True
 
 
 @pytest.mark.asyncio

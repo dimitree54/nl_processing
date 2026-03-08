@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair
+from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair, WordPairSnapshot
 import pytest
 
 _NL = Language.NL
@@ -19,27 +19,32 @@ def make_scored_pair(
     target_form: str,
     source_word_id: int,
     scores: dict[str, int] | None = None,
-) -> ScoredWordPair:
-    """Build a NL→RU ScoredWordPair for integration-level cache tests."""
+) -> WordPairSnapshot:
+    """Build a NL→RU snapshot payload for integration-level cache tests."""
     src = make_word(source_form, lang=_NL)
     tgt = make_word(target_form, lang=_RU)
-    return ScoredWordPair(pair=WordPair(source=src, target=tgt), scores=scores or {}, source_word_id=source_word_id)
+    return WordPairSnapshot(
+        pair=WordPair(source=src, target=tgt),
+        scores=scores or {},
+        source_word_id=source_word_id,
+        target_word_id=source_word_id + 1000,
+    )
 
 
 class MockProgressStore:
-    """Configurable fake ExerciseProgressStore for integration tests.
+    """Configurable fake remote progress sync port for integration tests.
 
     Supports per-call failure via ``apply_errors_by_call`` (list consumed FIFO)
     and a blanket ``apply_error`` fallback.
     """
 
-    def __init__(self, snapshot: list[ScoredWordPair] | None = None) -> None:
-        self.snapshot: list[ScoredWordPair] = snapshot or []
+    def __init__(self, snapshot: list[WordPairSnapshot] | None = None) -> None:
+        self.snapshot: list[WordPairSnapshot] = snapshot or []
         self.applied_deltas: list[dict[str, str | int]] = []
         self.apply_error: Exception | None = None
         self.apply_errors_by_call: list[Exception | None] = []
 
-    async def export_remote_snapshot(self) -> list[ScoredWordPair]:
+    async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
         return list(self.snapshot)
 
     async def apply_score_delta(

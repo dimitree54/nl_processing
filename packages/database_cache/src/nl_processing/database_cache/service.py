@@ -7,6 +7,7 @@ import tempfile
 from uuid import uuid4
 
 from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair
+from nl_processing.core.ports import RemoteProgressSyncPort
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 
 from nl_processing.database_cache.exceptions import CacheNotReadyError
@@ -19,7 +20,7 @@ _log = get_logger("service")
 
 
 class DatabaseCacheService:
-    """Offline-first cache backed by a local SQLite database."""
+    """Offline-first cache backed by SQLite and a compatible remote sync port."""
 
     def __init__(
         self,
@@ -29,6 +30,8 @@ class DatabaseCacheService:
         target_language: Language,
         exercise_types: list[str],
         cache_ttl: timedelta,
+        remote_progress: RemoteProgressSyncPort | None = None,
+        local_store: LocalStore | None = None,
         cache_dir: str | None = None,
     ) -> None:
         if not exercise_types:
@@ -41,19 +44,21 @@ class DatabaseCacheService:
         self._cache_ttl = cache_ttl
         base = cache_dir or tempfile.gettempdir()
         self._db_path = f"{base}/{user_id}_{source_language.value}_{target_language.value}.db"
+        self._remote_progress = remote_progress
         self._initialized = False
-        self._local: LocalStore | None = None
+        self._local: LocalStore | None = local_store
         self._syncer: CacheSyncer | None = None
 
     async def init(self) -> CacheStatus:
         """Open local store, bootstrap or refresh as needed, return status."""
-        progress_store = ExerciseProgressStore(
+        progress_store = self._remote_progress or ExerciseProgressStore(
             user_id=self._user_id,
             source_language=self._source_language,
             target_language=self._target_language,
             exercise_types=self._exercise_types,
         )
-        self._local = LocalStore(self._db_path)
+        if self._local is None:
+            self._local = LocalStore(self._db_path)
         await self._local.open()
         self._syncer = CacheSyncer(self._local, progress_store)
         await self._local.ensure_metadata(self._exercise_types)
