@@ -1,10 +1,14 @@
 """Integration tests — flush retry behaviour with file-based SQLite and mocked remote."""
 
+import asyncio
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
+from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.database_cache.local_store import LocalStore
+from nl_processing.database_cache.service import DatabaseCacheService
 from nl_processing.database_cache.sync import CacheSyncer
 from tests.integration.database_cache.conftest import MockProgressStore, make_scored_pair
 
@@ -111,4 +115,47 @@ async def test_mixed_success_failure_during_flush(db_path: Path) -> None:
     assert len(pending) == 1
     assert str(pending[0]["event_id"]) == "evt-fail"
     assert "transient" in str(pending[0]["last_error"])
+    await store.close()
+
+
+@pytest.mark.asyncio
+async def test_auto_flush_delivers_events_after_record(db_path: Path) -> None:
+    """DatabaseCacheService auto-flushes events to the remote after record_exercise_result()."""
+    remote = MockProgressStore(
+        snapshot=[
+            make_scored_pair("huis", "dom", 1, {"flashcard": 0}),
+        ]
+    )
+
+    svc = DatabaseCacheService(
+        user_id="test_user",
+        source_language=Language.NL,
+        target_language=Language.RU,
+        exercise_types=["flashcard"],
+        cache_ttl=timedelta(minutes=30),
+        cache_dir=str(db_path.parent),
+    )
+
+    # Wire internals manually — bypass init() which needs a real DATABASE_URL.
+    store = LocalStore(str(db_path))
+    await store.open()
+    await store.ensure_metadata(["flashcard"])
+    syncer = CacheSyncer(store, remote)
+    await syncer.refresh()
+
+    svc._local = store
+    svc._syncer = syncer
+    svc._initialized = True
+
+    word = Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)
+    await svc.record_exercise_result(source_word=word, exercise_type="flashcard", delta=1)
+
+    # Yield to event loop so the background flush task completes.
+    # File-backed SQLite needs more iterations than in-memory.
+    await asyncio.sleep(0.05)
+
+    assert len(remote.applied_deltas) == 1
+    status = await svc.get_status()
+    assert status.pending_events == 0
+
     await store.close()
