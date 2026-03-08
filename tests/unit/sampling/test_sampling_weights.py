@@ -4,6 +4,8 @@ from collections import Counter
 
 import pytest
 
+from nl_processing.core.models import Language, PartOfSpeech
+from nl_processing.database.models import WordPair
 from nl_processing.sampling.service import WordSampler
 from tests.unit.sampling.conftest import make_scored_pair, patch_store
 
@@ -65,12 +67,26 @@ async def test_sample_negative_returns_empty(sampler: WordSampler) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sample_returns_at_most_limit(sampler: WordSampler) -> None:
-    """Result length never exceeds the requested limit."""
+async def test_sample_returns_requested_count_when_enough_candidates(sampler: WordSampler) -> None:
+    """When enough candidates exist, sample(limit) returns exactly limit items."""
     pairs = [make_scored_pair(f"w{i}", f"t{i}") for i in range(10)]
     patch_store(sampler, pairs)
+    result = await sampler.sample(5)
+    assert len(result) == 5
+
+
+@pytest.mark.asyncio
+async def test_sample_with_all_zero_scores_returns_items(sampler: WordSampler) -> None:
+    """Zero-scored candidates are still returned for configured exercise types."""
+    pairs = [
+        make_scored_pair("huis", "dom", scores={"flashcard": 0}),
+        make_scored_pair("boek", "kniga", scores={"flashcard": 0}),
+        make_scored_pair("fiets", "velosiped", scores={"flashcard": 0}),
+    ]
+    patch_store(sampler, pairs)
     result = await sampler.sample(3)
-    assert len(result) <= 3
+    assert len(result) == 3
+    assert all(isinstance(word_pair, WordPair) for word_pair in result)
 
 
 @pytest.mark.asyncio
@@ -100,6 +116,26 @@ async def test_sample_empty_candidates(sampler: WordSampler) -> None:
     patch_store(sampler, [])
     result = await sampler.sample(5)
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_sample_returns_word_pairs_with_expected_fields(sampler: WordSampler) -> None:
+    """Sampled word pairs preserve language, part of speech, and normalized forms."""
+    pairs = [
+        make_scored_pair("huis", "dom", word_type=PartOfSpeech.NOUN),
+        make_scored_pair("lopen", "begat", word_type=PartOfSpeech.VERB),
+        make_scored_pair("groot", "bolshoi", word_type=PartOfSpeech.ADJECTIVE),
+    ]
+    patch_store(sampler, pairs)
+    result = await sampler.sample(3)
+    valid_pos = {PartOfSpeech.NOUN, PartOfSpeech.VERB, PartOfSpeech.ADJECTIVE}
+    for word_pair in result:
+        assert word_pair.source.language == Language.NL
+        assert word_pair.target.language == Language.RU
+        assert word_pair.source.word_type in valid_pos
+        assert word_pair.target.word_type in valid_pos
+        assert word_pair.source.normalized_form
+        assert word_pair.target.normalized_form
 
 
 @pytest.mark.asyncio
