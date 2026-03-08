@@ -1,6 +1,16 @@
 preview = true
 
 line-length = 120
+src = [
+    "packages/core/src",
+    "packages/extract_text_from_image/src",
+    "packages/extract_words_from_text/src",
+    "packages/translate_text/src",
+    "packages/translate_word/src",
+    "packages/database/src",
+    "packages/database_cache/src",
+    "packages/sampling/src",
+]
 
 [lint]
 select = [
@@ -83,4 +93,4 @@ combine-as-imports = true
 split-on-trailing-comma = true
 
 [lint.per-file-ignores]
-"scripts/*" = ["T201", "S603"]
+"packages/*/src/nl_processing/core/scripts/*" = ["T201", "S603"]

@@ -4,23 +4,34 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nl_processing"
-version = "0.5.0"
-description = "Natural language processing playground"
+version = "1.0.0"
+description = "Aggregate build for the nl_processing multi-package repository"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.0,<3",
-  "langchain>=0.3,<1",
+  "langchain-core>=0.3,<1",
   "langchain-openai>=0.3,<1",
+  "numpy>=2.0,<3",
   "opencv-python>=4.10,<5",
   "asyncpg>=0.30,<1",
   "aiosqlite>=0.20,<1",
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = [
+  "packages/core/src",
+  "packages/extract_text_from_image/src",
+  "packages/extract_words_from_text/src",
+  "packages/translate_text/src",
+  "packages/translate_word/src",
+  "packages/database/src",
+  "packages/database_cache/src",
+  "packages/sampling/src",
+]
 include = ["nl_processing*"]
 exclude = ["tests*"]
+namespaces = true
 
 [tool.setuptools.package-data]
 "nl_processing.extract_text_from_image.prompts" = ["*.json"]

@@ -7,7 +7,7 @@ from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import ConfigurationError, DatabaseError
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.logging import get_logger
-from nl_processing.database.models import AddWordsResult, ScoredWordPair
+from nl_processing.database.models import AddWordsResult
 from nl_processing.database.service import DatabaseService
 from nl_processing.database.testing import (
     count_translation_links,
@@ -17,6 +17,7 @@ from nl_processing.database.testing import (
 )
 from nl_processing.database_cache.models import CacheStatus
 from nl_processing.database_cache.service import DatabaseCacheService
+from nl_processing.core.models import ScoredWordPair
 
 # Benchmark utilities used by integration tests at runtime (not detected by static analysis)
 from nl_processing.extract_text_from_image.benchmark import run_benchmark
@@ -24,7 +25,6 @@ from nl_processing.extract_words_from_text.service import WordExtractor
 from nl_processing.sampling.service import ScoredPairProvider, WordSampler
 from nl_processing.translate_text.service import TextTranslator
 from nl_processing.translate_word.service import WordTranslator
-from tests.e2e.database.conftest import db_ready, wait_for_translations
 
 # AbstractBackend ABC — methods are abstract, implemented by concrete backends (T4+)
 AbstractBackend.add_word  # type: ignore[misc]
@@ -120,6 +120,11 @@ NeonBackend.check_event_applied  # type: ignore[misc]
 NeonBackend.mark_event_applied  # type: ignore[misc]
 NeonBackend.apply_score_delta_atomic  # type: ignore[misc]
 
+# Package-local pytest fixtures / helpers used via test discovery
+db_ready  # noqa: F821
+make_service  # noqa: F821
+wait_for_translations  # noqa: F821
+
 __all__ = [
     "DatabaseService",
     "ConfigurationError",
@@ -141,6 +146,7 @@ __all__ = [
     "ScoredPairProvider",
     "WordSampler",
     "db_ready",
+    "make_service",
     "wait_for_translations",
     "DatabaseCacheService",
     "CacheStatus",

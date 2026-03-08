@@ -17,8 +17,13 @@ All environment variables are managed via **Doppler CLI**.
 All commands requiring env vars must run with `doppler run --`:
 
 ```bash
-doppler run -- uv run pytest -n auto tests/unit
 doppler run -- make check
+
+cd packages/database
+doppler run -- uv run pytest tests/integration/database
+
+cd packages/translate_word
+doppler run -- uv run pytest tests/e2e/translate_word
 ```
 
 ## Adding New Variables

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nl-processing-database"
+version = "1.0.0"
+description = "Database package for nl_processing"
+requires-python = ">=3.12"
+dependencies = [
+  "nl-processing-core",
+  "asyncpg>=0.30,<1",
+  "pydantic>=2.0,<3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["nl_processing.database*"]
+namespaces = true
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0.2,<10",
+  "pytest-asyncio>=1.3.0,<2",
+  "pytest-xdist>=3.8.0,<4",
+  "ruff>=0.15.0,<0.16",
+  "pylint>=4.0.4,<5",
+  "vulture>=2.14.0,<3",
+  "nl-processing-translate-word",
+]
+
+[tool.uv.sources]
+nl-processing-core = { path = "../core" }
+nl-processing-translate-word = { path = "../translate_word" }

@@ -9,7 +9,8 @@
     "**/node_modules/**",
     "**/build/**",
     "**/dist/**",
-    "**/*.egg-info/**"
+    "**/*.egg-info/**",
+    "packages/*/tests/**/conftest.py"
   ],
   "absolute": true
 }
