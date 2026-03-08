@@ -1,5 +1,6 @@
 """Unit tests for DatabaseCacheService — public API for the local cache layer."""
 
+import asyncio
 from datetime import timedelta
 
 import pytest
@@ -106,4 +107,26 @@ async def test_get_status_returns_cache_status(cache_service: DatabaseCacheServi
     assert isinstance(status, CacheStatus)
     assert status.is_ready is True
     assert status.has_snapshot is True
+    assert status.pending_events == 0
+
+
+@pytest.mark.asyncio
+async def test_record_exercise_result_triggers_background_flush(
+    cache_service: DatabaseCacheService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """record_exercise_result() spawns a background flush task."""
+    word = Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)
+    calls: list[object] = []
+    monkeypatch.setattr(asyncio, "create_task", lambda coro: calls.append(coro) or coro.close())  # type: ignore[func-returns-value]
+    await cache_service.record_exercise_result(source_word=word, exercise_type="flashcard", delta=1)
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_auto_flush_delivers_events_to_remote(cache_service: DatabaseCacheService) -> None:
+    """Auto-flush after record_exercise_result() pushes events to remote."""
+    word = Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)
+    await cache_service.record_exercise_result(source_word=word, exercise_type="flashcard", delta=1)
+    await asyncio.sleep(0)  # yield to event loop so background task runs
+    status = await cache_service.get_status()
     assert status.pending_events == 0
