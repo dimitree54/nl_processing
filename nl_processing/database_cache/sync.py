@@ -55,9 +55,14 @@ class CacheSyncer:
                 await self._local.update_metadata(last_error=str(exc))
                 raise CacheSyncError(str(exc)) from exc
 
-    async def flush(self) -> None:
-        """Push pending local score events to the remote database."""
-        if self._flush_lock.locked():
+    async def flush(self, *, skip_if_running: bool = False) -> None:
+        """Push pending local score events to the remote database.
+
+        Args:
+            skip_if_running: If True, return immediately if another flush is already running.
+                           If False (default), wait for any running flush to complete.
+        """
+        if skip_if_running and self._flush_lock.locked():
             return
         async with self._flush_lock:
             events = await self._local.get_pending_events()

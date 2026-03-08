@@ -173,7 +173,7 @@ class DatabaseCacheService:
     async def _background_flush(self) -> None:
         try:
             assert self._syncer is not None
-            await self._syncer.flush()
+            await self._syncer.flush(skip_if_running=True)
         except Exception:
             _log.exception("background flush failed")
 
