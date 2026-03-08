@@ -80,12 +80,24 @@ from nl_processing.sampling.service import WordSampler
 from nl_processing.core.models import Language, Word
 from nl_processing.database.models import WordPair
 
+# Default usage: sampler constructs ExerciseProgressStore internally
 sampler = WordSampler(
     user_id="alex",
     source_language=Language.NL,
     target_language=Language.RU,
     exercise_types=["nl_to_ru"],
     positive_balance_weight=0.01,
+)
+
+# Alternative usage: inject a data source (e.g., cache instead of remote DB)
+from nl_processing.database_cache.service import DatabaseCacheService
+cache = DatabaseCacheService()
+sampler_with_cache = WordSampler(
+    user_id="alex",
+    source_language=Language.NL,
+    target_language=Language.RU,
+    exercise_types=["nl_to_ru"],
+    scored_store=cache,
 )
 
 pairs: list[WordPair] = await sampler.sample(limit=20)
@@ -102,7 +114,7 @@ distractors: list[WordPair] = await sampler.sample_adversarial(
 
 ### Implementation Considerations
 
-- `sampling` depends on `database` for: (1) user word pairs, (2) per-exercise scores.
+- `sampling` depends on `database` for: (1) user word pairs, (2) per-exercise scores. It can also work with `database_cache` via the `ScoredPairProvider` Protocol.
 - No LLM calls, no prompts, no `OPENAI_API_KEY` requirement.
 - Exercise types are stable string identifiers stored in the database (no hard-coded list in v1).
 
@@ -129,6 +141,14 @@ distractors: list[WordPair] = await sampler.sample_adversarial(
 - FR18: If `limit <= 0`, return an empty list
 - FR19: If there are fewer than `limit` available distractors, return all available distractors in randomized order
 - FR20: If `source_word.language` does not match the sampler's `source_language`, raise a descriptive exception
+
+### Data Source Configuration
+
+- FR21: `WordSampler` constructor must accept an optional `scored_store` parameter that provides word pairs with scores. When provided, the sampler uses it instead of constructing its own `ExerciseProgressStore`.
+- FR22: The `scored_store` parameter must conform to a `ScoredPairProvider` Protocol defined in the sampling module, requiring only `async def get_word_pairs_with_scores(self) -> list[ScoredWordPair]`.
+- FR23: Both `ExerciseProgressStore` and `DatabaseCacheService` must satisfy `ScoredPairProvider` without modification (structural typing).
+- FR24: When `scored_store` is not provided, the sampler falls back to constructing an `ExerciseProgressStore` internally (backward compatible).
+- FR25: The sampler must not import `DatabaseCacheService` — the Protocol enables loose coupling.
 
 ### Candidate Set
 
