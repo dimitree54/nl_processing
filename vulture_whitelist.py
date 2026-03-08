@@ -15,6 +15,8 @@ from nl_processing.database.testing import (
     count_words,
     reset_database,
 )
+from nl_processing.database_cache.models import CacheStatus
+from nl_processing.database_cache.service import DatabaseCacheService
 
 # Benchmark utilities used by integration tests at runtime (not detected by static analysis)
 from nl_processing.extract_text_from_image.benchmark import run_benchmark
@@ -84,6 +86,20 @@ ExerciseProgressStore.apply_score_delta  # type: ignore[misc]
 WordSampler.sample  # type: ignore[misc]
 WordSampler.sample_adversarial  # type: ignore[misc]
 
+# DatabaseCacheService — public API, used by consuming code / future tasks
+DatabaseCacheService.init  # type: ignore[misc]
+DatabaseCacheService.record_exercise_result  # type: ignore[misc]
+
+# CacheStatus model fields — used by consumers
+CacheStatus.is_ready  # type: ignore[misc]
+CacheStatus.is_stale  # type: ignore[misc]
+CacheStatus.pending_events  # type: ignore[misc]
+CacheStatus.last_refresh_completed_at  # type: ignore[misc]
+CacheStatus.last_flush_completed_at  # type: ignore[misc]
+
+# LocalStore.row_factory — set on aiosqlite.Connection, not a dead attribute
+row_factory  # noqa: F821
+
 # classmethod first parameter — required by Python, flagged by vulture
 cls  # noqa: F821
 
@@ -122,4 +138,6 @@ __all__ = [
     "WordSampler",
     "db_ready",
     "wait_for_translations",
+    "DatabaseCacheService",
+    "CacheStatus",
 ]
