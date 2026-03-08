@@ -222,9 +222,10 @@ await progress.apply_score_delta(
 
 - FR36: Module exposes an internal snapshot export returning translated word pairs with stable remote IDs.
 - FR37: Snapshot export includes scores for all exercise types configured in the `ExerciseProgressStore`.
-- FR38: Module exposes an internal `apply_score_delta(event_id, ...)` operation for cache replay.
+- FR38: Module exposes an internal `apply_score_delta(event_id, ...)` operation for retry-safe remote writes. The check-increment-mark operation is atomic (single database transaction).
 - FR39: `event_id` is treated as an idempotency key.
 - FR40: Repeating the same `event_id` must not double-apply the remote score delta.
+- FR41: `apply_score_delta` validates `delta` is `+1` or `-1` and `exercise_type` belongs to the configured set before any database operation.
 
 ## Non-Functional Requirements (Module-Specific)
 
