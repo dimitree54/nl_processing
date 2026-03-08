@@ -108,6 +108,7 @@ class DatabaseCacheService:
             msg = f"Word '{source_word.normalized_form}' not found in cache"
             raise ValueError(msg)
         await self._local.record_score_and_event(wid, exercise_type, delta, str(uuid4()))
+        asyncio.create_task(self._background_flush())
 
     async def refresh(self) -> None:
         """Trigger a full cache refresh from the remote database."""
@@ -168,6 +169,13 @@ class DatabaseCacheService:
             await self._syncer.refresh()
         except Exception:
             _log.exception("background refresh failed")
+
+    async def _background_flush(self) -> None:
+        try:
+            assert self._syncer is not None
+            await self._syncer.flush()
+        except Exception:
+            _log.exception("background flush failed")
 
 
 def _parse_dt(meta: dict[str, str | int], key: str) -> datetime | None:
