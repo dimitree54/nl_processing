@@ -90,9 +90,9 @@ Each outbox item uses a stable `event_id`. Flush sends that ID to `database.appl
 
 ### Decision: Refresh Rebuilds Snapshot Atomically
 
-Refresh writes downloaded data into staging tables and swaps them atomically into the active snapshot.
+Refresh deletes existing `cached_word_pairs` and `cached_scores` rows, inserts the freshly downloaded data, reapplies all still-pending outbox events via UPSERT, and commits — all within a single SQLite transaction.
 
-After the swap, the cache reapplies all still-pending outbox events to the local score state.
+There are no staging tables; atomicity is guaranteed by the enclosing transaction.
 
 **Rationale:** remote refresh must not erase locally acknowledged but not-yet-flushed score updates.
 
@@ -217,10 +217,9 @@ await progress.apply_score_delta(
 ### Refresh
 
 1. Call `progress.export_remote_snapshot()` to fetch word pairs with scores for the configured exercise set.
-2. Write them into staging tables.
-3. Atomically swap staging into active snapshot.
-4. Reapply still-pending local outbox events to `cached_scores`.
-5. Update refresh metadata.
+2. Within a single transaction: delete existing `cached_word_pairs` and `cached_scores` rows, insert the freshly downloaded word pairs (as tuples) and scores (as a dict keyed by `(source_word_id, exercise_type)`), then reapply still-pending local outbox events to `cached_scores` via UPSERT.
+3. Commit the transaction.
+4. Update refresh metadata.
 
 ### Record Exercise Result
 
@@ -240,13 +239,14 @@ await progress.apply_score_delta(
 
 ```
 nl_processing/database_cache/
-├── __init__.py
-├── service.py              # DatabaseCacheService
-├── local_store.py          # SQLite schema + local transactions
-├── sync.py                 # refresh / flush orchestration
-├── models.py               # CacheStatus and internal sync records
-├── exceptions.py           # CacheNotReadyError, CacheStorageError, CacheSyncError
-├── logging.py
+├── __init__.py               # empty
+├── service.py                # DatabaseCacheService (public class)
+├── local_store.py            # SQLite schema + CRUD operations
+├── _local_store_queries.py   # DDL and SQL query constants
+├── sync.py                   # CacheSyncer: refresh/flush orchestration
+├── models.py                 # CacheStatus Pydantic model
+├── exceptions.py             # CacheNotReadyError, CacheStorageError, CacheSyncError
+├── logging.py                # Module logger helper
 └── docs/
     ├── product-brief-database_cache-2026-03-07.md
     ├── prd_database_cache.md

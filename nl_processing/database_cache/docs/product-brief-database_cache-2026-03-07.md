@@ -47,8 +47,8 @@ Doing all of that directly against Neon risks user-visible latency far above the
 ### Why Existing Solutions Fall Short
 
 - **Direct `database` reads:** correct but network-bound.
-- **Current in-memory `CachedDatabaseService`:** not persistent, not TTL-based, not exercise-aware, and not safe for offline replay.
-- **Pure in-memory caches:** lose data on restart and cannot safely queue score deltas.
+- **Pure in-memory caches:** not persistent, not TTL-based, not exercise-aware, and not safe for offline replay.
+- **In-memory-only caches:** lose data on restart and cannot safely queue score deltas.
 
 ### Proposed Solution
 
@@ -99,7 +99,7 @@ This module exists specifically to accelerate the hot practice path.
 ### Module-Specific Dependencies
 
 - `database` — remote source of truth and sync target
-- local embedded SQL database (planned: SQLite)
+- local embedded SQL database (SQLite via aiosqlite)
 
 ### Out of Scope
 

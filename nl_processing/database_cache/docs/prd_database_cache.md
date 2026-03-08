@@ -90,6 +90,7 @@ cache = DatabaseCacheService(
     target_language=Language.RU,
     exercise_types=["nl_to_ru", "multiple_choice"],
     cache_ttl=timedelta(minutes=30),
+    cache_dir="/tmp/my_cache",  # optional; defaults to system temp dir
 )
 
 status = await cache.init()
@@ -105,7 +106,7 @@ await cache.record_exercise_result(
 await cache.flush()
 ```
 
-**Status object (planned shape):**
+**Status object:**
 
 ```python
 CacheStatus(
@@ -114,6 +115,7 @@ CacheStatus(
     has_snapshot=True,
     pending_events=3,
     last_refresh_completed_at=...,
+    last_flush_completed_at=...,
 )
 ```
 
