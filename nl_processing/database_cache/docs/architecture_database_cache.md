@@ -156,39 +156,53 @@ Single-row or key-value metadata storing:
 
 ## Remote Integration Contract
 
-`database_cache` depends on these remote interfaces from `database`:
+`database_cache` consumes `ExerciseProgressStore` from the `database` module directly. No separate Protocol is needed because `ExerciseProgressStore` is already a well-defined class with stable instance methods for cache support.
+
+### Snapshot Export
 
 ```python
-class DatabaseCacheSyncBackend(Protocol):
-    async def export_user_word_pairs(
-        self,
-        user_id: str,
-        source_language: Language,
-        target_language: Language,
-    ) -> list[RemoteWordPairRecord]:
-        ...
+from nl_processing.database.exercise_progress import ExerciseProgressStore
+from nl_processing.database.models import ScoredWordPair
 
-    async def export_user_scores(
-        self,
-        user_id: str,
-        source_language: Language,
-        target_language: Language,
-        exercise_types: list[str],
-    ) -> list[RemoteScoreRecord]:
-        ...
+progress = ExerciseProgressStore(
+    user_id="alex",
+    source_language=Language.NL,
+    target_language=Language.RU,
+    exercise_types=["nl_to_ru", "multiple_choice"],
+)
 
-    async def apply_score_delta(
-        self,
-        event_id: str,
-        user_id: str,
-        source_language: Language,
-        target_language: Language,
-        source_word_id: int,
-        exercise_type: str,
-        delta: int,
-    ) -> None:
-        ...
+snapshot: list[ScoredWordPair] = await progress.export_remote_snapshot()
 ```
+
+`export_remote_snapshot()` returns a list of `ScoredWordPair`, each containing:
+- `pair: WordPair` with `source: Word` and `target: Word` (translated pair)
+- `scores: dict[str, int]` (score per configured exercise type, missing defaults to 0)
+- `source_word_id: int` (remote canonical ID for the source word)
+
+This single call returns word pairs and scores together because they share the same row context.
+
+### Idempotent Score Delta Replay
+
+```python
+await progress.apply_score_delta(
+    event_id="uuid-here",
+    source_word_id=101,
+    exercise_type="nl_to_ru",
+    delta=-1,  # must be +1 or -1
+)
+```
+
+- `event_id` is the idempotency key. Repeating the same `event_id` is a no-op.
+- `delta` must be +1 or -1 (validated, raises `ValueError` otherwise).
+- The check-increment-mark operation is atomic (single database transaction).
+- `exercise_type` must belong to the store's configured exercise set.
+
+### Design Decision: Direct Dependency, Not Protocol
+
+`database_cache` depends directly on `ExerciseProgressStore` rather than an abstract Protocol because:
+1. There is exactly one implementation of the remote sync contract.
+2. The `ExerciseProgressStore` constructor already handles user/language/exercise-type scoping.
+3. Test isolation is achieved by injecting a mock backend into the store, not by abstracting the store itself.
 
 ## Lifecycle Flow
 
@@ -202,7 +216,7 @@ class DatabaseCacheSyncBackend(Protocol):
 
 ### Refresh
 
-1. Fetch remote word pairs and scores for the configured exercise set.
+1. Call `progress.export_remote_snapshot()` to fetch word pairs with scores for the configured exercise set.
 2. Write them into staging tables.
 3. Atomically swap staging into active snapshot.
 4. Reapply still-pending local outbox events to `cached_scores`.
@@ -218,7 +232,7 @@ class DatabaseCacheSyncBackend(Protocol):
 ### Flush
 
 1. Select oldest unflushed events.
-2. Replay each event remotely using `event_id`.
+2. Replay each event by calling `progress.apply_score_delta(event_id=..., source_word_id=..., exercise_type=..., delta=...)`.
 3. Mark successful events as flushed locally.
 4. Keep failed events pending for retry.
 
