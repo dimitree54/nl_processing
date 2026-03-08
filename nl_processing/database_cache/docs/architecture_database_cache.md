@@ -72,15 +72,18 @@ The local cache keeps:
 - a durable table of local score values;
 - a durable outbox of pending score events not yet flushed remotely.
 
-### Decision: Local Writes Use Transactional Outbox Pattern
+### Decision: Local Writes Use Transactional Outbox + Auto-Flush
 
 When the user answers an exercise:
 
 1. local score is updated;
 2. a pending score event with unique `event_id` is inserted into the outbox;
-3. both changes commit in one local transaction.
+3. both changes commit in one local transaction;
+4. a background flush task is started (fire-and-forget) to push all pending events to the remote database.
 
-**Rationale:** the user gets immediate feedback while the system preserves enough information for later remote replay.
+The auto-flush is non-blocking: `record_exercise_result()` returns as soon as the local transaction commits (step 3). The background flush (step 4) runs concurrently. If the flush fails (e.g., remote is unreachable), events remain pending and will be retried on the next write's auto-flush.
+
+**Rationale:** the user gets immediate feedback while score deltas are pushed to the remote database as quickly as possible. No manual `flush()` call is needed for normal operation — the system self-synchronizes on every write.
 
 ### Decision: Remote Replay Is Idempotent
 
@@ -227,13 +230,17 @@ await progress.apply_score_delta(
 2. Update local `cached_scores`.
 3. Insert `pending_score_events` row with new `event_id`.
 4. Commit transaction.
+5. Start background flush (fire-and-forget via `asyncio.create_task`).
 
-### Flush
+### Flush (Auto or Explicit)
 
-1. Select oldest unflushed events.
-2. Replay each event by calling `progress.apply_score_delta(event_id=..., source_word_id=..., exercise_type=..., delta=...)`.
-3. Mark successful events as flushed locally.
-4. Keep failed events pending for retry.
+Flush runs automatically after every `record_exercise_result()` and is also available as `cache.flush()` for explicit use.
+
+1. If another flush is already running, skip (lock guard).
+2. Select oldest unflushed events.
+3. Replay each event by calling `progress.apply_score_delta(event_id=..., source_word_id=..., exercise_type=..., delta=...)`.
+4. Mark successful events as flushed locally.
+5. Keep failed events pending for retry (retried on next auto-flush or explicit call).
 
 ## Module Internal Structure
 
@@ -261,6 +268,8 @@ nl_processing/database_cache/
 - exercise-type validation
 - local transaction writes both score and outbox
 - `CacheNotReadyError` on true cold start
+- `record_exercise_result()` triggers background flush automatically
+- auto-flush does not block `record_exercise_result()` return
 
 ### Integration Tests
 
@@ -268,10 +277,11 @@ nl_processing/database_cache/
 - refresh rebuild + pending-event overlay
 - flush retry behavior with repeated remote failures
 - changed `exercise_types` metadata triggers rebuild path
+- auto-flush delivers events to remote after `record_exercise_result()`
 
 ### E2E Tests
 
 - remote snapshot -> local cache -> sampling-facing read
 - stale snapshot start does not block user read path
-- offline local score write -> later remote flush
+- `record_exercise_result()` auto-flushes to Neon in background
 - repeated flush of same `event_id` does not double-apply remotely

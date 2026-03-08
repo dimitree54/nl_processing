@@ -27,7 +27,8 @@ The module initializes with a specific language pair, a cache TTL, and an explic
 - **Stale-while-revalidate:** stale data can still be served while refresh happens asynchronously.
 - **Durable local state:** cache data survives process restarts because it is stored in a local embedded database.
 - **Exercise-aware initialization:** the cache instance is initialized with the concrete exercise set it must support.
-- **Offline-safe sync model:** local writes are acknowledged immediately and synchronized to the remote source of truth later.
+- **Auto-flush on write:** every exercise result triggers an automatic background flush to the remote database — no manual sync calls needed.
+- **Offline-safe sync model:** if the remote database is unreachable, local writes are still acknowledged immediately and retried later.
 
 ---
 
@@ -57,9 +58,9 @@ An async Python module that:
 - stores a durable local snapshot of translated `WordPair` items and per-exercise scores;
 - initializes with `user_id`, language pair, cache TTL, and `exercise_types`;
 - serves reads entirely from local storage;
-- updates local exercise scores immediately and appends a sync event to a durable outbox;
+- updates local exercise scores immediately, appends a sync event to a durable outbox, and automatically starts a background flush to the remote database;
 - refreshes stale snapshots in the background without blocking reads;
-- flushes queued score deltas to `database` using idempotent event IDs.
+- retries failed flush attempts on the next write, ensuring eventual delivery using idempotent event IDs.
 
 ---
 
@@ -92,7 +93,7 @@ This module exists specifically to accelerate the hot practice path.
 3. **Local score cache** for all configured exercise types
 4. **Immediate local score writes** with offline outbox persistence
 5. **Background refresh** when the cache is stale
-6. **Background / explicit flush** of pending score deltas
+6. **Automatic background flush** of pending score deltas after every write (fire-and-forget)
 7. **Status reporting** for readiness, staleness, and pending sync volume
 8. **Low-latency read APIs** consumed by `sampling`
 

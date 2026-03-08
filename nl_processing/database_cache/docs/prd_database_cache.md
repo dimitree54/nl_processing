@@ -19,11 +19,11 @@ classification:
 
 ## Executive Summary
 
-`database_cache` is a local-first cache module that accelerates the practice path for one user and one language pair. It keeps a durable local snapshot of translated words and exercise statistics, serves reads from local storage, and synchronizes with the remote `database` module in the background.
+`database_cache` is a local-first cache module that accelerates the practice path for one user and one language pair. It keeps a durable local snapshot of translated words and exercise statistics, serves reads from local storage, and synchronizes with the remote `database` module automatically.
 
 The cache instance is initialized with an explicit `exercise_types` list. This matters because the remote `database` module stores statistics in separate tables per exercise type; the cache must know at initialization time which exercises it mirrors and maintains locally.
 
-The module must support stale-while-revalidate behavior: if the snapshot is old but still present, the user keeps working immediately while a background refresh starts. Progress writes are applied locally first and delivered to the remote database later.
+The module must support stale-while-revalidate behavior: if the snapshot is old but still present, the user keeps working immediately while a background refresh starts. Progress writes are applied locally first and automatically flushed to the remote database in the background (fire-and-forget). If the remote is unreachable, failed events remain pending and are retried on the next write.
 
 ## Success Criteria
 
@@ -64,13 +64,13 @@ Alex starts a study session. A local cache file already exists, but it is older 
 
 `sampling` asks for score-aware word pairs. `database_cache` returns translated words plus scores for the configured exercises entirely from local storage, so the sampler can build the next exercise set without waiting for Neon.
 
-### Journey 3: Record an Answer Offline
+### Journey 3: Record an Answer — Auto-Flush
 
-The user answers incorrectly. Alex calls `record_exercise_result(..., exercise_type="multiple_choice", delta=-1)`. The local score updates immediately and the cache stores a pending sync event. If Neon is unavailable, the session still continues.
+The user answers incorrectly. Alex calls `record_exercise_result(..., exercise_type="multiple_choice", delta=-1)`. The local score updates immediately, and a background flush starts automatically (fire-and-forget) to push the event to Neon. The caller does not wait for the flush — `record_exercise_result()` returns as soon as the local write commits.
 
-### Journey 4: Flush After Connectivity Returns
+### Journey 4: Offline Write — Retry on Next Write
 
-Connectivity recovers. `database_cache.flush()` replays pending events to `database` using idempotent event IDs. Successfully flushed events are marked complete locally.
+Neon is temporarily unreachable. The background flush fails, but the event stays in the local outbox. When Alex answers the next question, `record_exercise_result()` again triggers a background flush — this time it retries the previously failed event along with the new one. Once connectivity returns, all pending events are delivered.
 
 ## Developer Tool Specific Requirements
 
@@ -102,8 +102,9 @@ await cache.record_exercise_result(
     exercise_type="nl_to_ru",
     delta=-1,
 )
+# ↑ auto-flush starts in background (fire-and-forget)
 
-await cache.flush()
+await cache.flush()  # explicit flush is also available if needed
 ```
 
 **Status object:**
@@ -132,6 +133,7 @@ CacheStatus(
 - `exercise_types` are configured once at initialization and reused throughout the object lifetime
 - local storage must be durable, not in-memory only
 - local writes must be transactionally coupled to outbox persistence
+- every write triggers a background flush — the caller never needs to manually call `flush()` for normal operation
 
 ## Functional Requirements
 
@@ -161,29 +163,31 @@ CacheStatus(
 - FR16: The local score update and outbox append happen in the same local transaction.
 - FR17: After a successful local write, subsequent reads reflect the updated score immediately.
 - FR18: Each local write creates a unique `event_id` for remote replay.
+- FR19: After a successful local write, `record_exercise_result()` automatically starts a background flush (fire-and-forget) to push pending events to the remote database.
+- FR20: The background auto-flush must not block `record_exercise_result()` — the method returns as soon as the local transaction commits.
 
 ### Refresh and Flush
 
-- FR19: `refresh()` fetches translated word pairs and scores for the configured exercise set from `database`.
-- FR20: Refresh rebuilds the local snapshot atomically.
-- FR21: During refresh, existing readable snapshot data stays available.
-- FR22: Pending local outbox events are replayed on top of freshly downloaded scores so unsynced local progress is preserved.
-- FR23: `flush()` replays pending events to remote `database`.
-- FR24: Failed event flushes remain pending for later retry.
-- FR25: Only one refresh job per cache instance may run at a time.
-- FR26: Only one flush job per cache instance may run at a time.
+- FR21: `refresh()` fetches translated word pairs and scores for the configured exercise set from `database`.
+- FR22: Refresh rebuilds the local snapshot atomically.
+- FR23: During refresh, existing readable snapshot data stays available.
+- FR24: Pending local outbox events are replayed on top of freshly downloaded scores so unsynced local progress is preserved.
+- FR25: `flush()` replays pending events to remote `database`. It is called automatically after each `record_exercise_result()` and is also available as a public method for explicit use.
+- FR26: Failed event flushes remain pending for later retry (retried on the next auto-flush or explicit `flush()` call).
+- FR27: Only one refresh job per cache instance may run at a time.
+- FR28: Only one flush job per cache instance may run at a time.
 
 ### Exercise Set Management
 
-- FR27: The configured exercise set is stored in cache metadata.
-- FR28: If `exercise_types` changes between runs, the cache detects the mismatch and triggers local rebuild / refresh logic.
-- FR29: The cache may store local scores in a normalized table even though remote `database` uses separate tables per exercise type.
+- FR29: The configured exercise set is stored in cache metadata.
+- FR30: If `exercise_types` changes between runs, the cache detects the mismatch and triggers local rebuild / refresh logic.
+- FR31: The cache may store local scores in a normalized table even though remote `database` uses separate tables per exercise type.
 
 ### Status and Observability
 
-- FR30: `get_status()` returns readiness, staleness, pending event count, and last refresh / flush timestamps.
-- FR31: Background refresh failures are logged and reflected in status metadata.
-- FR32: Background flush failures are logged and reflected in status metadata.
+- FR32: `get_status()` returns readiness, staleness, pending event count, and last refresh / flush timestamps.
+- FR33: Background refresh failures are logged and reflected in status metadata.
+- FR34: Background flush failures are logged and reflected in status metadata.
 
 ## Non-Functional Requirements (Module-Specific)
 
