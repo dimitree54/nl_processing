@@ -6,8 +6,9 @@ import pytest
 
 from nl_processing.core.models import Language, PartOfSpeech
 from nl_processing.database.models import WordPair
-from nl_processing.sampling.service import WordSampler
-from tests.unit.sampling.conftest import make_scored_pair, patch_store
+from nl_processing.database_cache.service import DatabaseCacheService
+from nl_processing.sampling.service import ScoredPairProvider, WordSampler
+from tests.unit.sampling.conftest import MockProgressStore, make_scored_pair, patch_store
 
 # ---- constructor validation ----
 
@@ -162,26 +163,18 @@ def test_constructor_with_scored_store_skips_env(sampler_injected: WordSampler) 
 
 def test_mock_progress_store_satisfies_protocol() -> None:
     """MockProgressStore structurally satisfies ScoredPairProvider."""
-    from nl_processing.sampling.service import ScoredPairProvider
-    from tests.unit.sampling.conftest import MockProgressStore
-
     mock = MockProgressStore([])
     assert isinstance(mock, ScoredPairProvider)
 
 
 def test_database_cache_service_satisfies_protocol() -> None:
     """DatabaseCacheService structurally satisfies ScoredPairProvider."""
-    from nl_processing.database_cache.service import DatabaseCacheService
-    from nl_processing.sampling.service import ScoredPairProvider
-
     assert issubclass(DatabaseCacheService, ScoredPairProvider)
 
 
 @pytest.mark.asyncio
 async def test_sample_via_injected_store() -> None:
     """Sampling works when store is injected via scored_store parameter."""
-    from tests.unit.sampling.conftest import MockProgressStore, make_scored_pair
-
     pairs = [make_scored_pair(f"w{i}", f"t{i}", scores={"flashcard": 0}) for i in range(5)]
     mock_store = MockProgressStore(pairs)
     ws = WordSampler(

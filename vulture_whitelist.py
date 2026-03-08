@@ -21,7 +21,7 @@ from nl_processing.database_cache.service import DatabaseCacheService
 # Benchmark utilities used by integration tests at runtime (not detected by static analysis)
 from nl_processing.extract_text_from_image.benchmark import run_benchmark
 from nl_processing.extract_words_from_text.service import WordExtractor
-from nl_processing.sampling.service import WordSampler
+from nl_processing.sampling.service import ScoredPairProvider, WordSampler
 from nl_processing.translate_text.service import TextTranslator
 from nl_processing.translate_word.service import WordTranslator
 from tests.e2e.database.conftest import db_ready, wait_for_translations
@@ -86,6 +86,9 @@ ExerciseProgressStore.apply_score_delta  # type: ignore[misc]
 WordSampler.sample  # type: ignore[misc]
 WordSampler.sample_adversarial  # type: ignore[misc]
 
+# ScoredPairProvider — Protocol class, used structurally (never instantiated directly)
+ScoredPairProvider.get_word_pairs_with_scores  # type: ignore[misc]
+
 # DatabaseCacheService — public API, used by consuming code / future tasks
 DatabaseCacheService.init  # type: ignore[misc]
 DatabaseCacheService.record_exercise_result  # type: ignore[misc]
@@ -135,6 +138,7 @@ __all__ = [
     "count_user_words",
     "count_words",
     "reset_database",
+    "ScoredPairProvider",
     "WordSampler",
     "db_ready",
     "wait_for_translations",
