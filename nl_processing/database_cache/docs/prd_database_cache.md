@@ -21,12 +21,9 @@ classification:
 
 `database_cache` is a local-first cache module that accelerates the practice path for one user and one language pair. It keeps a durable local snapshot of translated words and exercise statistics, serves reads from local storage, and synchronizes with the remote `database` module automatically.
 
-The cache instance is initialized with an explicit `exercise_types` list. This matters because the remote `database` module stores statistics in separate tables per exercise type; the cache must know at initialization time which exercises it mirrors and maintains locally.
-
-The module must support stale-while-revalidate behavior: if the snapshot is old but still present, the user keeps working immediately while a background refresh starts. Progress writes are applied locally first and automatically flushed to the remote database in the background (fire-and-forget). If the remote is unreachable, failed events remain pending and are retried on the next write.
+The cache instance is initialized with an explicit `exercise_types` list and supports stale-while-revalidate behavior: if the snapshot is old but still present, the user keeps working immediately while a background refresh starts.
 
 ## Success Criteria
-
 ### Technical Success
 
 - Warm-cache reads and local score writes stay below 200ms
@@ -36,7 +33,6 @@ The module must support stale-while-revalidate behavior: if the snapshot is old 
 - Retried flushes do not double-apply remote score deltas
 
 ### Measurable Outcomes
-
 | Metric | Target | Measurement |
 |---|---|---|
 | Warm-cache read latency | < 200ms | Benchmark on local cache |
@@ -45,35 +41,31 @@ The module must support stale-while-revalidate behavior: if the snapshot is old 
 | Sync safety | 0 duplicate remote applications per repeated event ID | Integration / e2e test |
 
 ## Scope
-
 All features described here are required for the first release of the module.
 
 **Risk Mitigation:**
 
-- **Cold start:** if no snapshot exists, the cache reports not-ready explicitly instead of silently returning misleading empty data.
-- **Remote outage:** local score writes remain accepted and queued while remote flush fails.
+- **Cold start / Remote outage:** if no snapshot exists, the cache reports not-ready explicitly; local score writes remain accepted and queued while remote flush fails.
 - **Exercise drift:** exercise types are declared at initialization and stored in metadata; a changed exercise set triggers refresh / local rebuild logic.
 
 ## User Journeys
-
 ### Journey 1: Warm Start With Stale Cache
 
-Alex starts a study session. A local cache file already exists, but it is older than the configured TTL. `await cache.init()` returns quickly, the old snapshot remains readable, and a background refresh begins without blocking the user.
+Alex starts a study session with an existing but stale cache file. `await cache.init()` returns quickly with the old snapshot readable while background refresh starts.
 
 ### Journey 2: Sampling From Local Scores
 
-`sampling` asks for score-aware word pairs. `database_cache` returns translated words plus scores for the configured exercises entirely from local storage, so the sampler can build the next exercise set without waiting for Neon.
+`sampling` asks for score-aware word pairs. `database_cache` returns translated words plus scores entirely from local storage without waiting for Neon.
 
 ### Journey 3: Record an Answer — Auto-Flush
 
-The user answers incorrectly. Alex calls `record_exercise_result(..., exercise_type="multiple_choice", delta=-1)`. The local score updates immediately, and a background flush starts automatically (fire-and-forget) to push the event to Neon. The caller does not wait for the flush — `record_exercise_result()` returns as soon as the local write commits.
+Alex calls `record_exercise_result(..., exercise_type="multiple_choice", delta=-1)`. The local score updates immediately and background flush starts automatically without blocking the caller.
 
 ### Journey 4: Offline Write — Retry on Next Write
 
-Neon is temporarily unreachable. The background flush fails, but the event stays in the local outbox. When Alex answers the next question, `record_exercise_result()` again triggers a background flush — this time it retries the previously failed event along with the new one. Once connectivity returns, all pending events are delivered.
+Neon is temporarily unreachable and background flush fails. When Alex answers the next question, `record_exercise_result()` retries the previously failed event along with the new one.
 
 ## Developer Tool Specific Requirements
-
 ### API Surface
 
 **Public interface:**
@@ -130,13 +122,10 @@ CacheStatus(
 
 - `database_cache` is a downstream consumer of `database`
 - `sampling` should prefer `database_cache` as its hot-path source
-- `exercise_types` are configured once at initialization and reused throughout the object lifetime
 - local storage must be durable, not in-memory only
 - local writes must be transactionally coupled to outbox persistence
-- every write triggers a background flush — the caller never needs to manually call `flush()` for normal operation
 
 ## Functional Requirements
-
 ### Lifecycle
 
 - FR1: Module provides `DatabaseCacheService` in `database_cache/service.py`.
@@ -148,7 +137,6 @@ CacheStatus(
 - FR7: If no local snapshot exists, `init()` starts bootstrap refresh and marks the cache as not ready until the first snapshot completes.
 
 ### Local Read Path
-
 - FR8: `get_words()` returns translated `WordPair` items from local storage only.
 - FR9: `get_words()` supports optional `word_type`, `limit`, and `random` parameters.
 - FR10: `get_word_pairs_with_scores()` returns translated word pairs plus scores for all configured exercise types.
@@ -157,7 +145,6 @@ CacheStatus(
 - FR13: If no usable snapshot exists yet, read APIs raise `CacheNotReadyError`.
 
 ### Local Write Path
-
 - FR14: `record_exercise_result(source_word, exercise_type, delta)` validates that `exercise_type` belongs to the configured set.
 - FR15: `delta` is limited to `+1` or `-1`.
 - FR16: The local score update and outbox append happen in the same local transaction.
@@ -167,7 +154,6 @@ CacheStatus(
 - FR20: The background auto-flush must not block `record_exercise_result()` — the method returns as soon as the local transaction commits.
 
 ### Refresh and Flush
-
 - FR21: `refresh()` fetches translated word pairs and scores for the configured exercise set from `database`.
 - FR22: Refresh rebuilds the local snapshot atomically.
 - FR23: During refresh, existing readable snapshot data stays available.
@@ -178,19 +164,16 @@ CacheStatus(
 - FR28: Only one flush job per cache instance may run at a time.
 
 ### Exercise Set Management
-
 - FR29: The configured exercise set is stored in cache metadata.
 - FR30: If `exercise_types` changes between runs, the cache detects the mismatch and triggers local rebuild / refresh logic.
 - FR31: The cache may store local scores in a normalized table even though remote `database` uses separate tables per exercise type.
 
 ### Status and Observability
-
 - FR32: `get_status()` returns readiness, staleness, pending event count, and last refresh / flush timestamps.
 - FR33: Background refresh failures are logged and reflected in status metadata.
 - FR34: Background flush failures are logged and reflected in status metadata.
 
 ## Non-Functional Requirements (Module-Specific)
-
 ### Performance
 
 - NFR1: Warm-cache `get_words()`, `get_word_pairs_with_scores()`, and `record_exercise_result()` should complete in under 200ms.
@@ -198,24 +181,20 @@ CacheStatus(
 - NFR3: Background refresh and flush must not block read APIs.
 
 ### Reliability
-
 - NFR4: Local writes acknowledged to the caller survive process restart.
 - NFR5: Retried remote flushes are safe because replay uses idempotent event IDs.
 - NFR6: If the local cache file is corrupt, the module surfaces a clear local-storage error and supports rebuild from remote state.
 
 ### Consistency
-
 - NFR7: `database` remains the canonical remote source of truth.
 - NFR8: The cache may temporarily serve stale data, but pending local score writes must always be visible locally after acknowledgment.
 - NFR9: A post-refresh local snapshot must include both the freshly downloaded remote state and all still-pending local events.
 
 ### Dependencies
-
 - NFR10: No external cache server is introduced; local persistence uses an embedded local database.
 - NFR11: The module depends on `database` for snapshot export and idempotent remote replay.
 
 ### Testing
-
 - NFR12: Unit tests verify staleness checks, exercise-set validation, local score overlay, and not-ready behavior.
 - NFR13: Integration tests verify refresh / flush behavior against a local embedded database plus mocked remote interfaces.
 - NFR14: E2E tests verify a full loop with real `database`: snapshot refresh, sampling-facing reads, offline score write, and later remote flush.
