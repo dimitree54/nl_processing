@@ -31,6 +31,7 @@ _This document covers shared architectural decisions for the `nl_processing` pro
 > - [`translate_text`](../../nl_processing/translate_text/docs/architecture_translate_text.md)
 > - [`translate_word`](../../nl_processing/translate_word/docs/architecture_translate_word.md)
 > - [`database`](../../nl_processing/database/docs/architecture_database.md)
+> - [`database_cache`](../../nl_processing/database_cache/docs/architecture_database_cache.md)
 
 ---
 
@@ -59,7 +60,7 @@ Each module adds 9-14 module-specific FRs covering its domain logic (see module 
 
 - Primary domain: Python library (internal modules, no web/mobile/API surface)
 - Complexity level: Medium — quality validation and benchmarking required, no regulatory/compliance concerns
-- Architectural components: 6 packages (`core` + 5 modules), each with clear boundaries
+- Architectural components: 7 packages (`core` + 5 original modules + `database_cache`), each with clear boundaries
 
 ### Technical Constraints & Dependencies
 
@@ -69,6 +70,7 @@ Each module adds 9-14 module-specific FRs covering its domain logic (see module 
 - **OPENAI_API_KEY** — only external configuration (via `os.environ[]`, never `os.getenv`), managed via Doppler
 - **opencv-python** — module-specific dependency for `extract_text_from_image` only
 - **asyncpg** — module-specific dependency for `database` only (async PostgreSQL driver for Neon)
+- **aiosqlite** — module-specific dependency for `database_cache` only (async SQLite for local caching)
 - **Project state:** Greenfield (scaffold/stubs only — no implementation exists yet)
 - **Build tooling:** `pyproject.toml` with `uv` package manager — already initialized
 
@@ -276,6 +278,7 @@ from nl_processing.extract_words_from_text.service import WordExtractor
 from nl_processing.translate_text.service import TextTranslator
 from nl_processing.translate_word.service import WordTranslator
 from nl_processing.database.service import DatabaseService
+from nl_processing.database_cache.service import DatabaseCacheService
 ```
 
 The public class follows this pattern:
@@ -428,21 +431,35 @@ nl_processing/                          # project root
 │   │       ├── prd_translate_word.md
 │   │       └── architecture_translate_word.md
 │   │
-│   └── database/                       # module 5: async persistence layer
-│       ├── __init__.py                 # public exports: DatabaseService, CachedDatabaseService
-│       ├── service.py                  # DatabaseService, CachedDatabaseService (public classes)
-│       ├── backend/
-│       │   ├── __init__.py
-│       │   ├── abstract.py             # AbstractBackend (ABC)
-│       │   └── neon.py                 # NeonBackend (asyncpg implementation)
-│       ├── models.py                   # AddWordsResult, WordTranslationPair (module-internal models)
-│       ├── exceptions.py               # ConfigurationError, DatabaseError
-│       ├── logging.py                  # Structured logging setup
-│       ├── testing.py                  # Test utilities: drop_all_tables, reset_database (NOT production)
+│   ├── database/                       # module 5: async persistence layer
+│   │   ├── __init__.py                 # empty
+│   │   ├── service.py                  # DatabaseService (public class)
+│   │   ├── backend/
+│   │   │   ├── __init__.py
+│   │   │   ├── abstract.py             # AbstractBackend (ABC)
+│   │   │   └── neon.py                 # NeonBackend (asyncpg implementation)
+│   │   ├── models.py                   # AddWordsResult, WordTranslationPair (module-internal models)
+│   │   ├── exceptions.py               # ConfigurationError, DatabaseError
+│   │   ├── logging.py                  # Structured logging setup
+│   │   ├── testing.py                  # Test utilities: drop_all_tables, reset_database (NOT production)
+│   │   └── docs/
+│   │       ├── product-brief-database-2026-03-02.md
+│   │       ├── prd_database.md
+│   │       └── architecture_database.md
+│   │
+│   └── database_cache/                 # module 6: local-first SQLite cache
+│       ├── __init__.py                 # empty
+│       ├── service.py                  # DatabaseCacheService (public class)
+│       ├── local_store.py              # SQLite schema + CRUD operations
+│       ├── _local_store_queries.py     # DDL and SQL query constants
+│       ├── sync.py                     # CacheSyncer: refresh/flush orchestration
+│       ├── models.py                   # CacheStatus Pydantic model
+│       ├── exceptions.py               # CacheNotReadyError, CacheStorageError, CacheSyncError
+│       ├── logging.py                  # Module logger helper
 │       └── docs/
-│           ├── product-brief-database-2026-03-02.md
-│           ├── prd_database.md
-│           └── architecture_database.md
+│           ├── product-brief-database_cache-2026-03-07.md
+│           ├── prd_database_cache.md
+│           └── architecture_database_cache.md
 │
 └── tests/
     ├── __init__.py
@@ -453,7 +470,8 @@ nl_processing/                          # project root
     │   ├── extract_words_from_text/    # module 2 unit tests
     │   ├── translate_text/             # module 3 unit tests
     │   ├── translate_word/             # module 4 unit tests
-    │   └── database/                   # module 5 unit tests
+    │   ├── database/                   # module 5 unit tests
+    │   └── database_cache/              # module 6 unit tests
     ├── integration/
     │   ├── __init__.py
     │   ├── core/
@@ -461,7 +479,8 @@ nl_processing/                          # project root
     │   ├── extract_words_from_text/
     │   ├── translate_text/
     │   ├── translate_word/
-    │   └── database/
+    │   ├── database/
+    │   └── database_cache/              # module 6 integration tests
     └── e2e/
         ├── __init__.py
         ├── conftest.py
@@ -469,7 +488,8 @@ nl_processing/                          # project root
         ├── extract_words_from_text/
         ├── translate_text/
         ├── translate_word/
-        └── database/
+        ├── database/
+        └── database_cache/              # module 6 e2e tests
 ```
 
 ### Documentation Organization Principle
@@ -488,7 +508,10 @@ nl_processing/                          # project root
 - `core` knows nothing about modules — it provides models, exceptions, and utilities
 - Modules import from `core` (models, exceptions, optionally prompt loader)
 - Modules import from `langchain`/`langchain-openai` directly for chain building
-- Modules never import from each other — they are independently usable. **Exception:** `database` has a direct dependency on `translate_word` for automatic translation of newly added words (intentional — `database` is a persistence/orchestration layer)
+- Modules never import from each other — they are independently usable. **Exceptions:**
+  - `database` has a direct dependency on `translate_word` for automatic translation of newly added words (intentional — `database` is a persistence/orchestration layer)
+  - `database_cache` depends on `database` (`ExerciseProgressStore`) — intentional downstream consumer that provides local-first caching
+  - `sampling` should prefer `database_cache` as its hot-path source (future sprint)
 
 **Module boundary: module ↔ caller**
 - Each module has exactly one public class in `service.py` (imported directly, no `__init__.py` re-export)
@@ -514,6 +537,10 @@ Image → [extract_text_from_image] → markdown text
          list[words] + user_id → [database] → word-translation pairs, feedback
                                      ↓ (async, fire-and-forget)
                                  [translate_word] → translations stored back
+                                     ↓
+                                 [database_cache] ← local SQLite cache
+                                     ↓
+                                 [sampling] → exercise word selection (future)
 ```
 
 Each module is independently callable. The pipeline is composable — the caller connects modules, not the modules themselves. The `database` module is the only module that directly depends on another module (`translate_word`) — it acts as a persistence and orchestration layer that triggers translation of new words asynchronously.
@@ -583,7 +610,7 @@ All env vars are documented in `docs/ENV_VARS.md`.
 | Variable | Type | Description | Set by |
 |---|---|---|---|
 | `OPENAI_API_KEY` | Secret | OpenAI API authentication key | Developer (via Doppler) |
-| `DATABASE_URL` | Secret | Neon PostgreSQL connection string (used by `database` module) | Developer (via Doppler) |
+| `DATABASE_URL` | Secret | Neon PostgreSQL connection string (used by `database` module; also used indirectly by `database_cache` via `database`) | Developer (via Doppler) |
 
 ### Adding New Variables
 

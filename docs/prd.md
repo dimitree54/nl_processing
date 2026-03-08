@@ -138,7 +138,7 @@ Only Pydantic models that form public module interfaces (input/output contracts)
 
 - SNFR6: Project-level dependencies: `langchain`, `langchain-openai`, `pydantic`
 - SNFR7: All modules depend on `langchain` and `langchain-openai` directly (no abstraction layer)
-- SNFR8: Module-specific dependencies (e.g., `opencv-python` for `extract_text_from_image`) are listed in each module's PRD
+- SNFR8: Module-specific dependencies (e.g., `opencv-python` for `extract_text_from_image`, `aiosqlite` for `database_cache`) are listed in each module's PRD
 - SNFR9: Dependencies are managed at project level — no per-module dependency management
 
 ### Secrets Management
@@ -179,6 +179,8 @@ Each module uses the test methodology most appropriate to its output type (synth
 
 Most modules are independently usable with no cross-module dependencies. The `database` module is an exception — it has a direct dependency on `translate_word` for automatic translation of newly added words. This is an intentional design decision: `database` is a persistence and orchestration layer, not a pure processing module.
 
+The `database_cache` module depends on `database` (`ExerciseProgressStore`) — it provides a local-first SQLite cache that accelerates vocabulary practice reads and buffers score writes for later synchronization.
+
 ---
 
 ## Module PRD References
@@ -190,3 +192,4 @@ Most modules are independently usable with no cross-module dependencies. The `da
 | `translate_text` | `nl_processing/translate_text/docs/prd_translate_text.md` |
 | `translate_word` | `nl_processing/translate_word/docs/prd_translate_word.md` |
 | `database` | `nl_processing/database/docs/prd_database.md` |
+| `database_cache` | `nl_processing/database_cache/docs/prd_database_cache.md` |
