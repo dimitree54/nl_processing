@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nl_processing"
-version = "1.0.0"
+version = "1.0.1"
 description = "Aggregate build for the nl_processing multi-package repository"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -18,20 +18,37 @@ dependencies = [
   "aiosqlite>=0.20,<1",
 ]
 
-[tool.setuptools.packages.find]
-where = [
-  "packages/core/src",
-  "packages/extract_text_from_image/src",
-  "packages/extract_words_from_text/src",
-  "packages/translate_text/src",
-  "packages/translate_word/src",
-  "packages/database/src",
-  "packages/database_cache/src",
-  "packages/sampling/src",
+[tool.setuptools]
+packages = [
+  "nl_processing.core",
+  "nl_processing.database",
+  "nl_processing.database.backend",
+  "nl_processing.database_cache",
+  "nl_processing.extract_text_from_image",
+  "nl_processing.extract_text_from_image.prompts",
+  "nl_processing.extract_words_from_text",
+  "nl_processing.extract_words_from_text.prompts",
+  "nl_processing.sampling",
+  "nl_processing.translate_text",
+  "nl_processing.translate_text.prompts",
+  "nl_processing.translate_word",
+  "nl_processing.translate_word.prompts",
 ]
-include = ["nl_processing*"]
-exclude = ["tests*"]
-namespaces = true
+
+[tool.setuptools.package-dir]
+"nl_processing.core" = "packages/core/src/nl_processing/core"
+"nl_processing.database" = "packages/database/src/nl_processing/database"
+"nl_processing.database.backend" = "packages/database/src/nl_processing/database/backend"
+"nl_processing.database_cache" = "packages/database_cache/src/nl_processing/database_cache"
+"nl_processing.extract_text_from_image" = "packages/extract_text_from_image/src/nl_processing/extract_text_from_image"
+"nl_processing.extract_text_from_image.prompts" = "packages/extract_text_from_image/src/nl_processing/extract_text_from_image/prompts"
+"nl_processing.extract_words_from_text" = "packages/extract_words_from_text/src/nl_processing/extract_words_from_text"
+"nl_processing.extract_words_from_text.prompts" = "packages/extract_words_from_text/src/nl_processing/extract_words_from_text/prompts"
+"nl_processing.sampling" = "packages/sampling/src/nl_processing/sampling"
+"nl_processing.translate_text" = "packages/translate_text/src/nl_processing/translate_text"
+"nl_processing.translate_text.prompts" = "packages/translate_text/src/nl_processing/translate_text/prompts"
+"nl_processing.translate_word" = "packages/translate_word/src/nl_processing/translate_word"
+"nl_processing.translate_word.prompts" = "packages/translate_word/src/nl_processing/translate_word/prompts"
 
 [tool.setuptools.package-data]
 "nl_processing.extract_text_from_image.prompts" = ["*.json"]
