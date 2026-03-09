@@ -1,0 +1,45 @@
+{
+  "lc": 1,
+  "type": "constructor",
+  "id": [
+    "langchain",
+    "prompts",
+    "chat",
+    "ChatPromptTemplate"
+  ],
+  "kwargs": {
+    "input_variables": [
+      "images"
+    ],
+    "messages": [
+      {
+        "lc": 1,
+        "type": "constructor",
+        "id": [
+          "langchain",
+          "schema",
+          "messages",
+          "SystemMessage"
+        ],
+        "kwargs": {
+          "content": "Translate Dutch text from the image to Russian.",
+          "type": "system"
+        }
+      },
+      {
+        "lc": 1,
+        "type": "constructor",
+        "id": [
+          "langchain",
+          "prompts",
+          "chat",
+          "MessagesPlaceholder"
+        ],
+        "kwargs": {
+          "variable_name": "images"
+        }
+      }
+    ]
+  },
+  "name": "ChatPromptTemplate"
+}
