@@ -110,7 +110,7 @@ class ImageTextTranslator:
         target_language: Language,
         model: str = "gpt-4.1-mini",
         reasoning_effort: str | None = None,
-        service_tier: str | None = None,
+        service_tier: str | None = "priority",
         temperature: float | None = 0,
     ) -> None:
         self._source_language = source_language
@@ -257,7 +257,7 @@ Tests to implement:
 
 ## Edge cases
 
-- Constructor with `reasoning_effort=None` (default) — should work.
+- Constructor with `service_tier="priority"` (default) — should work.
 - Constructor with `temperature=None` — valid, uses API default.
 - `translate_from_path` with valid extension but missing file — `encode_path_to_base64` raises `FileNotFoundError`, which gets wrapped as `APIError` (happens inside `_atranslate`'s try/except). Actually, `encode_path_to_base64` is called outside the try/except. This matches the extraction pattern — file not found is NOT wrapped as `APIError`, it propagates as `FileNotFoundError`. This is correct: it's a caller error, not an API error.
   - Wait — looking at the service code more carefully, `validate_image_format` and `encode_path_to_base64` are called BEFORE `_atranslate`. The try/except in `_atranslate` only wraps the chain `ainvoke` call. So `FileNotFoundError` propagates naturally. Good.

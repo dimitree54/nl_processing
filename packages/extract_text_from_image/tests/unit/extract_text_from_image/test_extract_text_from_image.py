@@ -20,11 +20,40 @@ def test_constructor_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert extractor._chain is not None
 
 
+def test_constructor_uses_offline_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default constructor should use the offline extraction profile."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured: dict[str, object] = {}
+
+    class _PromptStub:
+        def __or__(self, other: object) -> object:
+            return other
+
+    class _ChatStub:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def bind_tools(self, *_args: object, **_kwargs: object) -> "_ChatStub":
+            return self
+
+    monkeypatch.setattr("nl_processing.extract_text_from_image.service.load_prompt", lambda _path: _PromptStub())
+    monkeypatch.setattr("nl_processing.extract_text_from_image.service.ChatOpenAI", _ChatStub)
+    ImageTextExtractor()
+
+    assert captured == {"model": "gpt-5-mini", "service_tier": None, "reasoning_effort": "medium", "temperature": None}
+
+
 def test_constructor_custom_params(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test ImageTextExtractor constructor with custom arguments."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    extractor = ImageTextExtractor(language=Language.NL, model="custom-model", reasoning_effort="high")
+    extractor = ImageTextExtractor(
+        language=Language.NL,
+        model="custom-model",
+        reasoning_effort="high",
+        service_tier="flex",
+        temperature=0.1,
+    )
     assert extractor._language == Language.NL
 
 

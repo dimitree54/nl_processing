@@ -26,7 +26,14 @@ class TextTranslator:
         result = await translator.translate(dutch_text)
     """
 
-    def __init__(self, *, source_language: Language, target_language: Language, model: str = "gpt-4.1-mini") -> None:
+    def __init__(
+        self,
+        *,
+        source_language: Language,
+        target_language: Language,
+        model: str = "gpt-4.1-mini",
+        service_tier: str | None = "priority",
+    ) -> None:
         self._source_language = source_language
         self._target_language = target_language
         self._chain = build_translation_chain(
@@ -36,6 +43,7 @@ class TextTranslator:
             prompts_dir=_PROMPTS_DIR,
             tool_schema=_TranslatedText,
             model=model,
+            service_tier=service_tier,
         )
 
     async def translate(self, text: str) -> str:

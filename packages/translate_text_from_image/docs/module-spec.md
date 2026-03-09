@@ -52,7 +52,7 @@ The module sits beside `extract_text_from_image` and `translate_text` as a devel
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must expose `ImageTextTranslator(source_language, target_language, model, reasoning_effort, service_tier, temperature)` plus async `translate_from_path(path)` and `translate_from_cv2(image)` methods. | Must | API shape should mirror the existing image and text services. |
+| FR-1 | The module must expose `ImageTextTranslator(source_language, target_language, model, reasoning_effort, service_tier, temperature)` plus async `translate_from_path(path)` and `translate_from_cv2(image)` methods. | Must | Current defaults are `model="gpt-4.1-mini"`, `reasoning_effort=None`, `service_tier="priority"`, `temperature=0`. |
 | FR-2 | `translate_from_path(path)` must validate supported image formats before any API call and then encode the image for multimodal submission. | Must | Reuse the current path-validation behavior. |
 | FR-3 | `translate_from_cv2(image)` must accept `numpy.ndarray`, encode it as PNG, and converge into the same internal translation pipeline. | Must | Mirrors `extract_text_from_image` semantics. |
 | FR-4 | Each translation request must use exactly one LLM invocation and must not call `ImageTextExtractor` or `TextTranslator` at runtime. | Must | The module is a replacement for the chain, not a wrapper around it. |

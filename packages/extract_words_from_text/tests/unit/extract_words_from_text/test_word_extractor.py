@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from nl_processing.core.models import Language, PartOfSpeech, Word
 import pytest
 
@@ -14,11 +16,28 @@ def test_constructor_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert extractor._chain is not None
 
 
+def test_constructor_uses_offline_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default constructor should use the offline extraction profile."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    seen: list[dict[str, object]] = []
+    prompt_stub = type("PromptWire", (), {"__or__": lambda _prompt, other: other})()
+
+    def _fake_chat_openai(**kwargs: object) -> SimpleNamespace:
+        seen.append(kwargs)
+        return SimpleNamespace(bind_tools=lambda *_args, **_kwargs: SimpleNamespace())
+
+    monkeypatch.setattr("nl_processing.extract_words_from_text.service.load_prompt", lambda _path: prompt_stub)
+    monkeypatch.setattr("nl_processing.extract_words_from_text.service.ChatOpenAI", _fake_chat_openai)
+    WordExtractor()
+
+    assert seen == [{"model": "gpt-5-mini", "reasoning_effort": "medium", "temperature": None}]
+
+
 def test_constructor_custom_params(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test WordExtractor constructor with custom arguments."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    extractor = WordExtractor(language=Language.NL, model="custom-model")
+    extractor = WordExtractor(language=Language.NL, model="custom-model", reasoning_effort=None, temperature=0.2)
     assert extractor._language == Language.NL
 
 

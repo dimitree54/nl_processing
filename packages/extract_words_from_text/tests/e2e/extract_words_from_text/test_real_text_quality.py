@@ -124,14 +124,17 @@ def _format_diff(expected: set, actual: set) -> str:
 
 @pytest.mark.asyncio
 async def test_vocabulary_list_quality() -> None:
-    """E2e quality: textbook vocabulary list (16 words) — exact set match."""
+    """E2e quality: textbook vocabulary list with one allowed ambiguous POS tag."""
     extractor = WordExtractor()
     result = await extractor.extract(VOCABULARY_LIST_TEXT)
     actual = _to_set(result)
+    expected_fixed = {entry for entry in VOCABULARY_LIST_EXPECTED if entry[0] != "vlakbij"}
+    actual_fixed = {entry for entry in actual if entry[0] != "vlakbij"}
 
-    assert actual == VOCABULARY_LIST_EXPECTED, (
-        f"Vocabulary list extraction mismatch:\n{_format_diff(VOCABULARY_LIST_EXPECTED, actual)}"
+    assert actual_fixed == expected_fixed, (
+        f"Vocabulary list extraction mismatch:\n{_format_diff(expected_fixed, actual_fixed)}"
     )
+    assert any(form == "vlakbij" and word_type in {"adverb", "preposition"} for form, word_type in actual)
 
 
 @pytest.mark.asyncio

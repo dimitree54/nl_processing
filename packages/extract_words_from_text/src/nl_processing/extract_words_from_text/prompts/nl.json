@@ -22,7 +22,7 @@
           "SystemMessage"
         ],
         "kwargs": {
-          "content": "Je bent een woord-extractie assistent voor de Nederlandse taal. Je taak is om alle Nederlandse woorden uit de aangeboden tekst te extraheren en te normaliseren.\n\nRegels:\n- Negeer alle markdown-opmaak (koppen, vet, cursief, lijsten) -- extraheer alleen taalkundige inhoud.\n- Negeer tekst in andere talen dan Nederlands.\n- Normaliseer elk woord volgens de Nederlandse regels:\n  - Zelfstandige naamwoorden: met lidwoord (de/het), bijv. 'de fiets', 'het huis'\n  - Werkwoorden: infinitief, bijv. 'lopen', 'hebben'\n  - Bijvoeglijke naamwoorden: basisvorm, bijv. 'groot', 'klein'\n  - Voorzetsels, voegwoorden, bijwoorden: basisvorm\n  - Eigennamen (personen/merken): ongewijzigd, type 'proper_noun_person'\n  - Eigennamen (landen): ongewijzigd, type 'proper_noun_country'\n- Extraheer samengestelde uitdrukkingen en fraseologische constructies als enkele eenheden.\n- Wijs een plat woordtype toe aan elk woord. Mogelijke types: noun, verb, adjective, adverb, preposition, conjunction, pronoun, article, numeral, interjection, proper_noun_person, proper_noun_country.\n- Retourneer het resultaat als een lijst van woord-objecten in een _WordList wrapper.\n- Als de tekst geen Nederlandse woorden bevat, retourneer dan een lege lijst.",
+          "content": "Je bent een woord-extractie assistent voor de Nederlandse taal. Je taak is om alle Nederlandse woorden uit de aangeboden tekst te extraheren en te normaliseren.\n\nRegels:\n- Negeer alle markdown-opmaak (koppen, vet, cursief, lijsten) -- extraheer alleen taalkundige inhoud.\n- Negeer tekst in andere talen dan Nederlands.\n- Normaliseer elk woord volgens de Nederlandse regels:\n  - Zelfstandige naamwoorden: met lidwoord (de/het), bijv. 'de fiets', 'het huis'\n  - Werkwoorden: infinitief, bijv. 'lopen', 'hebben'\n  - Bijvoeglijke naamwoorden: basisvorm, bijv. 'groot', 'klein'\n  - Voorzetsels, voegwoorden, bijwoorden: basisvorm\n  - Eigennamen (personen/merken): ongewijzigd, type 'proper_noun_person'\n  - Eigennamen (landen): ongewijzigd, type 'proper_noun_country'\n- Extraheer samengestelde uitdrukkingen en fraseologische constructies als enkele eenheden.\n- Laat beschrijvende bijvoeglijke naamwoorden niet weg; kleur- en eigenschapswoorden moeten behouden blijven.\n- Wijs een plat woordtype toe aan elk woord. Mogelijke types: noun, verb, adjective, adverb, preposition, conjunction, pronoun, article, numeral, interjection, proper_noun_person, proper_noun_country.\n- Retourneer het resultaat als een lijst van woord-objecten in een _WordList wrapper.\n- Als de tekst geen Nederlandse woorden bevat, retourneer dan een lege lijst.",
           "type": "system"
         }
       },
@@ -36,7 +36,7 @@
           "HumanMessage"
         ],
         "kwargs": {
-          "content": "De grote kat loopt snel.",
+          "content": "De grote kat loopt door de tuin.",
           "type": "human"
         }
       },
@@ -70,8 +70,12 @@
                     "word_type": "verb"
                   },
                   {
-                    "normalized_form": "snel",
-                    "word_type": "adverb"
+                    "normalized_form": "door",
+                    "word_type": "preposition"
+                  },
+                  {
+                    "normalized_form": "de tuin",
+                    "word_type": "noun"
                   }
                 ]
               },
@@ -92,9 +96,89 @@
           "ToolMessage"
         ],
         "kwargs": {
-          "content": "{\"words\": [{\"normalized_form\": \"de kat\", \"word_type\": \"noun\"}, {\"normalized_form\": \"groot\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"lopen\", \"word_type\": \"verb\"}, {\"normalized_form\": \"snel\", \"word_type\": \"adverb\"}]}",
+          "content": "{\"words\": [{\"normalized_form\": \"de kat\", \"word_type\": \"noun\"}, {\"normalized_form\": \"groot\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"lopen\", \"word_type\": \"verb\"}, {\"normalized_form\": \"door\", \"word_type\": \"preposition\"}, {\"normalized_form\": \"de tuin\", \"word_type\": \"noun\"}]}",
           "type": "tool",
           "tool_call_id": "call_ex_1",
+          "status": "success"
+        }
+      },
+      {
+        "lc": 1,
+        "type": "constructor",
+        "id": [
+          "langchain",
+          "schema",
+          "messages",
+          "HumanMessage"
+        ],
+        "kwargs": {
+          "content": "Het kleine kind speelt met de rode bal.",
+          "type": "human"
+        }
+      },
+      {
+        "lc": 1,
+        "type": "constructor",
+        "id": [
+          "langchain",
+          "schema",
+          "messages",
+          "AIMessage"
+        ],
+        "kwargs": {
+          "content": "",
+          "type": "ai",
+          "tool_calls": [
+            {
+              "name": "_WordList",
+              "args": {
+                "words": [
+                  {
+                    "normalized_form": "het kind",
+                    "word_type": "noun"
+                  },
+                  {
+                    "normalized_form": "klein",
+                    "word_type": "adjective"
+                  },
+                  {
+                    "normalized_form": "spelen",
+                    "word_type": "verb"
+                  },
+                  {
+                    "normalized_form": "met",
+                    "word_type": "preposition"
+                  },
+                  {
+                    "normalized_form": "de bal",
+                    "word_type": "noun"
+                  },
+                  {
+                    "normalized_form": "rood",
+                    "word_type": "adjective"
+                  }
+                ]
+              },
+              "id": "call_ex_2",
+              "type": "tool_call"
+            }
+          ],
+          "invalid_tool_calls": []
+        }
+      },
+      {
+        "lc": 1,
+        "type": "constructor",
+        "id": [
+          "langchain",
+          "schema",
+          "messages",
+          "ToolMessage"
+        ],
+        "kwargs": {
+          "content": "{\"words\": [{\"normalized_form\": \"het kind\", \"word_type\": \"noun\"}, {\"normalized_form\": \"klein\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"spelen\", \"word_type\": \"verb\"}, {\"normalized_form\": \"met\", \"word_type\": \"preposition\"}, {\"normalized_form\": \"de bal\", \"word_type\": \"noun\"}, {\"normalized_form\": \"rood\", \"word_type\": \"adjective\"}]}",
+          "type": "tool",
+          "tool_call_id": "call_ex_2",
           "status": "success"
         }
       },
@@ -147,7 +231,7 @@
                   }
                 ]
               },
-              "id": "call_ex_2",
+              "id": "call_ex_3",
               "type": "tool_call"
             }
           ],
@@ -166,7 +250,7 @@
         "kwargs": {
           "content": "{\"words\": [{\"normalized_form\": \"Jan\", \"word_type\": \"proper_noun_person\"}, {\"normalized_form\": \"wonen\", \"word_type\": \"verb\"}, {\"normalized_form\": \"in\", \"word_type\": \"preposition\"}, {\"normalized_form\": \"Nederland\", \"word_type\": \"proper_noun_country\"}]}",
           "type": "tool",
-          "tool_call_id": "call_ex_2",
+          "tool_call_id": "call_ex_3",
           "status": "success"
         }
       },
@@ -223,7 +307,7 @@
                   }
                 ]
               },
-              "id": "call_ex_3",
+              "id": "call_ex_4",
               "type": "tool_call"
             }
           ],
@@ -242,7 +326,7 @@
         "kwargs": {
           "content": "{\"words\": [{\"normalized_form\": \"zij\", \"word_type\": \"pronoun\"}, {\"normalized_form\": \"ervandoor gaan\", \"word_type\": \"verb\"}, {\"normalized_form\": \"met\", \"word_type\": \"preposition\"}, {\"normalized_form\": \"haar\", \"word_type\": \"pronoun\"}, {\"normalized_form\": \"de vriend\", \"word_type\": \"noun\"}]}",
           "type": "tool",
-          "tool_call_id": "call_ex_3",
+          "tool_call_id": "call_ex_4",
           "status": "success"
         }
       },
@@ -278,7 +362,7 @@
               "args": {
                 "words": []
               },
-              "id": "call_ex_4",
+              "id": "call_ex_5",
               "type": "tool_call"
             }
           ],
@@ -297,7 +381,7 @@
         "kwargs": {
           "content": "{\"words\": []}",
           "type": "tool",
-          "tool_call_id": "call_ex_4",
+          "tool_call_id": "call_ex_5",
           "status": "success"
         }
       },
@@ -362,7 +446,7 @@
                   }
                 ]
               },
-              "id": "call_ex_5",
+              "id": "call_ex_6",
               "type": "tool_call"
             }
           ],
@@ -381,7 +465,7 @@
         "kwargs": {
           "content": "{\"words\": [{\"normalized_form\": \"welkom\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"het kind\", \"word_type\": \"noun\"}, {\"normalized_form\": \"klein\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"spelen\", \"word_type\": \"verb\"}, {\"normalized_form\": \"vrolijk\", \"word_type\": \"adverb\"}, {\"normalized_form\": \"in\", \"word_type\": \"preposition\"}, {\"normalized_form\": \"de tuin\", \"word_type\": \"noun\"}]}",
           "type": "tool",
-          "tool_call_id": "call_ex_5",
+          "tool_call_id": "call_ex_6",
           "status": "success"
         }
       },
@@ -522,7 +606,7 @@
                   }
                 ]
               },
-              "id": "call_ex_6",
+              "id": "call_ex_7",
               "type": "tool_call"
             }
           ],
@@ -541,7 +625,7 @@
         "kwargs": {
           "content": "{\"words\": [{\"normalized_form\": \"met\", \"word_type\": \"preposition\"}, {\"normalized_form\": \"De Ruijter\", \"word_type\": \"proper_noun_person\"}, {\"normalized_form\": \"kunnen\", \"word_type\": \"verb\"}, {\"normalized_form\": \"u\", \"word_type\": \"pronoun\"}, {\"normalized_form\": \"elk\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"de dag\", \"word_type\": \"noun\"}, {\"normalized_form\": \"genieten\", \"word_type\": \"verb\"}, {\"normalized_form\": \"van\", \"word_type\": \"preposition\"}, {\"normalized_form\": \"een\", \"word_type\": \"article\"}, {\"normalized_form\": \"breed\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"het assortiment\", \"word_type\": \"noun\"}, {\"normalized_form\": \"smakelijk\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"het product\", \"word_type\": \"noun\"}, {\"normalized_form\": \"de chocoladevlokken\", \"word_type\": \"noun\"}, {\"normalized_form\": \"de melk\", \"word_type\": \"noun\"}, {\"normalized_form\": \"en\", \"word_type\": \"conjunction\"}, {\"normalized_form\": \"puur\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"de chocoladehagel\", \"word_type\": \"noun\"}, {\"normalized_form\": \"de vruchtenhagel\", \"word_type\": \"noun\"}, {\"normalized_form\": \"de anijshagel\", \"word_type\": \"noun\"}, {\"normalized_form\": \"het vlokfeest\", \"word_type\": \"noun\"}, {\"normalized_form\": \"gestampt\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"het muisje\", \"word_type\": \"noun\"}, {\"normalized_form\": \"roze\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"wit\", \"word_type\": \"adjective\"}, {\"normalized_form\": \"blauw\", \"word_type\": \"adjective\"}]}",
           "type": "tool",
-          "tool_call_id": "call_ex_6",
+          "tool_call_id": "call_ex_7",
           "status": "success"
         }
       },

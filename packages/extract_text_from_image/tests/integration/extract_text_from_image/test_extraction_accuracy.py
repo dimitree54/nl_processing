@@ -63,7 +63,7 @@ async def test_extraction_from_cv2_array(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.asyncio
 async def test_extraction_latency(tmp_path: pathlib.Path) -> None:
-    """Each extraction call completes in < 10 seconds (ETI-NFR1)."""
+    """Each extraction call completes in < 20 seconds (ETI-NFR1)."""
     ground_truth = "Snel test"
     image_path = str(tmp_path / "latency.png")
     generate_test_image(ground_truth, image_path, font_scale=1.5, width=400, height=100)
@@ -74,7 +74,7 @@ async def test_extraction_latency(tmp_path: pathlib.Path) -> None:
     elapsed = time.time() - start
 
     # NOTE: This is an integration test making a real API call; network latency is included.
-    assert elapsed < 10, f"Extraction took {elapsed:.2f}s — exceeds 10.00s QA gate"
+    assert elapsed < 20, f"Extraction took {elapsed:.2f}s — exceeds 20.00s QA gate"
 
 
 @pytest.mark.asyncio

@@ -47,7 +47,7 @@ The module consumes plain text or markdown and produces normalized `core.models.
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must expose `WordExtractor(language, model)` and `await extract(text: str) -> list[Word]`. | Must | Current default model is `gpt-4.1-mini`. |
+| FR-1 | The module must expose `WordExtractor(language, model, reasoning_effort, temperature)` and `await extract(text: str) -> list[Word]`. | Must | Current defaults are `model="gpt-5-mini"`, `reasoning_effort="medium"`, `temperature=None`. |
 | FR-2 | The extractor must ignore markdown syntax and return only lexical content in the target language. | Must | Markdown formatting is transparent to callers. |
 | FR-3 | Each returned item must be a `Word` with `normalized_form`, `word_type`, and `language` populated. | Must | `language` is set programmatically by the service. |
 | FR-4 | Compound expressions and multi-word phrases may be returned as single normalized entries. | Must | Prompt-driven behavior. |
@@ -65,8 +65,8 @@ The module consumes plain text or markdown and produces normalized `core.models.
 
 | ID | Category | Requirement | Target or Constraint | Notes |
 | --- | --- | --- | --- | --- |
-| NFR-1 | Performance | Extraction should stay interactive for short texts. | Product target <5s on ~100 words; current integration gate <30s | Test gate is currently looser than the original target. |
-| NFR-2 | Determinism | The module should minimize avoidable output variability. | `temperature=0` | Current constructor behavior. |
+| NFR-1 | Performance | Extraction should stay within the current offline QA budget for short texts. | Product target <5s on ~100 words; current integration gate <180s | The offline `gpt-5-mini` profile is much slower than the previous lightweight model. |
+| NFR-2 | Inference profile | Offline extraction should favor higher-quality reasoning over latency. | `model="gpt-5-mini"`, `reasoning_effort="medium"`, `temperature=None` | Current constructor behavior. |
 | NFR-3 | Packaging | Prompt assets must be shipped with the package. | `prompts/nl.json` available at runtime | Covered by a packaging test. |
 
 ### Failure Modes and Edge Cases

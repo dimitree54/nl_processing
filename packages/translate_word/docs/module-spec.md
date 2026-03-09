@@ -46,7 +46,7 @@ The module lives in the middle of the lexical pipeline between word extraction a
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must expose `WordTranslator(source_language, target_language, model)` and `await translate(words: list[Word]) -> list[Word]`. | Must | Current default model is `gpt-4.1-mini`. |
+| FR-1 | The module must expose `WordTranslator(source_language, target_language, model, reasoning_effort, temperature)` and `await translate(words: list[Word]) -> list[Word]`. | Must | Current defaults are `model="gpt-5-mini"`, `reasoning_effort="medium"`, `temperature=None`. |
 | FR-2 | The translator must return one output `Word` per input word in the same order. | Must | Public contract and existing tests. |
 | FR-3 | The output `Word.language` must always be set programmatically to the target language. | Must | The LLM does not set this field directly. |
 | FR-4 | Empty input must return `[]` without an API call. | Must | Explicit short-circuit in code. |
@@ -64,7 +64,7 @@ The module lives in the middle of the lexical pipeline between word extraction a
 
 | ID | Category | Requirement | Target or Constraint | Notes |
 | --- | --- | --- | --- | --- |
-| NFR-1 | Performance | Batch translation should stay within the current real-API QA budget. | Current integration gate <10s for 10 words | Older docs targeted <1s; current enforced gate is looser. |
+| NFR-1 | Performance | Batch translation should stay within the current real-API QA budget. | Current integration gate <20s for 10 words | Older docs targeted <1s; the offline `gpt-5-mini` profile now uses a looser gate. |
 | NFR-2 | Structure | Output shape must stay machine-usable and order-preserving. | Typed tool schema + tests | Key integration property. |
 | NFR-3 | Packaging | Pair-specific prompt assets must ship with the package. | `prompts/nl_ru.json` available at runtime | Required for init-time prompt load. |
 

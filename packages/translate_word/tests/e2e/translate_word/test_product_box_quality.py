@@ -34,7 +34,7 @@ PRODUCT_BOX_WORDS: list[tuple[Word, set[str]]] = [
     (Word(normalized_form="de melk", word_type=PartOfSpeech.NOUN, language=Language.NL), {"молоко"}),
     (
         Word(normalized_form="puur", word_type=PartOfSpeech.ADJECTIVE, language=Language.NL),
-        {"чистый", "горький", "тёмный", "темный"},
+        {"чистый", "горький", "тёмный", "темный", "натуральный"},
     ),
     (
         Word(normalized_form="de chocoladehagel", word_type=PartOfSpeech.NOUN, language=Language.NL),

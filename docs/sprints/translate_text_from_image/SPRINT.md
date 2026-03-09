@@ -58,7 +58,7 @@ class ImageTextTranslator:
         target_language: Language,
         model: str = "gpt-4.1-mini",
         reasoning_effort: str | None = None,
-        service_tier: str | None = None,
+        service_tier: str | None = "priority",
         temperature: float | None = 0,
     ) -> None: ...
 

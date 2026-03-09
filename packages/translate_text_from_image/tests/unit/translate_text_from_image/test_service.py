@@ -20,6 +20,24 @@ def test_constructor_creates_chain_for_nl_ru(monkeypatch: pytest.MonkeyPatch) ->
     assert translator._chain is not None
 
 
+def test_constructor_uses_priority_tier_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default constructor should request the priority service tier."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-api-key")
+    captured: dict[str, object] = {}
+
+    def _fake_build_translation_chain(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(
+        "nl_processing.translate_text_from_image.service.build_translation_chain", _fake_build_translation_chain
+    )
+    ImageTextTranslator(source_language=Language.NL, target_language=Language.RU)
+
+    assert captured["model"] == "gpt-4.1-mini"
+    assert captured["service_tier"] == "priority"
+
+
 def test_constructor_rejects_unsupported_pair(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test ImageTextTranslator raises ValueError for unsupported pair RU->NL."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-api-key")

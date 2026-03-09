@@ -46,7 +46,7 @@ The module sits at the beginning of the text-processing workflow and feeds downs
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must provide `ImageTextExtractor(language, model, reasoning_effort, service_tier, temperature)` with sensible defaults for async extraction. | Must | Current default model is `gpt-4.1-mini`. |
+| FR-1 | The module must provide `ImageTextExtractor(language, model, reasoning_effort, service_tier, temperature)` with sensible defaults for async extraction. | Must | Current defaults are `model="gpt-5-mini"`, `reasoning_effort="medium"`, `service_tier=None`, `temperature=None`. |
 | FR-2 | `extract_from_path(path)` must validate supported file extensions before invoking the model and must return markdown-formatted extracted text. | Must | Path input is fail-fast on extension errors. |
 | FR-3 | `extract_from_cv2(image)` must accept a `numpy.ndarray`, encode it as PNG, and return markdown-formatted extracted text. | Must | cv2 input converges into the same internal extraction path. |
 | FR-4 | Whitespace-only or empty extracted text must raise `TargetLanguageNotFoundError`. | Must | Covers blank images and images without target-language text. |
@@ -64,7 +64,7 @@ The module sits at the beginning of the text-processing workflow and feeds downs
 
 | ID | Category | Requirement | Target or Constraint | Notes |
 | --- | --- | --- | --- | --- |
-| NFR-1 | Performance | A single extraction call should stay within the current image-extraction latency budget. | Target <10s per call | Existing docs and tests treat this as the QA gate. |
+| NFR-1 | Performance | A single extraction call should stay within the current image-extraction latency budget. | Current integration gate <20s per call | The offline `gpt-5-mini` profile trades latency for higher-quality reasoning. |
 | NFR-2 | Quality | Prompt/model changes should preserve normalized exact-match benchmark behavior on synthetic fixtures. | 100% pass on curated benchmark set | Uses local benchmark helpers. |
 | NFR-3 | Dependencies | Keep image handling self-contained inside the module. | `numpy` + `opencv-python` only | No extra image stack is introduced. |
 

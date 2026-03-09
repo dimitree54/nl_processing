@@ -40,7 +40,9 @@ class WordTranslator:
         *,
         source_language: Language,
         target_language: Language,
-        model: str = "gpt-4.1-mini",
+        model: str = "gpt-5-mini",
+        reasoning_effort: str | None = "medium",
+        temperature: float | None = None,
     ) -> None:
         self._source_language = source_language
         self._target_language = target_language
@@ -51,6 +53,8 @@ class WordTranslator:
             prompts_dir=_PROMPTS_DIR,
             tool_schema=_TranslationBatch,
             model=model,
+            reasoning_effort=reasoning_effort,
+            temperature=temperature,
         )
 
     async def translate(self, words: list[Word]) -> list[Word]:

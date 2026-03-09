@@ -36,13 +36,17 @@ class WordExtractor:
         self,
         *,
         language: Language = Language.NL,
-        model: str = "gpt-4.1-mini",
+        model: str = "gpt-5-mini",
+        reasoning_effort: str | None = "medium",
+        temperature: float | None = None,
     ) -> None:
         self._language = language
         prompt_path = str(_PROMPTS_DIR / f"{language.value}.json")
         prompt = load_prompt(prompt_path)
 
-        llm = ChatOpenAI(model=model, temperature=0).bind_tools([_WordList], tool_choice=_WordList.__name__)
+        llm = ChatOpenAI(model=model, reasoning_effort=reasoning_effort, temperature=temperature).bind_tools(
+            [_WordList], tool_choice=_WordList.__name__
+        )
         self._chain = prompt | llm
 
     async def extract(self, text: str) -> list[Word]:

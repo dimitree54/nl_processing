@@ -28,6 +28,8 @@ SYSTEM_INSTRUCTION = (
     "Behoud de originele documentstructuur als markdown "
     "(koppen, nadruk, regelafbrekingen). "
     "Negeer tekst in andere talen. "
+    "Als er geen Nederlandse tekst zichtbaar is, retourneer dan een lege string. "
+    "Beschouw Engelse tekst nooit als Nederlands en kopieer geen niet-Nederlandse tekst. "
     "Retourneer alleen de geëxtraheerde tekst, zonder commentaar of uitleg."
 )
 
@@ -92,7 +94,7 @@ EXAMPLE_5_EXPECTED = ""
 EXAMPLE_6_TEXT = "Please take your shoes off before entering the house"
 EXAMPLE_6_EXPECTED = ""
 
-EXAMPLE_7_TEXT = "Remember to bring your umbrella tomorrow"
+EXAMPLE_7_TEXT = "Remember to charge your phone before leaving tomorrow"
 EXAMPLE_7_EXPECTED = ""
 
 OUTPUT_PATH = Path(__file__).parent / "nl.json"

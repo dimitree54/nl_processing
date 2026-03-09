@@ -92,7 +92,7 @@ Extend `build_translation_chain()` in `core/prompts.py` to accept optional `reas
    - `service_tier`: Optional service tier for the OpenAI API.
    - `temperature`: LLM temperature (default 0 for deterministic output).
 
-4. **Verify backward compatibility**: Run `make -C packages/translate_text check`. The existing `TextTranslator` calls `build_translation_chain()` without these kwargs, so it should receive the defaults (`reasoning_effort=None`, `service_tier=None`, `temperature=0`) — exactly matching the previous hardcoded behavior.
+4. **Verify backward compatibility**: Run `make -C packages/translate_text check`. The helper keeps defaults of `reasoning_effort=None`, `service_tier=None`, and `temperature=0`; callers may still override them later without changing the shared function.
 
 5. **Verify file size**: `prompts.py` should stay well under 200 lines (currently 98, adding ~6 lines).
 
@@ -105,7 +105,7 @@ Extend `build_translation_chain()` in `core/prompts.py` to accept optional `reas
 ## Anti-disaster constraints
 
 - **Reuse before build**: Extending existing shared infrastructure, not duplicating.
-- **No regressions**: Default values match previous hardcoded `temperature=0`. Existing callers are unaffected.
+- **No regressions**: Helper defaults still match the previous hardcoded `temperature=0` behavior. Existing callers remain compatible even if some services later override specific kwargs.
 - **Correct libraries only**: `ChatOpenAI` already accepts `reasoning_effort`, `service_tier`, `temperature` — this was verified from the `extract_text_from_image` service which already passes them.
 
 ## Error handling + correctness rules

@@ -27,6 +27,7 @@ SYSTEM_INSTRUCTION = (
     "  - Eigennamen (personen/merken): ongewijzigd, type 'proper_noun_person'\n"
     "  - Eigennamen (landen): ongewijzigd, type 'proper_noun_country'\n"
     "- Extraheer samengestelde uitdrukkingen en fraseologische constructies als enkele eenheden.\n"
+    "- Laat beschrijvende bijvoeglijke naamwoorden niet weg; kleur- en eigenschapswoorden moeten behouden blijven.\n"
     "- Wijs een plat woordtype toe aan elk woord. Mogelijke types: "
     "noun, verb, adjective, adverb, preposition, conjunction, pronoun, article, numeral, "
     "interjection, "
@@ -47,30 +48,36 @@ def _w(form: str, wtype: str) -> _W:
 
 # fmt: off
 EXAMPLES: list[tuple[str, list[_W]]] = [
-    # 1: Simple sentence — noun (de/het), verb, adjective
-    ("De grote kat loopt snel.", [
+    # 1: Simple sentence — adjective retained alongside noun, verb, and preposition
+    ("De grote kat loopt door de tuin.", [
         _w("de kat", "noun"), _w("groot", "adjective"),
-        _w("lopen", "verb"), _w("snel", "adverb"),
+        _w("lopen", "verb"), _w("door", "preposition"), _w("de tuin", "noun"),
     ]),
-    # 2: Proper nouns and prepositions
+    # 2: Multiple adjectives attached to different nouns
+    ("Het kleine kind speelt met de rode bal.", [
+        _w("het kind", "noun"), _w("klein", "adjective"),
+        _w("spelen", "verb"), _w("met", "preposition"),
+        _w("de bal", "noun"), _w("rood", "adjective"),
+    ]),
+    # 3: Proper nouns and prepositions
     ("Jan woont in Nederland.", [
         _w("Jan", "proper_noun_person"), _w("wonen", "verb"),
         _w("in", "preposition"), _w("Nederland", "proper_noun_country"),
     ]),
-    # 3: Compound expression
+    # 4: Compound expression
     ("Zij gaat er vandoor met haar vriend.", [
         _w("zij", "pronoun"), _w("ervandoor gaan", "verb"),
         _w("met", "preposition"), _w("haar", "pronoun"), _w("de vriend", "noun"),
     ]),
-    # 4: Non-Dutch text — empty list
+    # 5: Non-Dutch text — empty list
     ("The quick brown fox jumps over the lazy dog.", []),
-    # 5: Mixed markdown with various word types
+    # 6: Mixed markdown with various word types
     ("# Welkom\n\nHet **kleine** kind speelt vrolijk in de tuin.", [
         _w("welkom", "adjective"), _w("het kind", "noun"), _w("klein", "adjective"),
         _w("spelen", "verb"), _w("vrolijk", "adverb"),
         _w("in", "preposition"), _w("de tuin", "noun"),
     ]),
-    # 6: Product packaging prose — brand names, adjectives as base form, plurals singularized
+    # 7: Product packaging prose — brand names, adjectives as base form, plurals singularized
     (
         "Met De Ruijter kunt u elke dag genieten "
         "van een breed assortiment smakelijke producten.\n"

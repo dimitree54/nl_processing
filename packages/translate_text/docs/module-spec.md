@@ -45,7 +45,7 @@ The module is used by developers or higher-level workflows that need clean trans
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must expose `TextTranslator(source_language, target_language, model)` and `await translate(text: str) -> str`. | Must | Current default model is `gpt-4.1-mini`. |
+| FR-1 | The module must expose `TextTranslator(source_language, target_language, model, service_tier)` and `await translate(text: str) -> str`. | Must | Current defaults are `model="gpt-4.1-mini"` and `service_tier="priority"`. |
 | FR-2 | The output must preserve markdown structure such as headings, emphasis, lists, and paragraph breaks. | Must | Preserved through prompt behavior, not markdown parsing code. |
 | FR-3 | The public result must contain only the translated text and no conversational prefixes or explanations. | Must | Enforced by typed tool-calling output. |
 | FR-4 | Unsupported language pairs must be rejected during initialization. | Must | Fail-fast behavior. |

@@ -15,6 +15,23 @@ def test_constructor_valid_pair(monkeypatch: pytest.MonkeyPatch) -> None:
     assert translator._chain is not None
 
 
+def test_constructor_uses_offline_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default constructor should use the offline translation profile."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured: dict[str, object] = {}
+
+    def _fake_build_translation_chain(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("nl_processing.translate_word.service.build_translation_chain", _fake_build_translation_chain)
+    WordTranslator(source_language=Language.NL, target_language=Language.RU)
+
+    assert captured["model"] == "gpt-5-mini"
+    assert captured["reasoning_effort"] == "medium"
+    assert captured["temperature"] is None
+
+
 def test_constructor_unsupported_pair(monkeypatch: pytest.MonkeyPatch) -> None:
     """RU->NL pair raises ValueError."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
@@ -27,7 +44,13 @@ def test_constructor_custom_model(monkeypatch: pytest.MonkeyPatch) -> None:
     """Custom model parameter is accepted."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    translator = WordTranslator(source_language=Language.NL, target_language=Language.RU, model="gpt-4.1")
+    translator = WordTranslator(
+        source_language=Language.NL,
+        target_language=Language.RU,
+        model="gpt-4.1",
+        reasoning_effort=None,
+        temperature=0,
+    )
     assert translator._chain is not None
 
 
