@@ -26,6 +26,13 @@ from nl_processing.sampling.service import ScoredPairProvider, WordSampler
 from nl_processing.translate_text.service import TextTranslator
 from nl_processing.translate_word.service import WordTranslator
 
+# translate_text_from_image — public API, consumed by future callers
+from nl_processing.translate_text_from_image.service import ImageTextTranslator
+from nl_processing.translate_text_from_image.benchmark import render_text_image
+
+# Re-export module __all__ in extract_text_from_image — flagged as unused by vulture
+from nl_processing.extract_text_from_image.image_encoding import __all__ as image_encoding_all
+
 # AbstractBackend ABC — methods are abstract, implemented by concrete backends (T4+)
 AbstractBackend.add_word  # type: ignore[misc]
 AbstractBackend.get_word  # type: ignore[misc]
@@ -124,6 +131,14 @@ NeonBackend.apply_score_delta_atomic  # type: ignore[misc]
 db_ready  # noqa: F821
 make_service  # noqa: F821
 wait_for_translations  # noqa: F821
+dutch_original  # noqa: F821
+
+# ImageTextTranslator — public API, used by consuming code / future tasks
+ImageTextTranslator.translate_from_path  # type: ignore[misc]
+ImageTextTranslator.translate_from_cv2  # type: ignore[misc]
+
+# Re-export module __all__ variable — used for module interface but flagged as unused
+image_encoding_all  # noqa: F821
 
 __all__ = [
     "DatabaseService",
@@ -150,4 +165,6 @@ __all__ = [
     "wait_for_translations",
     "DatabaseCacheService",
     "CacheStatus",
+    "ImageTextTranslator",
+    "render_text_image",
 ]

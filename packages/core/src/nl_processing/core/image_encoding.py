@@ -2,8 +2,9 @@ import base64
 import pathlib
 
 import cv2
-from nl_processing.core.exceptions import UnsupportedImageFormatError
 import numpy
+
+from nl_processing.core.exceptions import UnsupportedImageFormatError
 
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
