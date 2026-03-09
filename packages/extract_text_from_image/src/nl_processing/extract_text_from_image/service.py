@@ -3,15 +3,14 @@ import pathlib
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 from nl_processing.core.exceptions import APIError, TargetLanguageNotFoundError
-from nl_processing.core.models import ExtractedText, Language
-from nl_processing.core.prompts import load_prompt
-import numpy
-
-from nl_processing.extract_text_from_image.image_encoding import (
+from nl_processing.core.image_encoding import (
     encode_cv2_to_base64,
     encode_path_to_base64,
     validate_image_format,
 )
+from nl_processing.core.models import ExtractedText, Language
+from nl_processing.core.prompts import load_prompt
+import numpy
 
 # Resolve prompts directory relative to this file
 _PROMPTS_DIR = pathlib.Path(__file__).parent / "prompts"

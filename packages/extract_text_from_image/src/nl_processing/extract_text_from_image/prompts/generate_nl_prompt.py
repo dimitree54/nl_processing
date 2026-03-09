@@ -18,9 +18,9 @@ import tempfile
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from nl_processing.core.image_encoding import encode_path_to_base64
 
 from nl_processing.extract_text_from_image.benchmark import generate_test_image
-from nl_processing.extract_text_from_image.image_encoding import encode_path_to_base64
 
 SYSTEM_INSTRUCTION = (
     "Je bent een tekst-extractie assistent. "
