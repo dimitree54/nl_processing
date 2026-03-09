@@ -18,6 +18,9 @@ def build_translation_chain(
     prompts_dir: pathlib.Path,
     tool_schema: type[BaseModel],
     model: str,
+    reasoning_effort: str | None = None,
+    service_tier: str | None = None,
+    temperature: float | None = 0,
 ) -> RunnableSerializable:  # type: ignore[type-arg]
     """Validate a language pair, load its prompt, and return a prompt|llm chain.
 
@@ -31,6 +34,9 @@ def build_translation_chain(
         prompts_dir: Directory containing ``<src>_<tgt>.json`` prompt files.
         tool_schema: Pydantic model class to bind as a tool.
         model: OpenAI model identifier string.
+        reasoning_effort: Optional reasoning effort level for the model.
+        service_tier: Optional service tier for the OpenAI API.
+        temperature: LLM temperature (default 0 for deterministic output).
 
     Returns:
         A ``prompt | llm`` RunnableSerializable ready for ``ainvoke()``.
@@ -50,7 +56,12 @@ def build_translation_chain(
     prompt_file = f"{source_language.value}_{target_language.value}.json"
     prompt = load_prompt(str(prompts_dir / prompt_file))
 
-    llm = ChatOpenAI(model=model, temperature=0).bind_tools(
+    llm = ChatOpenAI(
+        model=model,
+        temperature=temperature,
+        reasoning_effort=reasoning_effort,
+        service_tier=service_tier,
+    ).bind_tools(
         [tool_schema],
         tool_choice=tool_schema.__name__,
     )
