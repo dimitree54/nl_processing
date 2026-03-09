@@ -6,6 +6,7 @@ src = [
     "packages/extract_text_from_image/src",
     "packages/extract_words_from_text/src",
     "packages/translate_text/src",
+    "packages/translate_text_from_image/src",
     "packages/translate_word/src",
     "packages/database/src",
     "packages/database_cache/src",

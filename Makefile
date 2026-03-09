@@ -1,4 +1,4 @@
-PACKAGES = core extract_text_from_image extract_words_from_text translate_text translate_word database database_cache sampling
+PACKAGES = core extract_text_from_image extract_words_from_text translate_text translate_text_from_image translate_word database database_cache sampling
 
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 TOOLS_VENV ?= $(ROOT_DIR)/.venv
