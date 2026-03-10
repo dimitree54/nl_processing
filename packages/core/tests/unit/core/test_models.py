@@ -61,11 +61,12 @@ def test_part_of_speech_enum_values() -> None:
     assert PartOfSpeech.INTERJECTION.value == "interjection"
     assert PartOfSpeech.PROPER_NOUN_PERSON.value == "proper_noun_person"
     assert PartOfSpeech.PROPER_NOUN_COUNTRY.value == "proper_noun_country"
+    assert PartOfSpeech.PHRASE.value == "phrase"
 
 
 def test_part_of_speech_enum_count() -> None:
-    """Test PartOfSpeech enum has exactly 12 members."""
-    assert len(list(PartOfSpeech)) == 12
+    """Test PartOfSpeech enum has exactly 13 members."""
+    assert len(list(PartOfSpeech)) == 13
 
 
 def test_part_of_speech_enum_invalid_value() -> None:

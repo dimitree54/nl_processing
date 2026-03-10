@@ -28,6 +28,7 @@ class PartOfSpeech(Enum):
     INTERJECTION = "interjection"
     PROPER_NOUN_PERSON = "proper_noun_person"
     PROPER_NOUN_COUNTRY = "proper_noun_country"
+    PHRASE = "phrase"
 
 
 class ExtractedText(BaseModel):

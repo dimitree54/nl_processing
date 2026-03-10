@@ -31,7 +31,7 @@ SYSTEM_INSTRUCTION = (
     "- Wijs een plat woordtype toe aan elk woord. Mogelijke types: "
     "noun, verb, adjective, adverb, preposition, conjunction, pronoun, article, numeral, "
     "interjection, "
-    "proper_noun_person, proper_noun_country.\n"
+    "proper_noun_person, proper_noun_country, phrase.\n"
     "- Retourneer het resultaat als een lijst van woord-objecten in een _WordList wrapper.\n"
     "- Als de tekst geen Nederlandse woorden bevat, retourneer dan een lege lijst."
 )
@@ -99,6 +99,12 @@ EXAMPLES: list[tuple[str, list[_W]]] = [
             _w("roze", "adjective"), _w("wit", "adjective"), _w("blauw", "adjective"),
         ],
     ),
+    # 8: Phraseological constructions — multi-word expressions that don't fit standard POS
+    ("Op het eerste gezicht lijkt het met betrekking tot de regels eenvoudig.", [
+        _w("op het eerste gezicht", "phrase"), _w("lijken", "verb"),
+        _w("het", "pronoun"), _w("met betrekking tot", "phrase"),
+        _w("de regel", "noun"), _w("eenvoudig", "adjective"),
+    ]),
 ]
 # fmt: on
 
