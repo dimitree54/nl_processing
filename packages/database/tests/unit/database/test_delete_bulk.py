@@ -7,30 +7,15 @@ from nl_processing.database.service import DatabaseService
 from tests.unit.database.mock_backend import MockBackend
 
 
-@pytest.fixture
-def mock_backend() -> MockBackend:
-    return MockBackend()
-
-
-@pytest.fixture
-def service(mock_backend: MockBackend) -> DatabaseService:
-    return DatabaseService(
-        user_id="test_user",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        backend=mock_backend,
-    )
-
-
 @pytest.mark.asyncio
-async def test_delete_words_bulk(service: DatabaseService, mock_backend: MockBackend) -> None:
+async def test_delete_words_bulk(delete_service: DatabaseService, mock_backend: MockBackend) -> None:
     """Test that delete_words removes multiple words."""
     # Add multiple words
     words = [
         Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL),
         Word(normalized_form="kat", word_type=PartOfSpeech.NOUN, language=Language.NL),
     ]
-    await service.add_words(words)
+    await delete_service.add_words(words)
 
     # Manually add translated target words and links for test
     await mock_backend.add_word("ru", "собака", "noun")
@@ -46,22 +31,22 @@ async def test_delete_words_bulk(service: DatabaseService, mock_backend: MockBac
     source_word_ids = [int(hond_dict["id"]), int(kat_dict["id"])]
 
     # Verify they exist
-    user_words = await service.get_words()
+    user_words = await delete_service.get_words()
     assert len(user_words) == 2
 
     # Delete both
-    await service.delete_words(source_word_ids)
+    await delete_service.delete_words(source_word_ids)
 
     # Verify they're gone
-    user_words = await service.get_words()
+    user_words = await delete_service.get_words()
     assert len(user_words) == 0
 
 
 @pytest.mark.asyncio
-async def test_delete_words_empty_list_noop(service: DatabaseService) -> None:
+async def test_delete_words_empty_list_noop(delete_service: DatabaseService) -> None:
     """Test that delete_words with empty list does nothing."""
     # This should not raise an error
-    await service.delete_words([])
+    await delete_service.delete_words([])
 
 
 @pytest.mark.asyncio

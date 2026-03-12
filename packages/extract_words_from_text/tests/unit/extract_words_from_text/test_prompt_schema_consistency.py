@@ -8,9 +8,9 @@ These tests are written to assert the *correct* contract and therefore FAIL
 on the current codebase, reproducing the bug.
 """
 
+from nl_processing.core.models import PartOfSpeech
 import pytest
 
-from nl_processing.core.models import PartOfSpeech
 from nl_processing.extract_words_from_text.prompts.generate_nl_prompt import (
     EXAMPLES,
     SYSTEM_INSTRUCTION,
