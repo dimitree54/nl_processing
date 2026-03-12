@@ -4,6 +4,11 @@ from datetime import datetime
 
 import asyncpg
 
+from nl_processing.database.backend._neon_delete import (
+    check_word_exists,
+    delete_exercise_score,
+    delete_word_membership,
+)
 from nl_processing.database.backend._neon_exercise import (
     atomic_apply_delta,
     check_event,
@@ -12,16 +17,19 @@ from nl_processing.database.backend._neon_exercise import (
     increment_score,
     mark_event,
 )
+from nl_processing.database.backend._neon_helpers import infer_target_language
+from nl_processing.database.backend._neon_words import (
+    add_word as add_word_impl,
+    count_user_words as count_user_words_impl,
+    get_word as get_word_impl,
+)
 from nl_processing.database.backend._queries import (
     ADD_USER_WORD,
     CREATE_USER_WORDS,
     add_translation_link_query,
-    add_word_query,
-    count_user_words_query,
     create_translations_table,
     create_words_table,
     get_user_words_query,
-    get_word_query,
 )
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.exceptions import DatabaseError
@@ -72,27 +80,11 @@ class NeonBackend(AbstractBackend):
         word_type: str,
     ) -> int | None:
         conn = await self._connect()
-        try:
-            row = await conn.fetchrow(add_word_query(table), normalized_form, word_type)
-        except asyncpg.PostgresError as exc:
-            raise DatabaseError(str(exc)) from exc
-        if row is None:
-            return None
-        return int(row["id"])
+        return await add_word_impl(conn, table, normalized_form, word_type)
 
     async def get_word(self, table: str, normalized_form: str) -> dict[str, str | int] | None:
         conn = await self._connect()
-        try:
-            row = await conn.fetchrow(get_word_query(table), normalized_form)
-        except asyncpg.PostgresError as exc:
-            raise DatabaseError(str(exc)) from exc
-        if row is None:
-            return None
-        return {
-            "id": row["id"],
-            "normalized_form": row["normalized_form"],
-            "word_type": row["word_type"],
-        }
+        return await get_word_impl(conn, table, normalized_form)
 
     async def add_translation_link(self, table: str, source_id: int, target_id: int) -> None:
         conn = await self._connect()
@@ -119,7 +111,7 @@ class NeonBackend(AbstractBackend):
     ) -> list[dict[str, str | int | datetime]]:
         # jscpd:ignore-end
         conn = await self._connect()
-        target_lang = _infer_target_language(language)
+        target_lang = infer_target_language(language)
         query = get_user_words_query(language, language, target_lang, word_type, limit, random)
         args: list[str | int] = [user_id, language]
         if word_type is not None:
@@ -134,16 +126,7 @@ class NeonBackend(AbstractBackend):
 
     async def count_user_words(self, user_id: str, language: str, word_type: str | None = None) -> int:
         conn = await self._connect()
-        args: list[str] = [user_id, language]
-        if word_type is not None:
-            args.append(word_type)
-        try:
-            count = await conn.fetchval(count_user_words_query(language, word_type), *args)
-        except asyncpg.PostgresError as exc:
-            raise DatabaseError(str(exc)) from exc
-        if count is None:
-            return 0
-        return int(count)
+        return await count_user_words_impl(conn, user_id, language, word_type)
 
     async def increment_user_exercise_score(
         self,
@@ -176,9 +159,29 @@ class NeonBackend(AbstractBackend):
         conn = await self._connect()
         return await atomic_apply_delta(conn, score_table, events_table, user_id, event_id, source_word_id, delta)
 
+    async def check_user_word_exists(
+        self,
+        user_id: str,
+        source_word_id: int,
+        language: str,
+    ) -> bool:
+        conn = await self._connect()
+        return await check_word_exists(conn, user_id, source_word_id, language)
 
-def _infer_target_language(source_language: str) -> str:
-    """Infer the other language in the nl/ru pair."""
-    if source_language == "nl":
-        return "ru"
-    return "nl"
+    async def delete_user_word(
+        self,
+        user_id: str,
+        source_word_id: int,
+        language: str,
+    ) -> None:
+        conn = await self._connect()
+        await delete_word_membership(conn, user_id, source_word_id, language)
+
+    async def delete_user_exercise_score(
+        self,
+        table: str,
+        user_id: str,
+        source_word_id: int,
+    ) -> None:
+        conn = await self._connect()
+        await delete_exercise_score(conn, table, user_id, source_word_id)

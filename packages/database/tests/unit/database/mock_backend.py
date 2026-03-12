@@ -156,3 +156,18 @@ class MockBackend(AbstractBackend):
             "target_word_type": tgt["word_type"],
             "added_at": datetime.now(tz=timezone.utc),
         }
+
+    async def check_user_word_exists(self, user_id: str, source_word_id: int, language: str) -> bool:
+        for uid, wid, lang in self._user_words:
+            if uid == user_id and wid == source_word_id and lang == language:
+                return True
+        return False
+
+    async def delete_user_word(self, user_id: str, source_word_id: int, language: str) -> None:
+        self._user_words = [
+            (u, w, l) for u, w, l in self._user_words if not (u == user_id and w == source_word_id and l == language)
+        ]
+
+    async def delete_user_exercise_score(self, table: str, user_id: str, source_word_id: int) -> None:
+        key = (table, user_id, source_word_id)
+        self._scores.pop(key, None)

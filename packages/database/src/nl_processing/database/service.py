@@ -13,8 +13,10 @@ from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
 from nl_processing.database import _translation
 from nl_processing.database._database_config import read_database_url
 from nl_processing.database._row_helpers import row_to_word_pair
+from nl_processing.database._service_helpers import get_words_impl
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
+from nl_processing.database.exceptions import WordNotFoundError
 from nl_processing.database.logging import get_logger
 from nl_processing.database.models import AddWordsResult, PersonalWord
 
@@ -138,40 +140,39 @@ class DatabaseService:
         random: bool = False,
     ) -> list[WordPair]:
         """Return translated word pairs for the current user."""
-        rows = await self._backend.get_user_words(
+        return await get_words_impl(
+            self._backend,
             self._user_id,
-            self._source_language.value,
-            word_type=word_type.value if word_type else None,
+            self._source_language,
+            self._target_language,
+            word_type=word_type,
             limit=limit,
             random=random,
         )
-        pairs = []
-        for row in rows:
-            source = Word(
-                normalized_form=str(row["source_normalized_form"]),
-                word_type=PartOfSpeech(row["source_word_type"]),
-                language=self._source_language,
-            )
-            target = Word(
-                normalized_form=str(row["target_normalized_form"]),
-                word_type=PartOfSpeech(row["target_word_type"]),
-                language=self._target_language,
-            )
-            pairs.append(WordPair(source=source, target=target))
-        if limit is None and not random:
-            total_count = await self._backend.count_user_words(
-                self._user_id,
-                self._source_language.value,
-                word_type=word_type.value if word_type else None,
-            )
-            if total_count > len(pairs):
-                excluded_count = total_count - len(pairs)
-                _logger.warning(
-                    "%d of %d words excluded from get_words() due to missing translations",
-                    excluded_count,
-                    total_count,
-                )
-        return pairs
+
+    async def delete_word(self, source_word_id: int, exercise_types: list[str] | None = None) -> None:
+        """Delete one personal-vocabulary entry (FR-9, BR-7, FM-5)."""
+        exists = await self._backend.check_user_word_exists(
+            self._user_id,
+            source_word_id,
+            self._source_language.value,
+        )
+        if not exists:
+            raise WordNotFoundError(f"Source word ID {source_word_id} not in user's vocabulary")
+        # Delete exercise scores first
+        if exercise_types:
+            src = self._source_language.value
+            tgt = self._target_language.value
+            for et in exercise_types:
+                table = f"{src}_{tgt}_{et}"
+                await self._backend.delete_user_exercise_score(table, self._user_id, source_word_id)
+        # Delete user_words membership
+        await self._backend.delete_user_word(self._user_id, source_word_id, self._source_language.value)
+
+    async def delete_words(self, source_word_ids: list[int], exercise_types: list[str] | None = None) -> None:
+        """Delete many personal-vocabulary entries (FR-9)."""
+        for source_word_id in source_word_ids:
+            await self.delete_word(source_word_id, exercise_types=exercise_types)
 
     @classmethod
     async def create_tables(cls, exercise_slugs: list[str] | None = None) -> None:

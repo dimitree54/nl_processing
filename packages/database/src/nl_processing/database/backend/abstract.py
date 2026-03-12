@@ -141,3 +141,30 @@ class AbstractBackend(ABC):
         Creates per-exercise-type score tables and applied_events tables.
         Uses IF NOT EXISTS semantics — safe to call multiple times.
         """
+
+    @abstractmethod
+    async def check_user_word_exists(
+        self,
+        user_id: str,
+        source_word_id: int,
+        language: str,
+    ) -> bool:
+        """Check if a source word is in the user's vocabulary."""
+
+    @abstractmethod
+    async def delete_user_word(
+        self,
+        user_id: str,
+        source_word_id: int,
+        language: str,
+    ) -> None:
+        """Delete the user's membership row for a source word."""
+
+    @abstractmethod
+    async def delete_user_exercise_score(
+        self,
+        table: str,
+        user_id: str,
+        source_word_id: int,
+    ) -> None:
+        """Delete the user's exercise score for a source word in one exercise table."""
