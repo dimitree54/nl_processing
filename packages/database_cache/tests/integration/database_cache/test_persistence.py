@@ -7,8 +7,8 @@ import pytest
 
 from nl_processing.database_cache.local_store import LocalStore
 
-_PAIR_HUIS = (1, "huis", "noun", 0, "dom", "noun")
-_PAIR_BOEK = (2, "boek", "noun", 0, "kniga", "noun")
+_PAIR_HUIS = (1, "huis", "noun", 0, "dom", "noun", "2025-01-15T12:00:00+00:00")
+_PAIR_BOEK = (2, "boek", "noun", 0, "kniga", "noun", "2025-01-15T12:00:00+00:00")
 
 
 @pytest.mark.asyncio
@@ -63,6 +63,23 @@ async def test_cache_metadata_survives_restart(db_path: Path) -> None:
     assert meta is not None
     assert json.loads(str(meta["exercise_types"])) == ["flashcard"]
     assert meta["last_refresh_completed_at"] == "2025-01-01T00:00:00+00:00"
+    await store2.close()
+
+
+@pytest.mark.asyncio
+async def test_added_at_survives_close_reopen(db_path: Path) -> None:
+    """added_at persists across SQLite close/reopen cycles."""
+    store = LocalStore(str(db_path))
+    await store.open()
+    await store.rebuild_snapshot([_PAIR_HUIS], {})
+    await store.close()
+
+    store2 = LocalStore(str(db_path))
+    await store2.open()
+    cur = await store2._conn.execute("SELECT added_at FROM cached_word_pairs WHERE source_word_id=1")
+    row = await cur.fetchone()
+    assert row is not None
+    assert row[0] == "2025-01-15T12:00:00+00:00"
     await store2.close()
 
 

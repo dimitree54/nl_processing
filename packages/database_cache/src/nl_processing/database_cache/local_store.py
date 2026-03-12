@@ -90,7 +90,7 @@ class LocalStore(LocalStoreBase):
 
     async def rebuild_snapshot(
         self,
-        word_pairs: list[tuple[int, str, str, int, str, str]],
+        word_pairs: list[tuple[int, str, str, int, str, str, str | None]],
         scores: dict[tuple[int, str], int],
     ) -> None:
         """Atomically replace cached word pairs and scores, then reapply pending events."""

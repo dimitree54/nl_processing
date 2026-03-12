@@ -6,12 +6,12 @@ from nl_processing.database_cache.local_store import LocalStore
 
 _TABLES = {"cached_word_pairs", "cached_scores", "pending_score_events", "cache_metadata"}
 
-_NOUN_PAIR = (1, "huis", "noun", 0, "dom", "noun")
-_VERB_PAIR = (2, "lopen", "verb", 0, "begat", "verb")
-_ADJ_PAIR = (3, "groot", "adjective", 0, "bolshoi", "adjective")
+_NOUN_PAIR = (1, "huis", "noun", 0, "dom", "noun", "2025-01-15T12:00:00+00:00")
+_VERB_PAIR = (2, "lopen", "verb", 0, "begat", "verb", "2025-01-15T12:00:00+00:00")
+_ADJ_PAIR = (3, "groot", "adjective", 0, "bolshoi", "adjective", "2025-01-15T12:00:00+00:00")
 
 
-async def _insert_pairs(store: LocalStore, pairs: list[tuple[int, str, str, int, str, str]]) -> None:
+async def _insert_pairs(store: LocalStore, pairs: list[tuple[int, str, str, int, str, str, str | None]]) -> None:
     """Insert word pairs into the store via rebuild_snapshot."""
     await store.rebuild_snapshot(pairs, {})
 
@@ -131,3 +131,13 @@ async def test_get_source_word_id(local_store: LocalStore) -> None:
     assert found == 1
     missing = await local_store.get_source_word_id("onbekend", "noun")
     assert missing is None
+
+
+@pytest.mark.asyncio
+async def test_added_at_persisted_in_snapshot(local_store: LocalStore) -> None:
+    """added_at is stored and retrievable after rebuild_snapshot."""
+    await _insert_pairs(local_store, [_NOUN_PAIR])
+    cur = await local_store._conn.execute("SELECT added_at FROM cached_word_pairs WHERE source_word_id=1")
+    row = await cur.fetchone()
+    assert row is not None
+    assert row[0] == "2025-01-15T12:00:00+00:00"

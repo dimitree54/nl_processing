@@ -1,8 +1,10 @@
 """Shared fixtures for database_cache integration tests (file-based SQLite, mocked remote)."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 
-from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair, WordPairSnapshot
+from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
+from nl_processing.database.models import EnrichedWordPairSnapshot
 import pytest
 
 _NL = Language.NL
@@ -19,15 +21,16 @@ def make_scored_pair(
     target_form: str,
     source_word_id: int,
     scores: dict[str, int] | None = None,
-) -> WordPairSnapshot:
-    """Build a NL→RU snapshot payload for integration-level cache tests."""
+) -> EnrichedWordPairSnapshot:
+    """Build a NL→RU enriched snapshot payload for integration-level cache tests."""
     src = make_word(source_form, lang=_NL)
     tgt = make_word(target_form, lang=_RU)
-    return WordPairSnapshot(
+    return EnrichedWordPairSnapshot(
         pair=WordPair(source=src, target=tgt),
         scores=scores or {},
         source_word_id=source_word_id,
         target_word_id=source_word_id + 1000,
+        added_at=datetime(2025, 1, 15, 12, 0, tzinfo=UTC),
     )
 
 
@@ -38,13 +41,13 @@ class MockProgressStore:
     and a blanket ``apply_error`` fallback.
     """
 
-    def __init__(self, snapshot: list[WordPairSnapshot] | None = None) -> None:
-        self.snapshot: list[WordPairSnapshot] = snapshot or []
+    def __init__(self, snapshot: list[EnrichedWordPairSnapshot] | None = None) -> None:
+        self.snapshot: list[EnrichedWordPairSnapshot] = snapshot or []
         self.applied_deltas: list[dict[str, str | int]] = []
         self.apply_error: Exception | None = None
         self.apply_errors_by_call: list[Exception | None] = []
 
-    async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
+    async def export_remote_snapshot(self) -> list[EnrichedWordPairSnapshot]:
         return list(self.snapshot)
 
     async def apply_score_delta(

@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS cached_word_pairs (
     source_word_type TEXT NOT NULL,
     target_word_id INTEGER NOT NULL,
     target_normalized_form TEXT NOT NULL,
-    target_word_type TEXT NOT NULL
+    target_word_type TEXT NOT NULL,
+    added_at TEXT
 )"""
 
 DDL_CACHED_SCORES = """
@@ -53,6 +54,11 @@ INSERT_PENDING_EVENT = (
     " VALUES (?, ?, ?, ?, ?)"
 )
 
-INSERT_WORD_PAIR = "INSERT INTO cached_word_pairs VALUES (?, ?, ?, ?, ?, ?)"
+INSERT_WORD_PAIR = (
+    "INSERT INTO cached_word_pairs "
+    "(source_word_id, source_normalized_form, source_word_type, "
+    "target_word_id, target_normalized_form, target_word_type, added_at) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?)"
+)
 
 INSERT_SCORE = "INSERT INTO cached_scores (source_word_id, exercise_type, score, updated_at) VALUES (?, ?, ?, ?)"

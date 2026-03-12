@@ -47,6 +47,11 @@ async def test_refresh_replaces_snapshot_atomically(db_path: Path) -> None:
     assert len(pairs_after) == 3
     forms = {p["source_normalized_form"] for p in pairs_after}
     assert forms == {"tafel", "stoel", "deur"}
+
+    # Verify that added_at is present in refreshed rows
+    cur = await store._conn.execute("SELECT added_at FROM cached_word_pairs")
+    added_at_rows = await cur.fetchall()
+    assert all(row[0] == "2025-01-15T12:00:00+00:00" for row in added_at_rows)
     await store.close()
 
 

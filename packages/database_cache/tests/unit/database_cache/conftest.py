@@ -1,10 +1,11 @@
 """Shared fixtures for database_cache unit tests."""
 
 import asyncio
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair, WordPairSnapshot
+from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
+from nl_processing.database.models import EnrichedWordPairSnapshot
 import pytest_asyncio
 
 from nl_processing.database_cache.local_store import LocalStore
@@ -21,9 +22,9 @@ def make_scored_pair(
     target_form: str,
     source_word_id: int,
     scores: dict[str, int] | None = None,
-) -> WordPairSnapshot:
-    """Create a snapshot payload with NL->RU defaults."""
-    return WordPairSnapshot(
+) -> EnrichedWordPairSnapshot:
+    """Create an enriched snapshot payload with NL->RU defaults and added_at."""
+    return EnrichedWordPairSnapshot(
         pair=WordPair(
             source=make_word(source_form, lang=Language.NL),
             target=make_word(target_form, lang=Language.RU),
@@ -31,18 +32,19 @@ def make_scored_pair(
         scores=scores or {},
         source_word_id=source_word_id,
         target_word_id=source_word_id + 1000,
+        added_at=datetime(2025, 1, 15, 12, 0, tzinfo=UTC),
     )
 
 
 class MockProgressStore:
     """Fake remote progress sync port for testing."""
 
-    def __init__(self, snapshot: list[WordPairSnapshot] | None = None) -> None:
-        self.snapshot: list[WordPairSnapshot] = snapshot or []
+    def __init__(self, snapshot: list[EnrichedWordPairSnapshot] | None = None) -> None:
+        self.snapshot: list[EnrichedWordPairSnapshot] = snapshot or []
         self.applied_deltas: list[dict[str, str | int]] = []
         self.apply_error: Exception | None = None
 
-    async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
+    async def export_remote_snapshot(self) -> list[EnrichedWordPairSnapshot]:
         return list(self.snapshot)
 
     async def apply_score_delta(

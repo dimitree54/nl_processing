@@ -36,6 +36,12 @@ class LocalStoreBase:
             await self._db.execute("PRAGMA journal_mode=WAL")
             for ddl in ALL_DDL:
                 await self._db.execute(ddl)
+            # Schema migration: add added_at column if it doesn't exist
+            try:
+                await self._db.execute("ALTER TABLE cached_word_pairs ADD COLUMN added_at TEXT")
+            except sqlite3.OperationalError:
+                # Column already exists or other error, safe to ignore
+                pass
             await self._db.commit()
         except sqlite3.Error as exc:
             raise CacheStorageError(str(exc)) from exc
