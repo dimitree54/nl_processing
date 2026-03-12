@@ -68,6 +68,62 @@ def build_translation_chain(
     return prompt | llm
 
 
+def build_bidirectional_translation_chain(
+    *,
+    language_a: Language,
+    language_b: Language,
+    supported_pairs: set[frozenset[str]],
+    prompts_dir: pathlib.Path,
+    prompt_file: str,
+    tool_schemas: list[type[BaseModel]],
+    model: str,
+    service_tier: str | None = None,
+    temperature: float | None = 0,
+) -> RunnableSerializable:  # type: ignore[type-arg]
+    """Validate a bidirectional language pair, load its prompt, and return a prompt|llm chain.
+
+    This is shared infrastructure for bidirectional translation-style services that follow the
+    pattern: validate unordered pair → load JSON prompt → bind_tools → compose chain.
+    Unlike build_translation_chain, this function:
+    - Uses frozenset-based pair validation for unordered pairs
+    - Accepts multiple tool schemas instead of a single schema
+    - Does not force tool choice, letting the model decide which tool to call
+    - Uses an explicit prompt_file parameter instead of auto-computing the filename
+
+    Args:
+        language_a: First language enum value.
+        language_b: Second language enum value.
+        supported_pairs: Set of frozensets of language value strings that are allowed.
+        prompts_dir: Directory containing prompt files.
+        prompt_file: Explicit prompt filename to load.
+        tool_schemas: List of Pydantic model classes to bind as tools.
+        model: OpenAI model identifier string.
+        service_tier: Optional service tier for the OpenAI API.
+        temperature: LLM temperature (default 0 for deterministic output).
+
+    Returns:
+        A ``prompt | llm`` RunnableSerializable ready for ``ainvoke()``.
+
+    Raises:
+        ValueError: If the language pair is not in *supported_pairs*.
+    """
+    pair = frozenset({language_a.value, language_b.value})
+    if pair not in supported_pairs:
+        msg = (
+            f"Unsupported language pair: {language_a.value} <-> {language_b.value}. Supported pairs: {supported_pairs}"
+        )
+        raise ValueError(msg)
+
+    prompt = load_prompt(str(prompts_dir / prompt_file))
+
+    llm = ChatOpenAI(
+        model=model,
+        temperature=temperature,
+        service_tier=service_tier,
+    ).bind_tools(tool_schemas)
+    return prompt | llm
+
+
 def load_prompt(prompt_path: str) -> ChatPromptTemplate:
     """Load a ChatPromptTemplate from a LangChain-serialized JSON file.
 
