@@ -9,9 +9,14 @@ from uuid import uuid4
 from nl_processing.core.models import Language, ScoredWordPair, Word, WordPair
 from nl_processing.core.ports import RemoteProgressSyncPort
 from nl_processing.database.exercise_progress import ExerciseProgressStore
-from nl_processing.database.models import PersonalWord
+from nl_processing.database.models import ExerciseProgressSummary, PersonalWord
 
-from nl_processing.database_cache._service_helpers import _parse_dt, row_to_personal_word, row_to_word_pair
+from nl_processing.database_cache._service_helpers import (
+    _parse_dt,
+    compute_local_progress_summary,
+    row_to_personal_word,
+    row_to_word_pair,
+)
 from nl_processing.database_cache.exceptions import CacheNotReadyError
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.logging import get_logger
@@ -108,6 +113,13 @@ class DatabaseCacheService:
         return [
             row_to_personal_word(r, self._source_language, self._target_language, self._exercise_types) for r in rows
         ]
+
+    async def get_progress_summary(self) -> dict[str, ExerciseProgressSummary]:
+        """Return per-exercise progress stats from cached data (FR-8, DEC-7)."""
+        self._ensure_ready()
+        assert self._local is not None
+        rows = await self._local.get_cached_word_pairs_with_scores(self._exercise_types)
+        return compute_local_progress_summary(rows, self._exercise_types)
 
     async def record_exercise_result(self, *, source_word: Word, exercise_type: str, delta: int) -> None:
         """Record a score change locally and queue for remote flush."""

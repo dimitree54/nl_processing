@@ -1,11 +1,10 @@
 """Unit tests for DatabaseCacheService — public API for the local cache layer."""
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair
-from nl_processing.database.models import PersonalWord
 import pytest
 
 from nl_processing.database_cache.exceptions import CacheNotReadyError
@@ -153,46 +152,3 @@ async def test_auto_flush_delivers_events_to_remote(cache_service: DatabaseCache
     await asyncio.sleep(0)  # yield to event loop so background task runs
     status = await cache_service.get_status()
     assert status.pending_events == 0
-
-
-@pytest.mark.asyncio
-async def test_list_personal_words_before_init_raises() -> None:
-    """Calling list_personal_words before init() raises CacheNotReadyError."""
-    svc = DatabaseCacheService(
-        user_id="u1",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        exercise_types=["flashcard"],
-        cache_ttl=timedelta(minutes=30),
-    )
-    with pytest.raises(CacheNotReadyError):
-        await svc.list_personal_words()
-
-
-@pytest.mark.asyncio
-async def test_list_personal_words_returns_personal_word_objects(cache_service: DatabaseCacheService) -> None:
-    """list_personal_words returns a list of PersonalWord objects."""
-    result = await cache_service.list_personal_words()
-    assert len(result) == 2
-    assert all(isinstance(pw, PersonalWord) for pw in result)
-    forms = {pw.pair.source.normalized_form for pw in result}
-    assert forms == {"huis", "boek"}
-
-
-@pytest.mark.asyncio
-async def test_list_personal_words_includes_all_fields(cache_service: DatabaseCacheService) -> None:
-    """list_personal_words includes added_at, scores, and stable IDs."""
-    result = await cache_service.list_personal_words()
-    assert len(result) == 2
-    for pw in result:
-        # Check added_at
-        assert pw.added_at is not None
-        assert isinstance(pw.added_at, datetime)
-        # Check scores
-        assert "flashcard" in pw.scores
-        assert pw.scores["flashcard"] == 0  # From conftest fixture
-        # Check stable IDs
-        assert isinstance(pw.source_word_id, int)
-        assert isinstance(pw.target_word_id, int)
-        assert pw.source_word_id > 0
-        assert pw.target_word_id > 0

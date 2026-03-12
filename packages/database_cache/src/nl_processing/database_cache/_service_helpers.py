@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
-from nl_processing.database.models import PersonalWord
+from nl_processing.database.models import ExerciseProgressSummary, PersonalWord
 
 
 def _parse_dt(meta: dict[str, str | int], key: str) -> datetime | None:
@@ -51,3 +51,33 @@ def row_to_personal_word(
         added_at=added_at,
         scores=scores,
     )
+
+
+def compute_local_progress_summary(
+    rows: list[dict[str, str | int]],
+    exercise_types: list[str],
+) -> dict[str, ExerciseProgressSummary]:
+    """Compute progress summary from cached rows with flattened score fields."""
+    total_words = len(rows)
+    if total_words == 0:
+        return {
+            et: ExerciseProgressSummary(
+                total_words=0,
+                negative_words=0,
+                negative_ratio=0.0,
+                negative_percentage=0.0,
+            )
+            for et in exercise_types
+        }
+    result: dict[str, ExerciseProgressSummary] = {}
+    for et in exercise_types:
+        score_key = f"score_{et}"
+        negative_words = sum(1 for r in rows if int(r.get(score_key, 0)) < 0)
+        negative_ratio = negative_words / total_words
+        result[et] = ExerciseProgressSummary(
+            total_words=total_words,
+            negative_words=negative_words,
+            negative_ratio=negative_ratio,
+            negative_percentage=negative_ratio * 100,
+        )
+    return result
