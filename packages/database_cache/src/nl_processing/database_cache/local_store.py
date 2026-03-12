@@ -5,6 +5,9 @@ import sqlite3
 
 from nl_processing.database_cache._local_store_base import LocalStoreBase, _now
 from nl_processing.database_cache._local_store_queries import (
+    DELETE_CACHED_SCORES,
+    DELETE_CACHED_WORD_PAIR,
+    DELETE_PENDING_EVENTS,
     INSERT_PENDING_EVENT,
     INSERT_SCORE,
     INSERT_WORD_PAIR,
@@ -141,5 +144,15 @@ class LocalStore(LocalStoreBase):
             )
             row = await cur.fetchone()
             return int(row["source_word_id"]) if row else None
+        except sqlite3.Error as exc:
+            raise CacheStorageError(str(exc)) from exc
+
+    async def delete_cached_word(self, source_word_id: int) -> None:
+        """Remove a word from cached_word_pairs, cached_scores, and pending_score_events."""
+        try:
+            await self._conn.execute(DELETE_CACHED_WORD_PAIR, (source_word_id,))
+            await self._conn.execute(DELETE_CACHED_SCORES, (source_word_id,))
+            await self._conn.execute(DELETE_PENDING_EVENTS, (source_word_id,))
+            await self._conn.commit()
         except sqlite3.Error as exc:
             raise CacheStorageError(str(exc)) from exc

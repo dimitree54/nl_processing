@@ -1,9 +1,16 @@
 """Helper functions extracted from service.py for code organization."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
 from nl_processing.database.models import ExerciseProgressSummary, PersonalWord
+
+from nl_processing.database_cache.local_store import LocalStore
+from nl_processing.database_cache.logging import get_logger
+from nl_processing.database_cache.models import CacheStatus
+from nl_processing.database_cache.sync import CacheSyncer
+
+_log = get_logger("service_helpers")
 
 
 def _parse_dt(meta: dict[str, str | int], key: str) -> datetime | None:
@@ -81,3 +88,50 @@ def compute_local_progress_summary(
             negative_percentage=negative_ratio * 100,
         )
     return result
+
+
+async def background_refresh(syncer: CacheSyncer) -> None:
+    """Background refresh task with error handling."""
+    try:
+        await syncer.refresh()
+    except Exception:
+        _log.exception("background refresh failed")
+
+
+async def background_flush(syncer: CacheSyncer) -> None:
+    """Background flush task with error handling."""
+    try:
+        await syncer.flush(skip_if_running=True)
+    except Exception:
+        _log.exception("background flush failed")
+
+
+def is_stale(meta: dict[str, str | int] | None, cache_ttl: timedelta) -> bool:
+    """Check if cache is stale based on metadata and TTL."""
+    if not meta:
+        return True
+    last_refresh = _parse_dt(meta, "last_refresh_completed_at")
+    if last_refresh is None:
+        return True
+    return datetime.now(tz=UTC) - last_refresh > cache_ttl
+
+
+async def get_cache_status(
+    local: LocalStore,
+    initialized: bool,
+    cache_ttl: timedelta,
+) -> CacheStatus:
+    """Build current cache status from metadata and pending events."""
+    meta = await local.get_metadata()
+    has_snap = await local.has_snapshot()
+    pending = await local.get_pending_event_count()
+    last_refresh = _parse_dt(meta, "last_refresh_completed_at") if meta else None
+    last_flush = _parse_dt(meta, "last_flush_completed_at") if meta else None
+    return CacheStatus(
+        is_ready=initialized and has_snap,
+        is_stale=is_stale(meta, cache_ttl),
+        has_snapshot=has_snap,
+        pending_events=pending,
+        last_refresh_completed_at=last_refresh,
+        last_flush_completed_at=last_flush,
+    )

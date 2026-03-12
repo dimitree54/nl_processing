@@ -64,6 +64,24 @@ class MockProgressStore:
         })
 
 
+class MockRemoteDelete:
+    """Fake remote delete port for testing."""
+
+    def __init__(self) -> None:
+        self.deleted_words: list[int] = []
+        self.delete_error: Exception | None = None
+
+    async def delete_word(self, source_word_id: int, exercise_types: list[str] | None = None) -> None:  # noqa: ARG002
+        if self.delete_error is not None:
+            raise self.delete_error
+        self.deleted_words.append(source_word_id)
+
+    async def delete_words(self, source_word_ids: list[int], exercise_types: list[str] | None = None) -> None:  # noqa: ARG002
+        if self.delete_error is not None:
+            raise self.delete_error
+        self.deleted_words.extend(source_word_ids)
+
+
 @pytest_asyncio.fixture
 async def local_store() -> LocalStore:
     """In-memory LocalStore opened and ready for use."""
@@ -90,6 +108,7 @@ async def cache_service(tmp_path: Path) -> DatabaseCacheService:
                 make_scored_pair("boek", "kniga", 2, {"flashcard": 0}),
             ]
         ),
+        remote_db=MockRemoteDelete(),
         local_store=local_store,
     )
     await svc.init()

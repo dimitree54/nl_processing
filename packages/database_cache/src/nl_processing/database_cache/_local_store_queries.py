@@ -62,3 +62,7 @@ INSERT_WORD_PAIR = (
 )
 
 INSERT_SCORE = "INSERT INTO cached_scores (source_word_id, exercise_type, score, updated_at) VALUES (?, ?, ?, ?)"
+
+DELETE_CACHED_WORD_PAIR = "DELETE FROM cached_word_pairs WHERE source_word_id = ?"
+DELETE_CACHED_SCORES = "DELETE FROM cached_scores WHERE source_word_id = ?"
+DELETE_PENDING_EVENTS = "DELETE FROM pending_score_events WHERE source_word_id = ?"

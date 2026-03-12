@@ -11,7 +11,7 @@ import pytest
 from nl_processing.database_cache.exceptions import CacheNotReadyError
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.service import DatabaseCacheService
-from tests.unit.database_cache.conftest import MockProgressStore, make_scored_pair
+from tests.unit.database_cache.conftest import MockProgressStore, MockRemoteDelete, make_scored_pair
 
 
 @pytest.mark.asyncio
@@ -102,6 +102,7 @@ async def test_get_progress_summary_with_negative_scores(tmp_path: Path) -> None
                 make_scored_pair("boek", "kniga", 2, {"flashcard": 0}),  # Zero score
             ]
         ),
+        remote_db=MockRemoteDelete(),
         local_store=local_store,
     )
     await svc.init()
@@ -130,7 +131,8 @@ async def test_get_progress_summary_empty_cache(tmp_path: Path) -> None:
         exercise_types=["flashcard"],
         cache_ttl=timedelta(minutes=30),
         cache_dir=str(tmp_path),
-        remote_progress=MockProgressStore(snapshot=[]),  # Empty snapshot
+        remote_progress=MockProgressStore(snapshot=[]),
+        remote_db=MockRemoteDelete(),
         local_store=local_store,
     )
     await svc.init()

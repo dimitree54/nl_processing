@@ -1,7 +1,7 @@
 """DatabaseCacheService — public API for the local SQLite cache layer."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 import json
 import tempfile
 from uuid import uuid4
@@ -12,8 +12,11 @@ from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.models import ExerciseProgressSummary, PersonalWord
 
 from nl_processing.database_cache._service_helpers import (
-    _parse_dt,
+    background_flush,
+    background_refresh,
     compute_local_progress_summary,
+    get_cache_status,
+    is_stale,
     row_to_personal_word,
     row_to_word_pair,
 )
@@ -21,6 +24,7 @@ from nl_processing.database_cache.exceptions import CacheNotReadyError
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.logging import get_logger
 from nl_processing.database_cache.models import CacheStatus
+from nl_processing.database_cache.ports import RemoteDeletePort
 from nl_processing.database_cache.sync import CacheSyncer
 
 _log = get_logger("service")
@@ -38,6 +42,7 @@ class DatabaseCacheService:
         exercise_types: list[str],
         cache_ttl: timedelta,
         remote_progress: RemoteProgressSyncPort | None = None,
+        remote_db: RemoteDeletePort | None = None,
         local_store: LocalStore | None = None,
         cache_dir: str | None = None,
     ) -> None:
@@ -52,6 +57,7 @@ class DatabaseCacheService:
         base = cache_dir or tempfile.gettempdir()
         self._db_path = f"{base}/{user_id}_{source_language.value}_{target_language.value}.db"
         self._remote_progress = remote_progress
+        self._remote_db = remote_db
         self._initialized = False
         self._local: LocalStore | None = local_store
         self._syncer: CacheSyncer | None = None
@@ -64,6 +70,14 @@ class DatabaseCacheService:
             target_language=self._target_language,
             exercise_types=self._exercise_types,
         )
+        if self._remote_db is None:
+            from nl_processing.database.service import DatabaseService  # noqa: PLC0415
+
+            self._remote_db = DatabaseService(
+                user_id=self._user_id,
+                source_language=self._source_language,
+                target_language=self._target_language,
+            )
         if self._local is None:
             self._local = LocalStore(self._db_path)
         await self._local.open()
@@ -75,8 +89,8 @@ class DatabaseCacheService:
             await self._syncer.refresh()
         elif not await self._local.has_snapshot():
             await self._syncer.refresh()
-        elif self._is_stale(meta):
-            asyncio.create_task(self._background_refresh())
+        elif is_stale(meta, self._cache_ttl):
+            asyncio.create_task(background_refresh(self._syncer))
         self._initialized = True
         return await self.get_status()
 
@@ -136,7 +150,8 @@ class DatabaseCacheService:
             msg = f"Word '{source_word.normalized_form}' not found in cache"
             raise ValueError(msg)
         await self._local.record_score_and_event(wid, exercise_type, delta, str(uuid4()))
-        asyncio.create_task(self._background_flush())
+        assert self._syncer is not None
+        asyncio.create_task(background_flush(self._syncer))
 
     async def refresh(self) -> None:
         """Trigger a full cache refresh from the remote database."""
@@ -148,45 +163,28 @@ class DatabaseCacheService:
         assert self._syncer is not None
         await self._syncer.flush()
 
+    async def delete_word(self, source_word_id: int) -> None:
+        """Delete a word: remote first, then prune local state (FR-9, DEC-6)."""
+        self._ensure_ready()
+        assert self._local is not None
+        assert self._remote_db is not None
+        await self._remote_db.delete_word(source_word_id, exercise_types=self._exercise_types)
+        await self._local.delete_cached_word(source_word_id)
+
+    async def delete_words(self, source_word_ids: list[int]) -> None:
+        """Delete multiple words: remote first, then prune local state (FR-9)."""
+        self._ensure_ready()
+        assert self._local is not None
+        assert self._remote_db is not None
+        await self._remote_db.delete_words(source_word_ids, exercise_types=self._exercise_types)
+        for wid in source_word_ids:
+            await self._local.delete_cached_word(wid)
+
     async def get_status(self) -> CacheStatus:
         """Build current cache status from metadata and pending events."""
         assert self._local is not None
-        meta = await self._local.get_metadata()
-        has_snap = await self._local.has_snapshot()
-        pending = await self._local.get_pending_event_count()
-        last_refresh = _parse_dt(meta, "last_refresh_completed_at") if meta else None
-        last_flush = _parse_dt(meta, "last_flush_completed_at") if meta else None
-        return CacheStatus(
-            is_ready=self._initialized and has_snap,
-            is_stale=self._is_stale(meta),
-            has_snapshot=has_snap,
-            pending_events=pending,
-            last_refresh_completed_at=last_refresh,
-            last_flush_completed_at=last_flush,
-        )
+        return await get_cache_status(self._local, self._initialized, self._cache_ttl)
 
     def _ensure_ready(self) -> None:
         if not self._initialized or self._local is None:
             raise CacheNotReadyError("Cache not initialized — call init() first")
-
-    def _is_stale(self, meta: dict[str, str | int] | None) -> bool:
-        if not meta:
-            return True
-        last_refresh = _parse_dt(meta, "last_refresh_completed_at")
-        if last_refresh is None:
-            return True
-        return datetime.now(tz=UTC) - last_refresh > self._cache_ttl
-
-    async def _background_refresh(self) -> None:
-        try:
-            assert self._syncer is not None
-            await self._syncer.refresh()
-        except Exception:
-            _log.exception("background refresh failed")
-
-    async def _background_flush(self) -> None:
-        try:
-            assert self._syncer is not None
-            await self._syncer.flush(skip_if_running=True)
-        except Exception:
-            _log.exception("background flush failed")

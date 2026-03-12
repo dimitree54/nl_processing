@@ -11,7 +11,7 @@ from nl_processing.database_cache.exceptions import CacheNotReadyError
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.models import CacheStatus
 from nl_processing.database_cache.service import DatabaseCacheService
-from tests.unit.database_cache.conftest import MockProgressStore, make_scored_pair
+from tests.unit.database_cache.conftest import MockProgressStore, MockRemoteDelete, make_scored_pair
 
 
 def test_constructor_validates_exercise_types(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -67,6 +67,7 @@ async def test_init_with_injected_remote_skips_database_url(tmp_path: Path) -> N
         remote_progress=MockProgressStore(
             snapshot=[make_scored_pair("huis", "dom", 1, {"flashcard": 0})],
         ),
+        remote_db=MockRemoteDelete(),
         local_store=LocalStore(str(tmp_path / "cache.db")),
     )
 

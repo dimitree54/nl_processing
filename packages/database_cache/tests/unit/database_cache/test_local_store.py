@@ -141,3 +141,52 @@ async def test_added_at_persisted_in_snapshot(local_store: LocalStore) -> None:
     row = await cur.fetchone()
     assert row is not None
     assert row[0] == "2025-01-15T12:00:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_delete_cached_word_removes_all_related_data(local_store: LocalStore) -> None:
+    """Delete word removes pair, scores, and pending events while preserving other words' data."""
+    # Insert two word pairs
+    await _insert_pairs(local_store, [_NOUN_PAIR, _VERB_PAIR])
+
+    # Record scores and events for both words
+    await local_store.record_score_and_event(1, "flashcard", 2, "evt-1")
+    await local_store.record_score_and_event(2, "flashcard", 3, "evt-2")
+
+    # Verify both words have data
+    pairs = await local_store._fetch_all("SELECT * FROM cached_word_pairs")
+    assert len(pairs) == 2
+    scores = await local_store._fetch_all("SELECT * FROM cached_scores")
+    assert len(scores) == 2
+    events = await local_store._fetch_all("SELECT * FROM pending_score_events")
+    assert len(events) == 2
+
+    # Delete word 1
+    await local_store.delete_cached_word(1)
+
+    # Word 1 data should be gone, word 2 data should remain
+    pairs_after = await local_store._fetch_all("SELECT * FROM cached_word_pairs")
+    assert len(pairs_after) == 1
+    assert pairs_after[0]["source_word_id"] == 2
+
+    scores_after = await local_store._fetch_all("SELECT * FROM cached_scores")
+    assert len(scores_after) == 1
+    assert scores_after[0]["source_word_id"] == 2
+
+    events_after = await local_store._fetch_all("SELECT * FROM pending_score_events")
+    assert len(events_after) == 1
+    assert events_after[0]["source_word_id"] == 2
+
+
+@pytest.mark.asyncio
+async def test_delete_cached_word_nonexistent_is_noop(local_store: LocalStore) -> None:
+    """Deleting a non-existent word is a no-op (no error raised)."""
+    await _insert_pairs(local_store, [_NOUN_PAIR])
+
+    # This should not raise an error
+    await local_store.delete_cached_word(999)
+
+    # Original word should still be there
+    pairs = await local_store._fetch_all("SELECT * FROM cached_word_pairs")
+    assert len(pairs) == 1
+    assert pairs[0]["source_word_id"] == 1

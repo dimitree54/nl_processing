@@ -10,7 +10,7 @@ import pytest
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.service import DatabaseCacheService
 from nl_processing.database_cache.sync import CacheSyncer
-from tests.integration.database_cache.conftest import MockProgressStore, make_scored_pair
+from tests.integration.database_cache.conftest import MockProgressStore, MockRemoteDelete, make_scored_pair
 
 
 async def _setup_store_with_snapshot(
@@ -135,6 +135,7 @@ async def test_auto_flush_delivers_events_after_record(db_path: Path) -> None:
         cache_ttl=timedelta(minutes=30),
         cache_dir=str(db_path.parent),
         remote_progress=remote,
+        remote_db=MockRemoteDelete(),
         local_store=LocalStore(str(db_path)),
     )
     await svc.init()
