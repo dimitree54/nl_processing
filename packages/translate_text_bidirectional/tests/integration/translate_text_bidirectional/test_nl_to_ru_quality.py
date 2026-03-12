@@ -19,9 +19,9 @@ LLM_CHATTER_PREFIXES = [
 
 @pytest.mark.asyncio
 async def test_nl_to_ru_output_cleanliness() -> None:
-    """BT-FR4: NL→RU output must not contain LLM chatter prefixes."""
+    """BT-FR4: NL→RU bidirectional output must not contain LLM chatter prefixes."""
     translator = BidirectionalTextTranslator(source_language=Language.NL, target_language=Language.RU)
-    result = await translator.translate("Het is een mooie dag om te wandelen in het park.")
+    result = await translator.translate("Vandaag is het een prachtige dag voor een wandeling door het bos.")
 
     assert isinstance(result, str)
     assert len(result.strip()) > 0, "Translation should not be empty"
@@ -45,47 +45,49 @@ async def test_nl_to_ru_cyrillic_only_output() -> None:
 async def test_nl_to_ru_markdown_structure_preservation() -> None:
     """BT-FR2: NL→RU markdown formatting must be preserved in translation."""
     dutch_markdown = (
-        "# Belangrijke informatie\n\n"
-        "Dit is een **belangrijk** bericht met *cursieve* tekst.\n\n"
-        "- Eerste punt\n"
-        "- Tweede punt\n"
-        "- Derde punt"
+        "# Bidirectionele Vertaalinformatie\n\n"
+        "Dit betreft een **cruciaal** bericht met *belangrijke* gegevens.\n\n"
+        "- Primair element\n"
+        "- Secundair onderdeel\n"
+        "- Tertiair component"
     )
 
     translator = BidirectionalTextTranslator(source_language=Language.NL, target_language=Language.RU)
     result = await translator.translate(dutch_markdown)
 
     assert isinstance(result, str)
-    assert result.startswith("#"), f"Heading not preserved. Output: {result}"
-    assert "**" in result, f"Bold markdown not preserved. Output: {result}"
-    assert "- " in result, f"List items not preserved. Output: {result}"
+    assert result.startswith("#"), f"Heading formatting not preserved in bidirectional translation. Output: {result}"
+    assert "**" in result, f"Bold markdown formatting not preserved in bidirectional translation. Output: {result}"
+    assert "- " in result, f"List item formatting not preserved in bidirectional translation. Output: {result}"
 
 
 @pytest.mark.asyncio
 async def test_performance_nl_to_ru() -> None:
     """BT-NFR1: NL→RU translation of ~100 words must complete in <5 seconds."""
     dutch_text = (
-        "Nederland is een prachtig land in West-Europa. "
-        "Het staat bekend om zijn windmolens, tulpen en fietsen. "
-        "De mensen zijn vriendelijk en spreken vaak meerdere talen. "
-        "Amsterdam is de hoofdstad en trekt veel toeristen aan. "
-        "Het land heeft een rijke geschiedenis en cultuur. "
-        "De Nederlandse keuken is gevarieerd met veel kaas en vis. "
-        "Het weer is vaak bewolkt maar soms schijnt de zon. "
-        "De Nederlanders houden van voetbal en schaatsen. "
-        "Het onderwijs is van hoge kwaliteit en toegankelijk. "
-        "De economie is sterk en er zijn veel internationale bedrijven."
+        "Het Koninkrijk der Nederlanden is een fascinerend land in West-Europa. "
+        "Dit land is wereldberoemd om zijn karakteristieke windmolens, kleurrijke tulpenvelden en fietscultuur. "
+        "De vriendelijke inwoners communiceren vaak in verschillende internationale talen. "
+        "Amsterdam, de bruisende hoofdstad, trekt jaarlijks miljoenen bezoekers aan. "
+        "Het Nederlandse erfgoed omvat eeuwen van rijke geschiedenis en culturele tradities. "
+        "De gevarieerde lokale keuken biedt heerlijke kaasspecialiteiten en verse zeevruchten. "
+        "Het wisselvallige klimaat varieert van bewolkte dagen tot zonnige periodes. "
+        "Nederlanders zijn gepassioneerd over voetbal en traditioneel schaatsen op natuurijs. "
+        "Het onderwijssysteem staat bekend om zijn hoge kwaliteit en toegankelijkheid. "
+        "De florissante economie herbergt talrijke multinationaal opererende ondernemingen."
     )
 
     translator = BidirectionalTextTranslator(source_language=Language.NL, target_language=Language.RU)
 
-    start = time.time()
+    start_timestamp = time.time()
     result = await translator.translate(dutch_text)
-    elapsed = time.time() - start
+    execution_duration = time.time() - start_timestamp
 
     assert isinstance(result, str)
-    assert len(result.strip()) > 0, "Translation should not be empty"
-    assert elapsed < 5, f"Translation took {elapsed:.2f}s — exceeds 5.00s QA gate"
+    assert len(result.strip()) > 0, "Bidirectional translation should not be empty"
+    assert execution_duration < 5, (
+        f"Bidirectional translation took {execution_duration:.2f}s — exceeds 5.00s performance threshold"
+    )
 
 
 @pytest.mark.asyncio

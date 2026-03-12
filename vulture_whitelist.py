@@ -24,6 +24,7 @@ from nl_processing.extract_text_from_image.benchmark import run_benchmark
 from nl_processing.extract_words_from_text.service import WordExtractor
 from nl_processing.sampling.service import ScoredPairProvider, WordSampler
 from nl_processing.translate_text.service import TextTranslator
+from nl_processing.translate_text_bidirectional.service import BidirectionalTextTranslator
 from nl_processing.translate_word.service import WordTranslator
 
 # translate_text_from_image — public API, consumed by future callers
@@ -137,6 +138,9 @@ dutch_original  # noqa: F821
 ImageTextTranslator.translate_from_path  # type: ignore[misc]
 ImageTextTranslator.translate_from_cv2  # type: ignore[misc]
 
+# BidirectionalTextTranslator — public API, used by consuming code
+BidirectionalTextTranslator.translate  # type: ignore[misc]
+
 # Re-export module __all__ variable — used for module interface but flagged as unused
 image_encoding_all  # noqa: F821
 
@@ -167,4 +171,5 @@ __all__ = [
     "CacheStatus",
     "ImageTextTranslator",
     "render_text_image",
+    "BidirectionalTextTranslator",
 ]

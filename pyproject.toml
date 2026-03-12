@@ -31,6 +31,8 @@ packages = [
   "nl_processing.sampling",
   "nl_processing.translate_text",
   "nl_processing.translate_text.prompts",
+  "nl_processing.translate_text_bidirectional",
+  "nl_processing.translate_text_bidirectional.prompts",
   "nl_processing.translate_text_from_image",
   "nl_processing.translate_text_from_image.prompts",
   "nl_processing.translate_text_from_image.prompts.examples",
@@ -50,6 +52,8 @@ packages = [
 "nl_processing.sampling" = "packages/sampling/src/nl_processing/sampling"
 "nl_processing.translate_text" = "packages/translate_text/src/nl_processing/translate_text"
 "nl_processing.translate_text.prompts" = "packages/translate_text/src/nl_processing/translate_text/prompts"
+"nl_processing.translate_text_bidirectional" = "packages/translate_text_bidirectional/src/nl_processing/translate_text_bidirectional"
+"nl_processing.translate_text_bidirectional.prompts" = "packages/translate_text_bidirectional/src/nl_processing/translate_text_bidirectional/prompts"
 "nl_processing.translate_text_from_image" = "packages/translate_text_from_image/src/nl_processing/translate_text_from_image"
 "nl_processing.translate_text_from_image.prompts" = "packages/translate_text_from_image/src/nl_processing/translate_text_from_image/prompts"
 "nl_processing.translate_text_from_image.prompts.examples" = "packages/translate_text_from_image/src/nl_processing/translate_text_from_image/prompts/examples"
@@ -60,6 +64,7 @@ packages = [
 "nl_processing.extract_text_from_image.prompts" = ["*.json"]
 "nl_processing.extract_words_from_text.prompts" = ["*.json"]
 "nl_processing.translate_text.prompts" = ["*.json"]
+"nl_processing.translate_text_bidirectional.prompts" = ["*.json"]
 "nl_processing.translate_text_from_image.prompts" = ["*.json", "examples/*.jpg", "examples/*.png"]
 "nl_processing.translate_text_from_image.prompts.examples" = ["*.jpg", "*.png"]
 "nl_processing.translate_word.prompts" = ["*.json"]
