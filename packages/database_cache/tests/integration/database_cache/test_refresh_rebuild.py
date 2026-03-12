@@ -1,11 +1,15 @@
 """Integration tests — refresh / rebuild behaviour with file-based SQLite and mocked remote."""
 
+from datetime import timedelta
 import json
 from pathlib import Path
 
+from nl_processing.core.models import Language
+from nl_processing.database.models import PersonalWord
 import pytest
 
 from nl_processing.database_cache.local_store import LocalStore
+from nl_processing.database_cache.service import DatabaseCacheService
 from nl_processing.database_cache.sync import CacheSyncer
 from tests.integration.database_cache.conftest import MockProgressStore, make_scored_pair
 
@@ -117,3 +121,56 @@ async def test_refresh_with_zero_word_pairs(db_path: Path) -> None:
     assert meta is not None
     assert meta["last_refresh_completed_at"] is not None
     await store.close()
+
+
+@pytest.mark.asyncio
+async def test_list_personal_words_after_refresh_has_added_at(db_path: Path) -> None:
+    """End-to-end test: refresh with snapshots, then list_personal_words() returns PersonalWord objects."""
+    initial_snapshot = [
+        make_scored_pair("huis", "dom", 1, {"flashcard": 0}),
+        make_scored_pair("boek", "kniga", 2, {"flashcard": 5}),
+    ]
+
+    # Create service with mock remote
+    local_store = LocalStore(str(db_path))
+    remote = MockProgressStore(snapshot=initial_snapshot)
+    service = DatabaseCacheService(
+        user_id="test_user",
+        source_language=Language.NL,
+        target_language=Language.RU,
+        exercise_types=["flashcard"],
+        cache_ttl=timedelta(minutes=30),
+        cache_dir=str(db_path.parent),
+        remote_progress=remote,
+        local_store=local_store,
+    )
+
+    # Initialize and check list_personal_words
+    await service.init()
+    personal_words = await service.list_personal_words()
+
+    # Verify we get PersonalWord objects
+    assert len(personal_words) == 2
+    assert all(isinstance(pw, PersonalWord) for pw in personal_words)
+
+    # Verify added_at is correctly parsed from snapshot
+    for pw in personal_words:
+        assert pw.added_at is not None
+        assert pw.added_at.year == 2025
+        assert pw.added_at.month == 1
+        assert pw.added_at.day == 15
+
+    # Verify scores are included
+    for pw in personal_words:
+        assert "flashcard" in pw.scores
+
+    # Verify specific scores
+    huis_word = next((pw for pw in personal_words if pw.pair.source.normalized_form == "huis"), None)
+    boek_word = next((pw for pw in personal_words if pw.pair.source.normalized_form == "boek"), None)
+
+    assert huis_word is not None
+    assert huis_word.scores["flashcard"] == 0
+    assert boek_word is not None
+    assert boek_word.scores["flashcard"] == 5
+
+    await local_store.close()
