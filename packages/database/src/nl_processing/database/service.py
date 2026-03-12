@@ -5,16 +5,19 @@ and retrieving Word objects backed by Neon PostgreSQL.
 """
 
 import asyncio
+from datetime import datetime
 import os
 from typing import Protocol
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
 
+from nl_processing.database import _translation
+from nl_processing.database._row_helpers import row_to_word_pair
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import ConfigurationError
 from nl_processing.database.logging import get_logger
-from nl_processing.database.models import AddWordsResult
+from nl_processing.database.models import AddWordsResult, PersonalWord
 
 _logger = get_logger("service")
 
@@ -89,34 +92,58 @@ class DatabaseService:
 
         new_source_words = [word for word in new_words if word.language == self._source_language]
         if new_source_words and self._translator is not None:
-            asyncio.create_task(self._translate_and_store(new_source_words))
+            asyncio.create_task(
+                _translation.translate_and_store(
+                    self._backend,
+                    self._translator,
+                    self._source_table,
+                    self._target_table,
+                    self._translations_table,
+                    new_source_words,
+                    _logger,
+                )
+            )
 
         return AddWordsResult(new_words=new_words, existing_words=existing_words)
 
-    async def _translate_and_store(self, new_words: list[Word]) -> None:
-        """Translate new words and store translations (fire-and-forget)."""
-        assert self._translator is not None
-        try:
-            translated = await self._translator.translate(new_words)
-            for source_word, target_word in zip(new_words, translated):
-                target_id = await self._backend.add_word(
-                    self._target_table,
-                    target_word.normalized_form,
-                    target_word.word_type.value,
+    async def list_personal_words(self, exercise_types: list[str] | None = None) -> list[PersonalWord]:
+        """Return personal word entries with scores for the given exercise types."""
+        rows = await self._backend.get_user_words(self._user_id, self._source_language.value)
+        if not rows:
+            return []
+
+        scores_by_word: dict[int, dict[str, int]] = {}
+        if exercise_types:
+            source_word_ids = [int(row["source_id"]) for row in rows]  # type: ignore[arg-type]
+            for exercise_type in exercise_types:
+                table = f"{self._source_language.value}_{self._target_language.value}_{exercise_type}"
+                score_rows = await self._backend.get_user_exercise_scores(table, self._user_id, source_word_ids)
+                for score_row in score_rows:
+                    wid = int(score_row["source_word_id"])
+                    scores_by_word.setdefault(wid, {})[exercise_type] = int(score_row["score"])
+        result = []
+        for row in rows:
+            pair = row_to_word_pair(row, self._source_language, self._target_language)
+            source_word_id = int(row["source_id"])  # type: ignore[arg-type]
+            target_word_id = int(row["target_id"])  # type: ignore[arg-type]
+            added_at_raw = row["added_at"]
+            added_at = added_at_raw if isinstance(added_at_raw, datetime) else datetime.now()
+
+            scores = {}
+            if exercise_types:
+                word_scores = scores_by_word.get(source_word_id, {})
+                scores = {et: word_scores.get(et, 0) for et in exercise_types}
+
+            result.append(
+                PersonalWord(
+                    pair=pair,
+                    source_word_id=source_word_id,
+                    target_word_id=target_word_id,
+                    added_at=added_at,
+                    scores=scores,
                 )
-                if target_id is None:
-                    row = await self._backend.get_word(self._target_table, target_word.normalized_form)
-                    target_id = int(row["id"])  # type: ignore[index]
-                source_row = await self._backend.get_word(self._source_table, source_word.normalized_form)
-                source_id = int(source_row["id"])  # type: ignore[index]
-                await self._backend.add_translation_link(self._translations_table, source_id, target_id)
-            _logger.info("Translated and stored %d words", len(new_words))
-        except Exception:
-            _logger.warning(
-                "Background translation failed for %d words",
-                len(new_words),
-                exc_info=True,
             )
+        return result
 
     async def get_words(
         self,
@@ -125,11 +152,7 @@ class DatabaseService:
         limit: int | None = None,
         random: bool = False,
     ) -> list[WordPair]:
-        """Return translated word pairs for the current user.
-
-        Only words with completed translations are included
-        (backend uses INNER JOIN).
-        """
+        """Return translated word pairs for the current user."""
         rows = await self._backend.get_user_words(
             self._user_id,
             self._source_language.value,
@@ -137,7 +160,7 @@ class DatabaseService:
             limit=limit,
             random=random,
         )
-        pairs: list[WordPair] = []
+        pairs = []
         for row in rows:
             source = Word(
                 normalized_form=str(row["source_normalized_form"]),
@@ -166,10 +189,7 @@ class DatabaseService:
         return pairs
 
     @classmethod
-    async def create_tables(
-        cls,
-        exercise_slugs: list[str] | None = None,
-    ) -> None:
+    async def create_tables(cls, exercise_slugs: list[str] | None = None) -> None:
         """Create all required database tables (idempotent)."""
         database_url = _read_database_url()
         backend = NeonBackend(database_url)
