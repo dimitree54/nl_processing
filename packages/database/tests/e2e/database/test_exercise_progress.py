@@ -94,3 +94,26 @@ async def test_scores_persist_across_store_instances() -> None:
     assert scores_by_form["tafel"] == 1
     assert scores_by_form["stoel"] == 0
     assert scores_by_form["lamp"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("db_ready")
+async def test_get_progress_summary_e2e() -> None:
+    """E2E test for get_progress_summary with actual database."""
+    user_id = f"e2e_user_{uuid4()}"
+    await _add_and_translate(user_id)
+
+    store = _make_store(user_id)
+    ids = await _word_id_map(store)
+
+    # Set one word negative, others positive/zero
+    await store.increment(source_word_id=ids["tafel"], exercise_type="flashcard", delta=-1)
+    await store.increment(source_word_id=ids["stoel"], exercise_type="flashcard", delta=1)
+    # lamp stays at 0 (not negative)
+
+    summary = await store.get_progress_summary()
+
+    assert summary["flashcard"].total_words == 3
+    assert summary["flashcard"].negative_words == 1  # only tafel is negative
+    assert summary["flashcard"].negative_ratio == 1 / 3
+    assert summary["flashcard"].negative_percentage == pytest.approx(33.333333333333336)

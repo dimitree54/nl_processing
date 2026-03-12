@@ -5,29 +5,15 @@ sync contracts used by sampling and database_cache.
 """
 
 from datetime import datetime
-import os
 
 from nl_processing.core.models import Language, ScoredWordPair
 
+from nl_processing.database._database_config import read_database_url
+from nl_processing.database._progress_helpers import compute_progress_summary
 from nl_processing.database._row_helpers import row_to_word_pair
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
-from nl_processing.database.exceptions import ConfigurationError
-from nl_processing.database.models import EnrichedWordPairSnapshot
-
-_DATABASE_URL_MISSING = (
-    "DATABASE_URL environment variable is required. "
-    "Set it to your Neon PostgreSQL connection string. "
-    "See: https://neon.tech/docs/connect/connect-from-any-app"
-)
-
-
-def _read_database_url() -> str:
-    """Read DATABASE_URL from environment, raising ConfigurationError if absent."""
-    try:
-        return os.environ["DATABASE_URL"]
-    except KeyError as exc:
-        raise ConfigurationError(_DATABASE_URL_MISSING) from exc
+from nl_processing.database.models import EnrichedWordPairSnapshot, ExerciseProgressSummary
 
 
 class ExerciseProgressStore:
@@ -46,7 +32,7 @@ class ExerciseProgressStore:
             msg = "exercise_types must be a non-empty list"
             raise ValueError(msg)
         if backend is None:
-            database_url = _read_database_url()
+            database_url = read_database_url()
             self._backend: AbstractBackend = NeonBackend(database_url)
         else:
             self._backend = backend
@@ -99,6 +85,11 @@ class ExerciseProgressStore:
                 ScoredWordPair(pair=pair, scores=scores, source_word_id=wid),
             )
         return result
+
+    async def get_progress_summary(self) -> dict[str, ExerciseProgressSummary]:
+        """Return progress summary for all exercise types."""
+        rows, scores_by_word = await self._get_rows_with_scores()
+        return compute_progress_summary(rows, scores_by_word, self._exercise_types)
 
     async def export_remote_snapshot(self) -> list[EnrichedWordPairSnapshot]:
         """Return score-aware pairs with stable remote IDs for cache consumers."""

@@ -19,6 +19,15 @@ class PersonalWord(BaseModel):
     scores: dict[str, int]
 
 
+class ExerciseProgressSummary(BaseModel):
+    """Per-exercise-type progress report (FR-8, DEC-7)."""
+
+    total_words: int
+    negative_words: int
+    negative_ratio: float
+    negative_percentage: float
+
+
 class EnrichedWordPairSnapshot(WordPairSnapshot):
     """Snapshot with added_at for cache-side personal-vocabulary reads (FR-10, CR-3)."""
 

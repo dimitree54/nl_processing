@@ -6,34 +6,19 @@ and retrieving Word objects backed by Neon PostgreSQL.
 
 import asyncio
 from datetime import datetime
-import os
 from typing import Protocol
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
 
 from nl_processing.database import _translation
+from nl_processing.database._database_config import read_database_url
 from nl_processing.database._row_helpers import row_to_word_pair
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
-from nl_processing.database.exceptions import ConfigurationError
 from nl_processing.database.logging import get_logger
 from nl_processing.database.models import AddWordsResult, PersonalWord
 
 _logger = get_logger("service")
-
-_DATABASE_URL_MISSING = (
-    "DATABASE_URL environment variable is required. "
-    "Set it to your Neon PostgreSQL connection string. "
-    "See: https://neon.tech/docs/connect/connect-from-any-app"
-)
-
-
-def _read_database_url() -> str:
-    """Read DATABASE_URL from environment, raising ConfigurationError if absent."""
-    try:
-        return os.environ["DATABASE_URL"]
-    except KeyError as exc:
-        raise ConfigurationError(_DATABASE_URL_MISSING) from exc
 
 
 class WordTranslatorProtocol(Protocol):
@@ -53,7 +38,7 @@ class DatabaseService:
         translator: WordTranslatorProtocol | None = None,
     ) -> None:
         if backend is None:
-            database_url = _read_database_url()
+            database_url = read_database_url()
             self._backend: AbstractBackend = NeonBackend(database_url)
         else:
             self._backend = backend
@@ -191,7 +176,7 @@ class DatabaseService:
     @classmethod
     async def create_tables(cls, exercise_slugs: list[str] | None = None) -> None:
         """Create all required database tables (idempotent)."""
-        database_url = _read_database_url()
+        database_url = read_database_url()
         backend = NeonBackend(database_url)
         await backend.create_tables(
             languages=["nl", "ru"],
