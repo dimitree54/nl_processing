@@ -4,13 +4,16 @@ Default implementation of the shared scored-pair and remote-progress
 sync contracts used by sampling and database_cache.
 """
 
+from datetime import datetime
 import os
 
-from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair, WordPairSnapshot
+from nl_processing.core.models import Language, ScoredWordPair
 
+from nl_processing.database._row_helpers import row_to_word_pair
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import ConfigurationError
+from nl_processing.database.models import EnrichedWordPairSnapshot
 
 _DATABASE_URL_MISSING = (
     "DATABASE_URL environment variable is required. "
@@ -88,8 +91,8 @@ class ExerciseProgressStore:
             return []
         result: list[ScoredWordPair] = []
         for row in rows:
-            pair = self._row_to_word_pair(row)
-            wid = int(row["source_id"])
+            pair = row_to_word_pair(row, self._source_language, self._target_language)
+            wid = int(row["source_id"])  # type: ignore[arg-type]
             word_scores = scores_by_word.get(wid, {})
             scores = {et: word_scores.get(et, 0) for et in self._exercise_types}
             result.append(
@@ -97,24 +100,26 @@ class ExerciseProgressStore:
             )
         return result
 
-    async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
+    async def export_remote_snapshot(self) -> list[EnrichedWordPairSnapshot]:
         """Return score-aware pairs with stable remote IDs for cache consumers."""
         rows, scores_by_word = await self._get_rows_with_scores()
         if not rows:
             return []
-        snapshots: list[WordPairSnapshot] = []
+        snapshots: list[EnrichedWordPairSnapshot] = []
         for row in rows:
-            pair = self._row_to_word_pair(row)
-            source_word_id = int(row["source_id"])
-            target_word_id = int(row["target_id"])
+            pair = row_to_word_pair(row, self._source_language, self._target_language)
+            source_word_id = int(row["source_id"])  # type: ignore[arg-type]
+            target_word_id = int(row["target_id"])  # type: ignore[arg-type]
+            added_at = row["added_at"]  # type: ignore[assignment]  # datetime from T1
             word_scores = scores_by_word.get(source_word_id, {})
             scores = {et: word_scores.get(et, 0) for et in self._exercise_types}
             snapshots.append(
-                WordPairSnapshot(
+                EnrichedWordPairSnapshot(
                     pair=pair,
                     scores=scores,
                     source_word_id=source_word_id,
                     target_word_id=target_word_id,
+                    added_at=added_at,
                 ),
             )
         return snapshots
@@ -153,7 +158,7 @@ class ExerciseProgressStore:
 
     async def _get_rows_with_scores(
         self,
-    ) -> tuple[list[dict[str, str | int]], dict[int, dict[str, int]]]:
+    ) -> tuple[list[dict[str, str | int | datetime]], dict[int, dict[str, int]]]:
         """Fetch translated rows and per-exercise scores for the current user."""
         rows = await self._backend.get_user_words(
             self._user_id,
@@ -161,7 +166,7 @@ class ExerciseProgressStore:
         )
         if not rows:
             return [], {}
-        source_word_ids = [int(row["source_id"]) for row in rows]
+        source_word_ids = [int(row["source_id"]) for row in rows]  # type: ignore[arg-type]
         scores_by_word: dict[int, dict[str, int]] = {}
         for exercise_type, table in self._score_tables.items():
             score_rows = await self._backend.get_user_exercise_scores(
@@ -173,23 +178,3 @@ class ExerciseProgressStore:
                 wid = int(score_row["source_word_id"])
                 scores_by_word.setdefault(wid, {})[exercise_type] = int(score_row["score"])
         return rows, scores_by_word
-
-    def _word_from_row(
-        self,
-        row: dict[str, str | int],
-        prefix: str,
-        lang: Language,
-    ) -> Word:
-        """Reconstruct a Word from a backend row using column prefix."""
-        return Word(
-            normalized_form=str(row[f"{prefix}_normalized_form"]),
-            word_type=PartOfSpeech(row[f"{prefix}_word_type"]),
-            language=lang,
-        )
-
-    def _row_to_word_pair(self, row: dict[str, str | int]) -> WordPair:
-        """Reconstruct a WordPair from a backend row dict."""
-        return WordPair(
-            source=self._word_from_row(row, "source", self._source_language),
-            target=self._word_from_row(row, "target", self._target_language),
-        )
