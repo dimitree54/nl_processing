@@ -6,10 +6,11 @@ import json
 import tempfile
 from uuid import uuid4
 
-from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair
+from nl_processing.core.models import Language, ScoredWordPair, Word, WordPair
 from nl_processing.core.ports import RemoteProgressSyncPort
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 
+from nl_processing.database_cache._service_helpers import _parse_dt, row_to_word_pair
 from nl_processing.database_cache.exceptions import CacheNotReadyError
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.logging import get_logger
@@ -84,7 +85,7 @@ class DatabaseCacheService:
         self._ensure_ready()
         assert self._local is not None
         rows = await self._local.get_cached_word_pairs(word_type=word_type, limit=limit, random=random)
-        return [self._row_to_word_pair(r) for r in rows]
+        return [row_to_word_pair(r, self._source_language, self._target_language) for r in rows]
 
     async def get_word_pairs_with_scores(self) -> list[ScoredWordPair]:
         """Return cached word pairs with exercise scores."""
@@ -93,7 +94,7 @@ class DatabaseCacheService:
         rows = await self._local.get_cached_word_pairs_with_scores(self._exercise_types)
         result: list[ScoredWordPair] = []
         for row in rows:
-            pair = self._row_to_word_pair(row)
+            pair = row_to_word_pair(row, self._source_language, self._target_language)
             scores = {et: int(row[f"score_{et}"]) for et in self._exercise_types}
             result.append(ScoredWordPair(pair=pair, scores=scores, source_word_id=int(row["source_word_id"])))
         return result
@@ -154,20 +155,6 @@ class DatabaseCacheService:
             return True
         return datetime.now(tz=UTC) - last_refresh > self._cache_ttl
 
-    def _row_to_word_pair(self, row: dict[str, str | int]) -> WordPair:
-        return WordPair(
-            source=Word(
-                normalized_form=str(row["source_normalized_form"]),
-                word_type=PartOfSpeech(row["source_word_type"]),
-                language=self._source_language,
-            ),
-            target=Word(
-                normalized_form=str(row["target_normalized_form"]),
-                word_type=PartOfSpeech(row["target_word_type"]),
-                language=self._target_language,
-            ),
-        )
-
     async def _background_refresh(self) -> None:
         try:
             assert self._syncer is not None
@@ -181,10 +168,3 @@ class DatabaseCacheService:
             await self._syncer.flush(skip_if_running=True)
         except Exception:
             _log.exception("background flush failed")
-
-
-def _parse_dt(meta: dict[str, str | int], key: str) -> datetime | None:
-    val = meta[key] if key in meta else None
-    if val is None:
-        return None
-    return datetime.fromisoformat(str(val))
