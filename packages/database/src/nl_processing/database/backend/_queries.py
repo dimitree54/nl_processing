@@ -116,7 +116,8 @@ def get_user_words_query(
             sw.word_type AS source_word_type,
             tw.id AS target_id,
             tw.normalized_form AS target_normalized_form,
-            tw.word_type AS target_word_type
+            tw.word_type AS target_word_type,
+            uw.added_at AS added_at
         FROM user_words uw
         JOIN words_{language} sw ON uw.word_id = sw.id
         JOIN translations_{source_lang}_{target_lang} t ON t.source_word_id = sw.id

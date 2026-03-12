@@ -1,5 +1,7 @@
 """NeonBackend asyncpg implementation for Neon PostgreSQL."""
 
+from datetime import datetime
+
 import asyncpg
 
 from nl_processing.database.backend._neon_exercise import (
@@ -114,7 +116,7 @@ class NeonBackend(AbstractBackend):
         word_type: str | None = None,
         limit: int | None = None,
         random: bool = False,
-    ) -> list[dict[str, str | int]]:
+    ) -> list[dict[str, str | int | datetime]]:
         # jscpd:ignore-end
         conn = await self._connect()
         target_lang = _infer_target_language(language)

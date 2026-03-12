@@ -1,5 +1,6 @@
 """Integration tests for NeonBackend CRUD operations against real Neon PostgreSQL."""
 
+from datetime import datetime
 import uuid
 
 import pytest
@@ -159,3 +160,24 @@ async def test_get_user_words_with_limit(neon_backend: NeonBackend) -> None:
 
     rows = await neon_backend.get_user_words(user_id, "nl", limit=3)
     assert len(rows) == 3
+
+
+@pytest.mark.asyncio
+async def test_get_user_words_includes_added_at(neon_backend: NeonBackend) -> None:
+    """get_user_words returns rows with added_at datetime field."""
+    user_id = _uid()
+    unique_word = f"test_word_{uuid.uuid4().hex[:8]}"
+
+    # Insert a word, create a translation link, associate with a user
+    source_id = await neon_backend.add_word("nl", unique_word, "noun")
+    target_id = await neon_backend.add_word("ru", f"{unique_word}_translation", "noun")
+    await neon_backend.add_translation_link("nl_ru", source_id, target_id)
+    await neon_backend.add_user_word(user_id, source_id, "nl")
+
+    # Call get_user_words and check the returned row dict
+    rows = await neon_backend.get_user_words(user_id, "nl")
+    assert len(rows) == 1
+
+    row = rows[0]
+    assert "added_at" in row
+    assert isinstance(row["added_at"], datetime)

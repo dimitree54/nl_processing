@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 
 class AbstractBackend(ABC):
@@ -46,7 +47,7 @@ class AbstractBackend(ABC):
         word_type: str | None = None,
         limit: int | None = None,
         random: bool = False,
-    ) -> list[dict[str, str | int]]:
+    ) -> list[dict[str, str | int | datetime]]:
         """Return list of word row dicts for the given user and language.
 
         Supports optional filtering by word_type, limiting result count,
