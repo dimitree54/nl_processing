@@ -63,10 +63,13 @@ class DetailedWordStore:
                 payload_raw = detail_row["payload"]
                 if isinstance(payload_raw, str):
                     # Mock backend stores as JSON string
-                    payload: dict[str, str | int | bool | list[str] | dict[str, str]] = json.loads(payload_raw)
+                    payload = json.loads(payload_raw)
+                elif isinstance(payload_raw, dict):
+                    # Real backend returns dict directly (asyncpg JSONB deserialization)
+                    payload = payload_raw
                 else:
-                    # Real backend returns dict directly
-                    payload = payload_raw  # type: ignore[assignment]
+                    # Fallback for unexpected types (should not happen in practice)
+                    raise TypeError(f"Unexpected payload type: {type(payload_raw)}")
                 result.append(
                     DetailedWordRecord(
                         source_word=word.normalized_form,
@@ -104,9 +107,8 @@ class DetailedWordStore:
         existing_rows = await self._backend.get_word_details_batch(self._details_table, source_word_ids_and_types)
 
         # Build lookup of existing records
-        existing_lookup: dict[tuple[int, str], dict[str, str | int]] = {
-            (int(row["source_word_id"]), str(row["word_type"])): row for row in existing_rows
-        }
+        # Contains both backend rows (dict[str, str | int]) and constructed rows with JsonValue payload
+        existing_lookup = {(int(row["source_word_id"]), str(row["word_type"])): row for row in existing_rows}
 
         # Find misses and extract them
         missing_words = []
@@ -135,7 +137,7 @@ class DetailedWordStore:
                     )
 
                     # Add to existing lookup for return
-                    existing_lookup[(source_word_id, record.word_type)] = {  # type: ignore[assignment]
+                    existing_lookup[(source_word_id, record.word_type)] = {
                         "source_word_id": source_word_id,
                         "word_type": record.word_type,
                         "schema_key": record.schema_key,
@@ -156,10 +158,13 @@ class DetailedWordStore:
                     payload_raw = detail_row["payload"]
                     if isinstance(payload_raw, str):
                         # Mock backend stores as JSON string
-                        payload: dict[str, str | int | bool | list[str] | dict[str, str]] = json.loads(payload_raw)
+                        payload = json.loads(payload_raw)
+                    elif isinstance(payload_raw, dict):
+                        # Real backend returns dict directly (asyncpg JSONB deserialization)
+                        payload = payload_raw
                     else:
-                        # Real backend returns dict directly
-                        payload = payload_raw  # type: ignore[assignment]
+                        # Fallback for unexpected types (should not happen in practice)
+                        raise TypeError(f"Unexpected payload type: {type(payload_raw)}")
                     result.append(
                         DetailedWordRecord(
                             source_word=word.normalized_form,
