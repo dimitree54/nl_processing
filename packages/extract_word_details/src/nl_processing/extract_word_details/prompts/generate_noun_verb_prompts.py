@@ -77,14 +77,14 @@ def build_verb_prompt() -> ChatPromptTemplate:
     system_instruction = (
         "Вы — эксперт по нидерландской грамматике. "
         "Получая нидерландский глагол, вы предоставляете подробную лингвистическую информацию: "
-        "формы настоящего времени (ik/jij/hij/wij/zij), прошедшее время, причастие прошедшего времени, "
-        "вспомогательный глагол (hebben/zijn), отделяемую приставку, объяснение спряжения на русском языке, "
-        "а также обучающие материалы."
+        "формы настоящего времени (ik/jij/hij/wij/zij), прошедшее время (singular/plural), "
+        "причастие прошедшего времени, вспомогательный глагол (hebben/zijn), отделяемую приставку, "
+        "объяснение спряжения на русском языке, а также обучающие материалы."
     )
 
     example_1 = {
         "present_tense": {"ik": "loop", "jij": "loopt", "hij": "loopt", "wij": "lopen", "zij": "lopen"},
-        "past_simple": "liep",
+        "past_simple": {"singular": "liep", "plural": "liepen"},
         "past_participle": "gelopen",
         "auxiliary": "hebben",
         "separable_prefix": None,

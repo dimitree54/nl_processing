@@ -70,3 +70,7 @@ class SchemaRegistry:
         """Check if a schema version is registered."""
         entry_key = (schema_key, schema_version)
         return entry_key in self._entries
+
+    def list_schemas(self) -> list[str]:
+        """List all registered schema keys."""
+        return list(self._current_versions.keys())

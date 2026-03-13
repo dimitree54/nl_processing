@@ -10,6 +10,10 @@ from nl_processing.extract_word_details.models import (
     NlRuNounDetails,
     NlRuVerbDetails,
 )
+from nl_processing.extract_word_details.models._verb import (
+    PastSimpleConjugation,
+    PresentTenseConjugation,
+)
 
 
 class TestNlRuNounDetails:
@@ -50,24 +54,25 @@ class TestNlRuVerbDetails:
     def test_valid_construction(self, shared_fields: SharedLearningFields) -> None:
         """Test creating a valid verb details instance."""
         verb = NlRuVerbDetails(
-            present_tense={"ik": "loop", "jij": "loopt", "hij": "loopt", "wij": "lopen", "zij": "lopen"},
-            past_simple="liep",
+            present_tense=PresentTenseConjugation(ik="loop", jij="loopt", hij="loopt", wij="lopen", zij="lopen"),
+            past_simple=PastSimpleConjugation(singular="liep", plural="liepen"),
             past_participle="gelopen",
             auxiliary="hebben",
             separable_prefix=None,
             conjugation_explanation="Сильный глагол",
             shared=shared_fields,
         )
-        assert verb.present_tense["ik"] == "loop"
-        assert verb.past_simple == "liep"
+        assert verb.present_tense.ik == "loop"
+        assert verb.past_simple.singular == "liep"
+        assert verb.past_simple.plural == "liepen"
         assert verb.auxiliary == "hebben"
         assert verb.separable_prefix is None
 
     def test_serialization_round_trip(self, shared_fields: SharedLearningFields) -> None:
         """Test model_dump and model_validate round trip."""
         original = NlRuVerbDetails(
-            present_tense={"ik": "ga", "jij": "gaat"},
-            past_simple="ging",
+            present_tense=PresentTenseConjugation(ik="ga", jij="gaat", hij="gaat", wij="gaan", zij="gaan"),
+            past_simple=PastSimpleConjugation(singular="ging", plural="gingen"),
             past_participle="gegaan",
             auxiliary="zijn",
             separable_prefix="uit",
@@ -82,8 +87,8 @@ class TestNlRuVerbDetails:
         """Test validation error when required fields are missing."""
         with pytest.raises(ValidationError):
             NlRuVerbDetails(
-                present_tense={"ik": "loop"},
-                past_simple="liep",
+                present_tense=PresentTenseConjugation(ik="loop", jij="loopt", hij="loopt", wij="lopen", zij="lopen"),
+                past_simple=PastSimpleConjugation(singular="liep", plural="liepen"),
                 shared=shared_fields,
                 # Missing past_participle, auxiliary, conjugation_explanation
             )
