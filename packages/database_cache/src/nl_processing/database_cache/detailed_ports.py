@@ -1,11 +1,12 @@
 """Protocols for remote detailed word store and schema checker."""
 
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from nl_processing.core.models import Word
 from nl_processing.database.detailed_models import DetailedWordRecord
 
 
+@runtime_checkable
 class RemoteDetailedWordStorePort(Protocol):
     """Protocol for remote detailed word store backend."""
 
@@ -13,6 +14,7 @@ class RemoteDetailedWordStorePort(Protocol):
         """Fetch detailed word records from remote store."""
 
 
+@runtime_checkable
 class SchemaVersionChecker(Protocol):
     """Protocol for checking schema version compatibility."""
 
