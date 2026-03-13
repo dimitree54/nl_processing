@@ -1,6 +1,7 @@
 """POS configuration mapping for extraction chains."""
 
 from nl_processing.core.models import PartOfSpeech
+
 from nl_processing.extract_word_details._batch_models import (
     _AdjectiveDetailsBatch,
     _AdverbDetailsBatch,

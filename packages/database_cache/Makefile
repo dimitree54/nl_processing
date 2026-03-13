@@ -4,4 +4,4 @@ TOOLS_VENV ?= $(shell if [ -x "$(CURDIR)/.venv/bin/pytest" ] && [ -x "$(CURDIR)/
 .PHONY: check
 
 check:
-	$(MAKE) -C "$(ROOT_DIR)" package-check PKG=database_cache PACKAGE_PYTHONPATH=src:../core/src:../database/src:../translate_word/src TOOLS_VENV="$(TOOLS_VENV)"
+	$(MAKE) -C "$(ROOT_DIR)" package-check PKG=database_cache PACKAGE_PYTHONPATH=src:../core/src:../database/src:../translate_word/src:../extract_word_details/src TOOLS_VENV="$(TOOLS_VENV)"

@@ -3,6 +3,7 @@
 from collections import defaultdict
 
 from nl_processing.core.models import PartOfSpeech, Word
+
 from nl_processing.extract_word_details.models._registry_init import SCHEMA_REGISTRY
 
 

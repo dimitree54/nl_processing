@@ -5,11 +5,11 @@ import pathlib
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableSerializable
 from langchain_openai import ChatOpenAI
-
 from nl_processing.core.exceptions import APIError
 from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.core.prompts import load_prompt
 from nl_processing.database.detailed_models import DetailedWordRecord
+
 from nl_processing.extract_word_details._pos_config import POS_CONFIG
 from nl_processing.extract_word_details._pos_dispatch import (
     get_supported_pos,

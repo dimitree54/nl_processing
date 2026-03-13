@@ -28,9 +28,11 @@ dev = [
   "pylint>=4.0.4,<5",
   "vulture>=2.14.0,<3",
   "nl-processing-translate-word",
+  "nl-processing-extract-word-details",
 ]
 
 [tool.uv.sources]
 nl-processing-core = { path = "../core" }
 nl-processing-database = { path = "../database" }
 nl-processing-translate-word = { path = "../translate_word" }
+nl-processing-extract-word-details = { path = "../extract_word_details" }
