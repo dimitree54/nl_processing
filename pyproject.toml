@@ -38,6 +38,9 @@ packages = [
   "nl_processing.translate_text_from_image.prompts.examples",
   "nl_processing.translate_word",
   "nl_processing.translate_word.prompts",
+  "nl_processing.extract_word_details",
+  "nl_processing.extract_word_details.models",
+  "nl_processing.extract_word_details.prompts",
 ]
 
 [tool.setuptools.package-dir]
@@ -59,6 +62,9 @@ packages = [
 "nl_processing.translate_text_from_image.prompts.examples" = "packages/translate_text_from_image/src/nl_processing/translate_text_from_image/prompts/examples"
 "nl_processing.translate_word" = "packages/translate_word/src/nl_processing/translate_word"
 "nl_processing.translate_word.prompts" = "packages/translate_word/src/nl_processing/translate_word/prompts"
+"nl_processing.extract_word_details" = "packages/extract_word_details/src/nl_processing/extract_word_details"
+"nl_processing.extract_word_details.models" = "packages/extract_word_details/src/nl_processing/extract_word_details/models"
+"nl_processing.extract_word_details.prompts" = "packages/extract_word_details/src/nl_processing/extract_word_details/prompts"
 
 [tool.setuptools.package-data]
 "nl_processing.extract_text_from_image.prompts" = ["*.json"]
@@ -68,6 +74,7 @@ packages = [
 "nl_processing.translate_text_from_image.prompts" = ["*.json", "examples/*.jpg", "examples/*.png"]
 "nl_processing.translate_text_from_image.prompts.examples" = ["*.jpg", "*.png"]
 "nl_processing.translate_word.prompts" = ["*.json"]
+"nl_processing.extract_word_details.prompts" = ["*.json"]
 
 [dependency-groups]
 dev = [

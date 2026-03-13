@@ -9,6 +9,7 @@ src = [
     "packages/translate_text_bidirectional/src",
     "packages/translate_text_from_image/src",
     "packages/translate_word/src",
+    "packages/extract_word_details/src",
     "packages/database/src",
     "packages/database_cache/src",
     "packages/sampling/src",
