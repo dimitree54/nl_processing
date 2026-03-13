@@ -5,6 +5,7 @@ document_type: "module-spec"
 related_docs:
   - "../../../docs/module-spec.md"
   - "../../core/docs/module-spec.md"
+  - "../../extract_word_details/docs/module-spec.md"
 ---
 
 # Module Spec: database
@@ -13,22 +14,23 @@ related_docs:
 
 ### Summary
 
-`database` is the authoritative remote persistence layer for `nl_processing`. It stores the shared corpus of words, translation links, per-user vocabulary membership, and per-user exercise progress in Neon PostgreSQL. The module is optimized for correctness and durable state, not hot-path local latency; cache and offline concerns are intentionally delegated to `database_cache`. It also provides the default remote implementation for the shared score-provider and cache-sync ports defined in `core`, plus the planned remote read/delete surface for a user's personal vocabulary.
+`database` is the authoritative remote persistence layer for `nl_processing`. It stores the shared corpus of words, translation links, pair-specific detailed-word records, per-user vocabulary membership, and per-user exercise progress in Neon PostgreSQL. The module is optimized for correctness and durable state, not hot-path local latency; cache and offline concerns are intentionally delegated to `database_cache`. It also provides the default remote implementation for the shared score-provider and cache-sync ports defined in `core`.
 
 ### System Context
 
-The module sits below the LLM-facing extract/translate modules and above downstream practice/caching flows. It exposes `DatabaseService` as the main public persistence API and `ExerciseProgressStore` as the default remote implementation behind the shared score-provider and cache-sync contracts used by consumers such as `sampling` and `database_cache`.
+The module sits below the LLM-facing extract and translate packages and above downstream practice and cache flows. It exposes `DatabaseService` as the main public persistence API, `DetailedWordStore` as the pair-specific detailed-word persistence surface, and `ExerciseProgressStore` as the default remote implementation behind the shared score-provider and cache-sync contracts used by consumers such as `sampling` and `database_cache`.
 
 ### In Scope
 
 - `DatabaseService` for adding words, reading translated word pairs, reading full personal vocabulary entries, deleting personal vocabulary entries, and creating tables.
-- Canonical remote persistence of words, translation links, and user-word membership.
-- Per-exercise score tables, personal-vocabulary progress summaries, remote snapshot export, and idempotent score-delta replay.
-- Backend abstraction, structured logging, and test-only reset helpers.
+- `DetailedWordStore` for pair-specific detailed-word persistence and get-or-extract behavior.
+- `ExerciseProgressStore` for score-aware reads, summaries, remote snapshots, and idempotent delta replay.
+- Remote schema, backend abstraction, structured logging, and test-only reset helpers.
 
 ### Out of Scope
 
 - Local caching, offline writes, or stale-while-revalidate behavior.
+- Prompt logic, POS-specific extraction rules, or LLM client construction.
 - User authentication or user management.
 - Admin UIs, dashboards, or migration tooling outside table creation.
 - Interactive latency optimization beyond reasonable remote efficiency.
@@ -40,6 +42,7 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 | A-1 | Neon PostgreSQL remains the default remote backend for production and integration testing. | Needs Review | Current concrete backend is `NeonBackend` over `asyncpg`. |
 | A-2 | The current production workflow remains focused on the NL/RU language pair even though parts of the schema are structured symmetrically. | Needs Review | Some helpers still hardcode `nl`/`ru` defaults and table creation paths. |
 | A-3 | V1 personal-vocabulary reads continue to cover translated entries only, not untranslated raw `user_words` rows. | Needs Review | Matches the current join shape and cache snapshot model. |
+| A-4 | Detailed-word records are shared corpus data, not per-user data. | Approved | Matches extractor contract. |
 
 ## 2. Requirements
 
@@ -47,16 +50,20 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must expose `DatabaseService(user_id, source_language, target_language, backend?, translator?)` with async `add_words()`, `get_words()`, and `create_tables()` methods. | Must | Main public API surface. |
+| FR-1 | The module must expose `DatabaseService(user_id, source_language, target_language, backend?, translator?)` with async `add_words()`, `get_words()`, `list_personal_words()`, `delete_word()`, `delete_words()`, and `create_tables()` methods. | Must | Main public API surface. |
 | FR-2 | `add_words()` must deduplicate words by normalized form within a language, associate them with the current user, and return `AddWordsResult(new_words, existing_words)`. | Must | Dedup is form-based, not type-based. |
 | FR-3 | `get_words()` must return only translated `WordPair` items for the configured user and language pair, with optional `word_type`, `limit`, and `random` filters. | Must | Untranslated words stay hidden from read results. |
 | FR-4 | `ExerciseProgressStore` must require a non-empty configured `exercise_types` list and expose score-aware reads plus idempotent delta replay. | Must | Default implementation of the shared `core.ports.ScoredPairProvider` and `core.ports.RemoteProgressSyncPort` contracts. |
-| FR-5 | `create_tables()` must create the required corpus, translation, user, score, and applied-events tables idempotently. | Must | Remote schema bootstrap entrypoint. |
+| FR-5 | `create_tables()` must create the required corpus, translation, detailed-word, user, score, and applied-events tables idempotently. | Must | Remote schema bootstrap entrypoint. |
 | FR-6 | Missing `DATABASE_URL` must raise `ConfigurationError`, and remote operation failures must surface as `DatabaseError` or backend failures. | Must | Fail-fast configuration contract. |
-| FR-7 | The module must expose a personal-vocabulary read API that returns translated user entries with stable source and target IDs, `user_words.added_at`, and per-exercise scores. | Must | This is the ergonomic "whole personal database" read surface requested for callers. |
+| FR-7 | The module must expose a personal-vocabulary read API that returns translated user entries with stable source and target IDs, `user_words.added_at`, and per-exercise scores. | Must | Ergonomic read surface for callers. |
 | FR-8 | The module must expose an exercise-progress summary API that reports, for each configured exercise type, total translated personal words plus negative-word count, ratio, and percentage where negative means `score < 0`. | Must | Missing scores count as `0`, not negative. |
 | FR-9 | The module must expose delete APIs for one or many source-word IDs that remove only the requesting user's membership rows and that user's exercise-score rows. | Must | Canonical corpus rows and translation links remain intact. |
 | FR-10 | Cache-facing snapshot export must include `added_at` together with stable IDs and score maps so `database_cache` can rebuild the same personal-vocabulary read model locally. | Must | Prevents remote/cache read-model drift. |
+| FR-11 | The module must expose `DetailedWordStore(source_language, target_language, backend?, extractor?)` with async `get_details()` and `get_or_extract_details()` methods. | Must | Dedicated pair-specific persistence surface for rich lexical records. |
+| FR-12 | `DetailedWordStore` must persist pair-specific detailed-word rows keyed by canonical source-word identity and requested `word_type`, with `schema_key`, `schema_version`, and validated JSON payload columns. | Must | Storage must round-trip through the extractor-owned schema registry. |
+| FR-13 | `get_or_extract_details(words)` must read persisted detailed rows first, extract only misses through an injected extractor, persist the validated results, and return merged typed records in supported-input order. | Must | Convenience read-through behavior requested by the user. |
+| FR-14 | The store must reject missing canonical source words, unsupported schema versions, and invalid payloads instead of silently creating fallback rows. | Must | No silent storage repair or implicit corpus mutation. |
 
 ### Rules and Invariants
 
@@ -67,6 +74,8 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 - BR-5: Cache-facing snapshot export must return stable remote IDs for both source and target words.
 - BR-6: Personal-vocabulary `added_at` is sourced from `user_words.added_at`.
 - BR-7: Personal-vocabulary deletes remove only per-user state and must not delete shared corpus rows or translation links.
+- BR-8: Detailed-word rows are source-target specific and shared across users.
+- BR-9: Detailed-word rows must store only schema-validated payloads and must be parseable through the extractor-owned registry.
 
 ### Non-Functional Requirements
 
@@ -75,6 +84,7 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 | NFR-1 | Reliability | Durable correctness is more important than sub-200ms latency. | Remote correctness first | Cache handles the interactive latency problem. |
 | NFR-2 | Async | Public and cache-facing operations remain async. | Async-first API | Supports remote I/O without blocking callers. |
 | NFR-3 | Retry Safety | Idempotent score replay must be safe across retries. | Atomic apply using event IDs | Important for `database_cache` sync. |
+| NFR-4 | Schema Safety | Detailed-word payloads must never bypass typed validation. | Validate before write and after read | Prevents drift across extractor, DB, and cache. |
 
 ### Failure Modes and Edge Cases
 
@@ -85,6 +95,8 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 | FM-3 | Background translation fails after `add_words()`. | Log the failure without undoing the successful write path. | Retry via later workflows if needed. |
 | FM-4 | Unknown `exercise_type` or invalid `delta` is passed. | Raise `ValueError` before remote mutation. | Caller fixes the input contract. |
 | FM-5 | Delete is requested for a source-word ID outside the user's personal vocabulary. | Raise an explicit domain failure instead of silently succeeding. | Caller refreshes IDs or fixes the request. |
+| FM-6 | `get_or_extract_details()` is asked for a word that is not present in the canonical corpus. | Raise an explicit database-layer error. | Caller must persist the source word first. |
+| FM-7 | Persisted detailed payload does not match the declared schema version or schema key. | Raise an explicit database-layer error and reject the row. | Fix migration or stored data; do not coerce. |
 
 ## 3. Module Design
 
@@ -93,6 +105,7 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 **Owns:**
 
 - Remote persistence schema and canonical word/translation/progress tables.
+- Pair-specific detailed-word tables and read-through store behavior.
 - Public persistence APIs plus cache-facing snapshot/replay primitives.
 - Personal-vocabulary read, summary, and delete behavior over per-user state.
 - Backend abstraction and structured logging.
@@ -100,17 +113,19 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 **Does Not Own:**
 
 - Local caching, TTL management, or outbox durability.
-- Translator construction; translation is injected if desired.
+- Translator or detailed-word extractor construction; LLM-backed services are injected.
 - User-facing practice selection logic.
 
 ### Interfaces and Dependencies
 
 | ID | Type | Direction | Counterparty | Contract or Data | Notes |
 | --- | --- | --- | --- | --- | --- |
-| IF-1 | Python API | Inbound | Callers | `DatabaseService.add_words()`, `get_words()`, `list_personal_words()`, `delete_word()`, `delete_words()`, `create_tables()` | Main public persistence surface, including the new personal-vocabulary convenience APIs. |
-| IF-2 | Python API | Inbound | `sampling`, `database_cache` | `ExerciseProgressStore.get_word_pairs_with_scores()`, `get_progress_summary()`, `export_remote_snapshot()`, `apply_score_delta(...)` | Default implementation of the shared score-provider and remote-sync contracts; snapshot export now carries the metadata required for cache-side personal-vocabulary reads. |
-| IF-3 | External system | Outbound | Neon PostgreSQL via `asyncpg` | SQL tables for words, translations, user membership, scores, and applied events | Default backend implementation. |
-| IF-4 | Optional dependency | Inbound | Translator implementation | `translate(words: list[Word]) -> list[Word]` protocol | Injected into `DatabaseService` when auto-translation is wanted. |
+| IF-1 | Python API | Inbound | Callers | `DatabaseService.add_words()`, `get_words()`, `list_personal_words()`, `delete_word()`, `delete_words()`, `create_tables()` | Main public persistence surface, including personal-vocabulary convenience APIs. |
+| IF-2 | Python API | Inbound | Callers, `database_cache` | `DetailedWordStore.get_details()` and `get_or_extract_details()` | Pair-specific detailed-word persistence surface. |
+| IF-3 | Python API | Inbound | `sampling`, `database_cache` | `ExerciseProgressStore.get_word_pairs_with_scores()`, `get_progress_summary()`, `export_remote_snapshot()`, `apply_score_delta(...)` | Default implementation of the shared score-provider and remote-sync contracts; snapshot export carries the metadata required for cache-side personal-vocabulary reads. |
+| IF-4 | External system | Outbound | Neon PostgreSQL via `asyncpg` | SQL tables for words, translations, detailed words, user membership, scores, and applied events | Default backend implementation. |
+| IF-5 | Optional dependency | Inbound | Translator implementation | `translate(words: list[Word]) -> list[Word]` protocol | Injected into `DatabaseService` when auto-translation is wanted. |
+| IF-6 | Optional dependency | Inbound | Detailed extractor implementation | `extract(words: list[Word]) -> list[DetailedWordRecord]` protocol | Injected into `DetailedWordStore` when read-through extraction is wanted. |
 
 ### Data and State Ownership
 
@@ -118,18 +133,21 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 | --- | --- | --- | --- | --- |
 | `words_<lang>` tables | Owned | Canonical per-language word rows. | Durable remote state | Shared corpus. |
 | `translations_<src>_<tgt>` tables | Owned | Translation links between source and target words. | Durable remote state | One table per language pair. |
+| `word_details_<src>_<tgt>` tables | Owned | Pair-specific detailed-word rows with schema metadata and JSON payloads. | Durable remote state | Shared across users. |
 | `user_words` data | Owned | User membership in the shared corpus, including `added_at`. | Durable remote state | Separates shared corpus from per-user vocabulary. |
 | `user_word_exercise_scores_<src>_<tgt>_<exercise>` tables | Owned | Per-user progress per exercise type. | Durable remote state | Score tables are exercise-specific. |
 | `applied_events_<src>_<tgt>` tables | Owned | Idempotency records for replayed score events. | Durable remote state | Shared across exercise types in one pair. |
 
 ### Processing Flow
 
-1. `create_tables()` bootstraps the remote schema for the configured languages, pairs, and exercise slugs.
+1. `create_tables()` bootstraps the remote schema for the configured languages, pairs, exercise slugs, and detailed-word tables.
 2. `add_words()` inserts or reuses canonical word rows, associates them with the current user, and optionally schedules background translation for new source words.
 3. `get_words()` reads translated pairs for the user and reconstructs them into shared `WordPair` objects.
 4. `list_personal_words()` joins translated user entries with `user_words.added_at` and per-exercise scores, and `get_progress_summary()` derives negative-balance percentages from the same record set.
 5. `delete_word()` and `delete_words()` remove only the user's membership and exercise-score rows for the requested source-word IDs.
-6. `ExerciseProgressStore` overlays per-exercise score data onto translated pairs, serves `sampling` through scored reads, and serves `database_cache` through enriched snapshot export plus idempotent score-delta replay.
+6. `DetailedWordStore.get_details()` resolves canonical source-word IDs and returns persisted detailed records for the configured pair.
+7. `DetailedWordStore.get_or_extract_details()` reads persisted detail rows first, extracts only misses through the injected extractor, validates payloads, persists them, and returns merged typed records.
+8. `ExerciseProgressStore` overlays per-exercise score data onto translated pairs, serves `sampling` through scored reads, and serves `database_cache` through enriched snapshot export plus idempotent score-delta replay.
 
 ### Decisions
 
@@ -140,24 +158,30 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 | DEC-3 | Inject the translator instead of constructing `translate_word` internally. | Decided | Preserves package independence and explicit composition. | Callers opt into automatic translation explicitly. |
 | DEC-4 | Use applied-event idempotency plus one atomic replay operation for score deltas. | Decided | Supports safe retries from cache flush workflows. | Event IDs must stay unique within a language-pair scope. |
 | DEC-5 | Expose cross-package sync behavior through shared `core` contracts rather than concrete cache-specific types. | Decided | Keeps `database` as the default implementation without forcing consumers to type against one concrete class. | Snapshot/export behavior must stay aligned with the shared DTOs and ports in `core`. |
-| DEC-6 | Keep personal-vocabulary delete scoped to per-user membership and scores only. | Decided | Shared corpus ownership stays stable and safe for other users. | Deletes do not reclaim canonical word rows. |
+| DEC-6 | Keep personal-vocabulary delete scoped to per-user membership and scores only. | Decided | Shared corpus ownership stays stable and safe for other users. | Deletes do not reclaim canonical word rows or detailed-word rows. |
 | DEC-7 | Define exercise progress explicitly per exercise type as `negative_words / total_words * 100`. | Decided | Score ownership is per exercise table and implicit averaging would hide behavior. | Callers choose how to present one or many exercise summaries. |
+| DEC-8 | Detailed-word rows live in pair-specific tables with versioned JSON payloads. | Decided | Supports many POS models without table explosion. | Parser/version compatibility becomes a first-class constraint. |
+| DEC-9 | Inject the detailed extractor instead of constructing `extract_word_details` internally. | Decided | Same dependency-injection pattern as the translator. | Callers opt into automatic extraction explicitly. |
+| DEC-10 | `get_or_extract_details()` fails if the source word is missing from the canonical corpus. | Decided | Avoids silent corpus mutation and keeps persistence fail-fast. | Callers must persist or resolve words before requesting details. |
+| DEC-11 | Expose cache-facing detailed reads through the same typed store contract used by other callers. | Decided | Avoids a second remote shape for the same data. | `database_cache` depends on `DetailedWordStore`, not on ad hoc SQL. |
 
 ### Consistency Rules
 
 - CR-1: `create_tables(exercise_slugs)` and `ExerciseProgressStore(exercise_types)` must stay aligned on exercise slug naming.
 - CR-2: When the module promises multi-language flexibility, helper defaults and schema bootstrap paths must not quietly hardcode only one pair.
 - CR-3: Personal-vocabulary reads and cache snapshots must use the same ordering and field set, including `added_at`.
+- CR-4: `DetailedWordStore` must round-trip payloads through the same schema registry and version parser defined by `extract_word_details`.
 
 ### Requirement Traceability
 
 | Requirement | Covered By | Verified By |
 | --- | --- | --- |
 | FR-2 | IF-1, DEC-1, DEC-3 | QA-1 |
-| FR-4, FR-8 | IF-2, DEC-2, DEC-4, DEC-5, DEC-7, CR-1 | QA-2 |
-| FR-5 | IF-3, DEC-2 | QA-3 |
-| FR-7, FR-10 | IF-1, IF-2, DEC-5, CR-3 | QA-4 |
-| FR-9 | IF-1, IF-3, DEC-6 | QA-5 |
+| FR-4, FR-8 | IF-3, DEC-2, DEC-4, DEC-5, DEC-7, CR-1 | QA-2 |
+| FR-5 | IF-4, DEC-2 | QA-3 |
+| FR-7, FR-10 | IF-1, IF-3, DEC-5, CR-3 | QA-4 |
+| FR-9 | IF-1, IF-4, DEC-6 | QA-5 |
+| FR-11, FR-12, FR-13, FR-14 | IF-2, IF-6, DEC-8, DEC-9, DEC-10, CR-4 | QA-6 |
 
 ## 4. Delivery and Validation
 
@@ -165,10 +189,13 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 
 - AC-1: `DatabaseService` persists canonical words, associates them with users, and returns translated `WordPair` results only when translations exist.
 - AC-2: `ExerciseProgressStore` exposes score-aware snapshots with stable remote IDs plus idempotent score replay for configured exercises.
-- AC-3: Remote schema bootstrap remains idempotent for the current table set.
+- AC-3: Remote schema bootstrap remains idempotent for the current table set, including the new detailed-word table.
 - AC-4: The module can return the full translated personal vocabulary for a user, including `added_at` and per-exercise scores.
 - AC-5: The module can report per-exercise negative-balance percentages over the user's translated personal vocabulary.
 - AC-6: Deleting one or many personal-vocabulary entries removes only per-user membership and scores.
+- AC-7: `DetailedWordStore` returns persisted detailed rows when present and extracts+persists only misses when an extractor is injected.
+- AC-8: Invalid detailed payloads, missing source words, and unsupported schema versions fail fast instead of being coerced or silently created.
+- AC-9: `database_cache` can consume the typed detailed-word store contract without private SQL knowledge.
 
 ### Testing Strategy
 
@@ -179,19 +206,20 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 
 **Unit:**
 
-- Mock-backend coverage for deduplication, warnings, progress logic, validation, and replay semantics.
+- Mock-backend coverage for deduplication, warnings, progress logic, validation, replay semantics, detailed-word store validation, and injected dependency behavior.
 
 **Integration:**
 
-- Real Neon schema creation, CRUD operations, score table behavior, personal-vocabulary joins, delete semantics, and snapshot/export correctness.
+- Real Neon schema creation, CRUD operations, score table behavior, personal-vocabulary joins, delete semantics, snapshot/export correctness, detailed-word persistence, and get-or-extract behavior.
 
 **Contract:**
 
-- Validate idempotent replay, personal-vocabulary DTO shape, and exercise-type validation paths on `ExerciseProgressStore`.
+- Validate idempotent replay, personal-vocabulary DTO shape, exercise-type validation paths on `ExerciseProgressStore`, and detailed payload schema parsing plus schema-version enforcement through the extractor-owned registry.
 
 **E2E or UI Workflow:**
 
 - Full flow from adding words to translated reads, full personal-vocabulary reads, progress summaries, deletes, and persisted score updates.
+- Persist source words, request details twice, and verify the second call reuses durable data instead of re-extracting.
 
 **Operational or Non-Functional:**
 
@@ -205,9 +233,10 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 | --- | --- | --- | --- | --- | --- |
 | QA-1 | FR-2 | Unit + E2E | Deduplication and add/read flow tests | PR CI / nightly | Covers the main write/read contract. |
 | QA-2 | FR-4 | Unit + Integration | Progress-store validation and snapshot/replay tests | PR CI / nightly | Protects sync-facing behavior. |
-| QA-3 | FR-5 | Integration | Table-creation idempotency tests | PR CI / nightly | Verifies remote bootstrap behavior. |
+| QA-3 | FR-5 | Integration | Table-creation idempotency tests | PR CI / nightly | Verifies remote bootstrap behavior, including detailed-word table. |
 | QA-4 | FR-7, FR-10 | Unit + Integration | Personal-vocabulary read-model and enriched snapshot tests | PR CI / nightly | Covers `added_at`, stable IDs, and per-exercise score maps. |
 | QA-5 | FR-9 | Integration + E2E | Single-item and bulk delete tests over user membership and scores | PR CI / nightly | Confirms deletes do not remove shared corpus rows. |
+| QA-6 | FR-11, FR-12, FR-13, FR-14 | Unit + Integration | Detailed-word persistence and get-or-extract tests | PR CI / nightly | Covers the new storage surface. |
 
 #### Static Checks and Gates
 
@@ -228,14 +257,15 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 | --- | --- | --- | --- |
 | RISK-1 | Multi-language aspirations and NL/RU-specific helpers drift apart. | Callers may assume broader support than the current helper paths actually provide. | Document current pair reality honestly and revisit when adding the next pair. |
 | RISK-2 | Event-id idempotency is scoped per language pair, not per exercise. | Reused event IDs across exercises could collide. | Keep event IDs globally unique per flush event. |
-| RISK-3 | The requested "whole personal database" may also need untranslated entries, not just translated pairs. | The current join and cache model would be insufficient. | Resolve this before implementation starts. |
+| RISK-3 | Pair-specific detailed schemas multiply storage and migration complexity as new target languages are added. | Operational footprint grows quickly. | Keep pair-specific tables and schema versioning from day one. |
+| RISK-4 | The extractor field matrix for some POS is not finalized yet. | Detailed-word rows may drift before the model contract stabilizes. | Finalize the per-POS field matrix before implementation. |
 
 ### Open Questions
 
 | ID | Question | Status | Owner or Next Step | Notes |
 | --- | --- | --- | --- | --- |
 | OQ-1 | Should the module formalize itself as NL/RU-only for now, or complete the remaining work needed for true multi-language bootstrap helpers? | Open | Project owner to decide before new pair support is announced | The schema is more flexible than some helper defaults. |
-| OQ-2 | Does "whole personal database" need untranslated source words, or only translated entries usable in exercises? | Open | Project owner to decide before implementation | Current plan assumes translated entries only. |
+| OQ-2 | Should `word_details_<src>_<tgt>` retain only the current payload per source word, or also preserve historical schema versions? | Open | Project owner to decide before migration planning | V1 can ship with current-row semantics. |
 
 ### Assumption Review Outcomes
 
@@ -244,15 +274,19 @@ The module sits below the LLM-facing extract/translate modules and above downstr
 | RV-1 | A-1 | Not yet reviewed | Kept as active assumption | A-1 |
 | RV-2 | A-2 | Not yet reviewed | Kept as active assumption | A-2 |
 | RV-3 | A-3 | Not yet reviewed | Kept as active assumption | A-3 |
+| RV-4 | A-4 | Approved | Promoted into explicit detailed-word storage rules | FR-12, BR-8 |
 
 ### Open Question Resolution
 
 | ID | Source | Resolution Status | Outcome | Promoted To or Next Step |
 | --- | --- | --- | --- | --- |
-| RV-3 | OQ-1 | Unresolved | Remains open pending explicit language-support roadmap work | Revisit before adding another pair |
-| RV-4 | OQ-2 | Unresolved | Keep translated-entry scope as the working assumption | Resolve before implementation starts |
+| RV-5 | OQ-1 | Unresolved | Remains open pending explicit language-support roadmap work | Revisit before adding another pair |
+| RV-6 | OQ-2 | Unresolved | Keep current-row storage as the working assumption | Revisit during migration planning |
 
 ### Deferred Work
 
 - D-1: Tighten real-database coverage around idempotent replay if cache sync becomes more central.
 - D-2: Reconcile helper defaults with any future multi-language expansion.
+- D-3: Add source-target pairs beyond `nl -> ru`.
+- D-4: Add historical version retention for detailed-word rows if migrations or auditability require it.
+- D-5: Evaluate moving canonical word identity from `normalized_form`-only to `(normalized_form, word_type)` if homograph correctness requires it.
