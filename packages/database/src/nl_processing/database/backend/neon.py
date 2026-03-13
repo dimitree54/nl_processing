@@ -9,6 +9,11 @@ from nl_processing.database.backend._neon_delete import (
     delete_exercise_score,
     delete_word_membership,
 )
+from nl_processing.database.backend._neon_detailed import (
+    get_details,
+    get_details_batch,
+    upsert_details,
+)
 from nl_processing.database.backend._neon_exercise import (
     atomic_apply_delta,
     check_event,
@@ -17,20 +22,22 @@ from nl_processing.database.backend._neon_exercise import (
     increment_score,
     mark_event,
 )
-from nl_processing.database.backend._neon_helpers import infer_target_language
+from nl_processing.database.backend._neon_users import (
+    add_translation_link as add_translation_link_impl,
+    add_user_word as add_user_word_impl,
+    get_user_words as get_user_words_impl,
+)
 from nl_processing.database.backend._neon_words import (
     add_word as add_word_impl,
     count_user_words as count_user_words_impl,
     get_word as get_word_impl,
 )
 from nl_processing.database.backend._queries import (
-    ADD_USER_WORD,
     CREATE_USER_WORDS,
-    add_translation_link_query,
     create_translations_table,
     create_words_table,
-    get_user_words_query,
 )
+from nl_processing.database.backend._queries_detailed import create_word_details_table
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.exceptions import DatabaseError
 from nl_processing.database.logging import get_logger
@@ -71,34 +78,25 @@ class NeonBackend(AbstractBackend):
         except asyncpg.PostgresError as exc:
             raise DatabaseError(str(exc)) from exc
         await create_exercise_tables(conn, pairs, exercise_slugs)
+        # Create detailed word tables
+        try:
+            for src, tgt in pairs:
+                await conn.execute(create_word_details_table(src, tgt))
+        except asyncpg.PostgresError as exc:
+            raise DatabaseError(str(exc)) from exc
         _logger.info("Created tables for languages=%s pairs=%s", languages, pairs)
 
-    async def add_word(
-        self,
-        table: str,
-        normalized_form: str,
-        word_type: str,
-    ) -> int | None:
-        conn = await self._connect()
-        return await add_word_impl(conn, table, normalized_form, word_type)
+    async def add_word(self, table: str, normalized_form: str, word_type: str) -> int | None:
+        return await add_word_impl(await self._connect(), table, normalized_form, word_type)
 
     async def get_word(self, table: str, normalized_form: str) -> dict[str, str | int] | None:
-        conn = await self._connect()
-        return await get_word_impl(conn, table, normalized_form)
+        return await get_word_impl(await self._connect(), table, normalized_form)
 
     async def add_translation_link(self, table: str, source_id: int, target_id: int) -> None:
-        conn = await self._connect()
-        try:
-            await conn.execute(add_translation_link_query(table), source_id, target_id)
-        except asyncpg.PostgresError as exc:
-            raise DatabaseError(str(exc)) from exc
+        await add_translation_link_impl(await self._connect(), table, source_id, target_id)
 
     async def add_user_word(self, user_id: str, word_id: int, language: str) -> None:
-        conn = await self._connect()
-        try:
-            await conn.execute(ADD_USER_WORD, user_id, word_id, language)
-        except asyncpg.PostgresError as exc:
-            raise DatabaseError(str(exc)) from exc
+        await add_user_word_impl(await self._connect(), user_id, word_id, language)
 
     # jscpd:ignore-start — method signature must match AbstractBackend ABC
     async def get_user_words(
@@ -111,30 +109,12 @@ class NeonBackend(AbstractBackend):
     ) -> list[dict[str, str | int | datetime]]:
         # jscpd:ignore-end
         conn = await self._connect()
-        target_lang = infer_target_language(language)
-        query = get_user_words_query(language, language, target_lang, word_type, limit, random)
-        args: list[str | int] = [user_id, language]
-        if word_type is not None:
-            args.append(word_type)
-        if limit is not None:
-            args.append(limit)
-        try:
-            rows = await conn.fetch(query, *args)
-        except asyncpg.PostgresError as exc:
-            raise DatabaseError(str(exc)) from exc
-        return [dict(row) for row in rows]
+        return await get_user_words_impl(conn, user_id, language, word_type, limit, random)
 
     async def count_user_words(self, user_id: str, language: str, word_type: str | None = None) -> int:
-        conn = await self._connect()
-        return await count_user_words_impl(conn, user_id, language, word_type)
+        return await count_user_words_impl(await self._connect(), user_id, language, word_type)
 
-    async def increment_user_exercise_score(
-        self,
-        table: str,
-        user_id: str,
-        source_word_id: int,
-        delta: int,
-    ) -> int:
+    async def increment_user_exercise_score(self, table: str, user_id: str, source_word_id: int, delta: int) -> int:
         conn = await self._connect()
         return await increment_score(conn, table, user_id, source_word_id, delta)
 
@@ -185,3 +165,32 @@ class NeonBackend(AbstractBackend):
     ) -> None:
         conn = await self._connect()
         await delete_exercise_score(conn, table, user_id, source_word_id)
+
+    async def upsert_word_details(
+        self,
+        table: str,
+        source_word_id: int,
+        word_type: str,
+        schema_key: str,
+        schema_version: int,
+        payload: str,
+    ) -> None:
+        conn = await self._connect()
+        await upsert_details(conn, table, source_word_id, word_type, schema_key, schema_version, payload)
+
+    async def get_word_details(
+        self,
+        table: str,
+        source_word_id: int,
+        word_type: str,
+    ) -> dict[str, str | int] | None:
+        conn = await self._connect()
+        return await get_details(conn, table, source_word_id, word_type)
+
+    async def get_word_details_batch(
+        self,
+        table: str,
+        source_word_ids_and_types: list[tuple[int, str]],
+    ) -> list[dict[str, str | int]]:
+        conn = await self._connect()
+        return await get_details_batch(conn, table, source_word_ids_and_types)

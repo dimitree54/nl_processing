@@ -1,7 +1,5 @@
 """DetailedWordRecord model for persisting detailed word extraction data."""
 
-from typing import Any
-
 from pydantic import BaseModel
 
 
@@ -16,4 +14,4 @@ class DetailedWordRecord(BaseModel):
     word_type: str
     schema_key: str
     schema_version: int
-    payload: dict[str, Any]
+    payload: dict[str, str | int | bool | list[str] | dict[str, str]]

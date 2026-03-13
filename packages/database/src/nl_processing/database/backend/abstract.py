@@ -168,3 +168,32 @@ class AbstractBackend(ABC):
         source_word_id: int,
     ) -> None:
         """Delete the user's exercise score for a source word in one exercise table."""
+
+    @abstractmethod
+    async def upsert_word_details(
+        self,
+        table: str,
+        source_word_id: int,
+        word_type: str,
+        schema_key: str,
+        schema_version: int,
+        payload: str,
+    ) -> None:
+        """Upsert detailed word record."""
+
+    @abstractmethod
+    async def get_word_details(
+        self,
+        table: str,
+        source_word_id: int,
+        word_type: str,
+    ) -> dict[str, str | int] | None:
+        """Get detailed word record by source_word_id and word_type."""
+
+    @abstractmethod
+    async def get_word_details_batch(
+        self,
+        table: str,
+        source_word_ids_and_types: list[tuple[int, str]],
+    ) -> list[dict[str, str | int]]:
+        """Get detailed word records for multiple (source_word_id, word_type) pairs."""

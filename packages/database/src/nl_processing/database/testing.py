@@ -18,9 +18,10 @@ async def drop_all_tables(
     Drop order (respects foreign key constraints):
     1. ``user_word_exercise_scores_{src}_{tgt}_{slug}`` for each pair/slug
     2. ``applied_events_{src}_{tgt}`` for each pair
-    3. ``translations_{src}_{tgt}`` for each pair
-    4. ``user_words``
-    5. ``words_{lang}`` for each language
+    3. ``word_details_{src}_{tgt}`` for each pair
+    4. ``translations_{src}_{tgt}`` for each pair
+    5. ``user_words``
+    6. ``words_{lang}`` for each language
     """
     backend = NeonBackend(os.environ["DATABASE_URL"])
     conn = await backend._connect()  # noqa: SLF001
@@ -32,6 +33,10 @@ async def drop_all_tables(
                 )
             await conn.execute(
                 f"DROP TABLE IF EXISTS applied_events_{src}_{tgt}",  # noqa: S608
+            )
+        for src, tgt in pairs:
+            await conn.execute(
+                f"DROP TABLE IF EXISTS word_details_{src}_{tgt}",  # noqa: S608
             )
         for src, tgt in pairs:
             await conn.execute(

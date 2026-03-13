@@ -16,6 +16,7 @@ class MockBackend(AbstractBackend):
         self._user_words: list[tuple[str, int, str]] = []
         self._scores: dict[tuple[str, str, int], int] = {}
         self._applied_events: set[tuple[str, str]] = set()
+        self._detailed_words: dict[tuple[str, int, str], dict[str, str | int]] = {}
         self.count_user_words_calls = 0
 
     async def add_word(self, table: str, normalized_form: str, word_type: str) -> int | None:
@@ -132,7 +133,6 @@ class MockBackend(AbstractBackend):
         pass
 
     # ---- helpers ----
-
     def _find_word_by_id(self, table: str, wid: int) -> dict[str, str | int] | None:
         for row in self._words.get(table, {}).values():
             if row["id"] == wid:
@@ -171,3 +171,26 @@ class MockBackend(AbstractBackend):
     async def delete_user_exercise_score(self, table: str, user_id: str, source_word_id: int) -> None:
         key = (table, user_id, source_word_id)
         self._scores.pop(key, None)
+
+    async def upsert_word_details(
+        self, table: str, source_word_id: int, word_type: str, schema_key: str, schema_version: int, payload: str
+    ) -> None:
+        self._detailed_words[(table, source_word_id, word_type)] = {
+            "source_word_id": source_word_id,
+            "word_type": word_type,
+            "schema_key": schema_key,
+            "schema_version": schema_version,
+            "payload": payload,
+        }
+
+    async def get_word_details(self, table: str, source_word_id: int, word_type: str) -> dict[str, str | int] | None:
+        return self._detailed_words.get((table, source_word_id, word_type))
+
+    async def get_word_details_batch(
+        self, table: str, source_word_ids_and_types: list[tuple[int, str]]
+    ) -> list[dict[str, str | int]]:
+        return [
+            self._detailed_words[key]
+            for key in [(table, wid, wtype) for wid, wtype in source_word_ids_and_types]
+            if key in self._detailed_words
+        ]

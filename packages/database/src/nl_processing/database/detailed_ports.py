@@ -4,7 +4,7 @@ from typing import Protocol, runtime_checkable
 
 from nl_processing.core.models import Word
 
-from .detailed_models import DetailedWordRecord
+from nl_processing.database.detailed_models import DetailedWordRecord
 
 
 @runtime_checkable
