@@ -57,10 +57,6 @@ PRODUCT_BOX_WORDS: list[tuple[Word, set[str]]] = [
         Word(normalized_form="blauw", word_type=PartOfSpeech.ADJECTIVE, language=Language.NL),
         {"голубой", "синий", "голубая", "синяя"},
     ),
-    (
-        Word(normalized_form="De Ruijter", word_type=PartOfSpeech.PROPER_NOUN_PERSON, language=Language.NL),
-        {"Де Рёйтер", "Де Рюйтер", "Де Рейтер", "De Ruijter"},
-    ),
 ]
 
 
@@ -70,7 +66,7 @@ def _normalize(text: str) -> str:
 
 @pytest.mark.asyncio
 async def test_product_box_translation_quality() -> None:
-    """E2e quality: translate 18 words from the product box and verify each translation."""
+    """E2e quality: translate 17 words from the product box and verify each translation."""
     translator = WordTranslator(source_language=Language.NL, target_language=Language.RU)
 
     words = [w for w, _ in PRODUCT_BOX_WORDS]

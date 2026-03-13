@@ -6,7 +6,7 @@ Usage:
 This script:
 1. Generates synthetic test images and encodes real photos
 2. Encodes them to base64
-3. Builds a ChatPromptTemplate with 7 few-shot examples (HumanMessage + AIMessage + ToolMessage triplets)
+3. Builds a ChatPromptTemplate with 8 few-shot examples (HumanMessage + AIMessage + ToolMessage triplets)
 4. Serializes with dumpd() and saves to nl.json
 
 The script is the source of truth — nl.json is the generated artifact.
@@ -88,14 +88,34 @@ EXAMPLE_4_EXPECTED = (
     "zin, de"
 )
 
-EXAMPLE_5_TEXT = "The quick brown fox jumps over the lazy dog"
-EXAMPLE_5_EXPECTED = ""
+EXAMPLE_5_IMAGE = Path(__file__).parent / "examples" / "dutch_vocabulary.jpg"
+EXAMPLE_5_EXPECTED = (
+    "vandaan\n"
+    "veranderen\n"
+    "verbeteren\n"
+    "vlakbij\n"
+    "volgorde, de\n"
+    "voorbeeld, het\n"
+    "voornaam, de\n"
+    "vorm, de\n"
+    "vraag, de\n"
+    "vriendin, de\n"
+    "vrouw, de\n"
+    "wat\n"
+    "week, de\n"
+    "welkom\n"
+    "werken\n"
+    "wonen"
+)
 
-EXAMPLE_6_TEXT = "Please take your shoes off before entering the house"
+EXAMPLE_6_TEXT = "The quick brown fox jumps over the lazy dog"
 EXAMPLE_6_EXPECTED = ""
 
-EXAMPLE_7_TEXT = "Remember to charge your phone before leaving tomorrow"
+EXAMPLE_7_TEXT = "Please take your shoes off before entering the house"
 EXAMPLE_7_EXPECTED = ""
+
+EXAMPLE_8_TEXT = "Remember to charge your phone before leaving tomorrow"
+EXAMPLE_8_EXPECTED = ""
 
 OUTPUT_PATH = Path(__file__).parent / "nl.json"
 
@@ -133,14 +153,15 @@ def _make_example_ai(expected_text: str, call_id: str) -> AIMessage:
 
 
 def build_prompt() -> ChatPromptTemplate:
-    """Build the Dutch extraction prompt with 7 few-shot examples."""
+    """Build the Dutch extraction prompt with 8 few-shot examples."""
     img1 = _generate_image_b64(EXAMPLE_1_TEXT)
     img2 = _generate_image_b64(EXAMPLE_2_TEXT)
     img3 = _encode_existing_image_b64(EXAMPLE_3_IMAGE)
     img4 = _encode_existing_image_b64(EXAMPLE_4_IMAGE)
-    img5 = _generate_image_b64(EXAMPLE_5_TEXT)
+    img5 = _encode_existing_image_b64(EXAMPLE_5_IMAGE)
     img6 = _generate_image_b64(EXAMPLE_6_TEXT)
     img7 = _generate_image_b64(EXAMPLE_7_TEXT)
+    img8 = _generate_image_b64(EXAMPLE_8_TEXT)
 
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=SYSTEM_INSTRUCTION),
@@ -165,6 +186,9 @@ def build_prompt() -> ChatPromptTemplate:
         _make_example_human(img7),
         _make_example_ai(EXAMPLE_7_EXPECTED, "call_example_7"),
         ToolMessage(content=EXAMPLE_7_EXPECTED, tool_call_id="call_example_7"),
+        _make_example_human(img8),
+        _make_example_ai(EXAMPLE_8_EXPECTED, "call_example_8"),
+        ToolMessage(content=EXAMPLE_8_EXPECTED, tool_call_id="call_example_8"),
         MessagesPlaceholder(variable_name="images"),
     ])
 
