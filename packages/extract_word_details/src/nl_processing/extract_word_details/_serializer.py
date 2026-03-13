@@ -10,16 +10,16 @@ from nl_processing.extract_word_details._exceptions import PayloadValidationErro
 from nl_processing.extract_word_details._schema_registry import SchemaRegistry
 
 
-def serialize_payload(record: BaseModel) -> dict[str, object]:
+def serialize_payload(model: BaseModel) -> dict[str, object]:
     """Serialize a Pydantic model to a dictionary payload.
 
     Args:
-        record: The Pydantic model instance to serialize.
+        model: The Pydantic model instance to serialize.
 
     Returns:
-        Dictionary representation of the model.
+        Dictionary with model data.
     """
-    return record.model_dump()
+    return model.model_dump()
 
 
 def parse_payload(
@@ -30,7 +30,7 @@ def parse_payload(
     Args:
         schema_key: Schema key (e.g., "nl_ru_noun").
         schema_version: Schema version number.
-        payload: Dictionary to deserialize.
+        payload: Dictionary with model data to deserialize.
         registry: Schema registry for model lookup.
 
     Returns:
