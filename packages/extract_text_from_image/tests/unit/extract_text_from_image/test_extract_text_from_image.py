@@ -40,7 +40,7 @@ def test_constructor_uses_offline_defaults(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("nl_processing.extract_text_from_image.service.ChatOpenAI", _ChatStub)
     ImageTextExtractor()
 
-    assert captured == {"model": "gpt-5-mini", "service_tier": None, "reasoning_effort": "medium", "temperature": None}
+    assert captured == {"model": "gpt-4.1-mini", "service_tier": None, "reasoning_effort": None, "temperature": 0}
 
 
 def test_constructor_custom_params(monkeypatch: pytest.MonkeyPatch) -> None:

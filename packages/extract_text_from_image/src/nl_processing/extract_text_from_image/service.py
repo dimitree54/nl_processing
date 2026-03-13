@@ -29,10 +29,10 @@ class ImageTextExtractor:
         self,
         *,
         language: Language = Language.NL,
-        model: str = "gpt-5-mini",
-        reasoning_effort: str | None = "medium",
+        model: str = "gpt-4.1-mini",
+        reasoning_effort: str | None = None,
         service_tier: str | None = None,
-        temperature: float | None = None,
+        temperature: float | None = 0,
     ) -> None:
         self._language = language
         prompt_path = str(_PROMPTS_DIR / f"{language.value}.json")
