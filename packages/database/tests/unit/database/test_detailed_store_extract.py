@@ -8,46 +8,21 @@ import pytest
 from nl_processing.database.detailed_exceptions import SourceWordNotFoundError
 from nl_processing.database.detailed_models import DetailedWordRecord
 from nl_processing.database.detailed_store import DetailedWordStore
+from tests.unit.database.conftest import FakeExtractor, add_word_with_detail, setup_extraction_test
 from tests.unit.database.mock_backend import MockBackend
-
-
-class FakeExtractor:
-    """Mock extractor for testing."""
-
-    def __init__(self, results: list[DetailedWordRecord]) -> None:
-        self.extract_calls: list[list[Word]] = []
-        self._results = results
-
-    async def extract(self, words: list[Word]) -> list[DetailedWordRecord]:
-        self.extract_calls.append(words)
-        return self._results
 
 
 class TestDetailedWordStoreExtract:
     """Test DetailedWordStore.get_or_extract_details functionality."""
 
     @pytest.fixture
-    def backend(self) -> MockBackend:
-        """Create a mock backend for testing."""
-        return MockBackend()
-
-    @pytest.fixture
-    def store(self, backend: MockBackend) -> DetailedWordStore:
-        """Create a DetailedWordStore with mock backend."""
-        return DetailedWordStore(
-            source_language=Language.NL,
-            target_language=Language.RU,
-            backend=backend,
-        )
-
-    @pytest.fixture
-    def extractor_store(self, backend: MockBackend) -> tuple[DetailedWordStore, FakeExtractor]:
+    def extractor_store(self, detailed_backend: MockBackend) -> tuple[DetailedWordStore, FakeExtractor]:
         """Create a DetailedWordStore with mock backend and extractor."""
         extractor = FakeExtractor([])
         store = DetailedWordStore(
             source_language=Language.NL,
             target_language=Language.RU,
-            backend=backend,
+            backend=detailed_backend,
             extractor=extractor,
         )
         return store, extractor
@@ -61,12 +36,12 @@ class TestDetailedWordStoreExtract:
         assert result == []
         assert extractor.extract_calls == []
 
-    async def test_get_or_extract_details_without_extractor(self, store: DetailedWordStore) -> None:
+    async def test_get_or_extract_details_without_extractor(self, detailed_store: DetailedWordStore) -> None:
         """Test get_or_extract_details without extractor raises ValueError."""
         word = Word(normalized_form="test", word_type=PartOfSpeech.NOUN, language=Language.NL)
 
         with pytest.raises(ValueError, match="get_or_extract_details requires an extractor"):
-            await store.get_or_extract_details([word])
+            await detailed_store.get_or_extract_details([word])
 
     async def test_get_or_extract_details_word_not_in_corpus(
         self, extractor_store: tuple[DetailedWordStore, FakeExtractor]
@@ -79,18 +54,20 @@ class TestDetailedWordStoreExtract:
             await store.get_or_extract_details([word])
 
     async def test_get_or_extract_details_all_hits_no_extraction(
-        self, extractor_store: tuple[DetailedWordStore, FakeExtractor], backend: MockBackend
+        self, extractor_store: tuple[DetailedWordStore, FakeExtractor], detailed_backend: MockBackend
     ) -> None:
         """Test get_or_extract_details with all hits does not call extractor."""
         store, extractor = extractor_store
 
         # Add word to corpus
-        word_id = await backend.add_word("nl", "hond", "noun")
+        word_id = await detailed_backend.add_word("nl", "hond", "noun")
         assert word_id is not None
 
         # Add detailed record
         payload = {"article": "de"}
-        await backend.upsert_word_details("word_details_nl_ru", word_id, "noun", "nl_ru_noun", 1, json.dumps(payload))
+        await detailed_backend.upsert_word_details(
+            "word_details_nl_ru", word_id, "noun", "nl_ru_noun", 1, json.dumps(payload)
+        )
 
         word = Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL)
         result = await store.get_or_extract_details([word])
@@ -100,27 +77,12 @@ class TestDetailedWordStoreExtract:
         assert extractor.extract_calls == []  # No extraction needed
 
     async def test_get_or_extract_details_all_misses_calls_extractor(
-        self, extractor_store: tuple[DetailedWordStore, FakeExtractor], backend: MockBackend
+        self, extractor_store: tuple[DetailedWordStore, FakeExtractor], detailed_backend: MockBackend
     ) -> None:
         """Test get_or_extract_details with all misses calls extractor and persists."""
         store, extractor = extractor_store
 
-        # Add word to corpus
-        word_id = await backend.add_word("nl", "kat", "noun")
-        assert word_id is not None
-
-        # Configure extractor to return detailed record
-        payload = {"article": "de", "plural": "katten"}
-        extracted_record = DetailedWordRecord(
-            source_word="kat",
-            word_type="noun",
-            schema_key="nl_ru_noun",
-            schema_version=1,
-            payload=payload,
-        )
-        extractor._results = [extracted_record]
-
-        word = Word(normalized_form="kat", word_type=PartOfSpeech.NOUN, language=Language.NL)
+        word_id, payload, word = await setup_extraction_test(detailed_backend, extractor)
         result = await store.get_or_extract_details([word])
 
         # Verify extractor was called
@@ -133,24 +95,22 @@ class TestDetailedWordStoreExtract:
         assert result[0].payload == payload
 
         # Verify persisted
-        detail_row = await backend.get_word_details("word_details_nl_ru", word_id, "noun")
+        detail_row = await detailed_backend.get_word_details("word_details_nl_ru", word_id, "noun")
         assert detail_row is not None
         assert detail_row["schema_key"] == "nl_ru_noun"
 
     async def test_get_or_extract_details_mixed_hits_and_misses(
-        self, extractor_store: tuple[DetailedWordStore, FakeExtractor], backend: MockBackend
+        self, extractor_store: tuple[DetailedWordStore, FakeExtractor], detailed_backend: MockBackend
     ) -> None:
         """Test get_or_extract_details with mix of hits and misses."""
         store, extractor = extractor_store
 
-        # Add two words to corpus
-        word_id1 = await backend.add_word("nl", "hond", "noun")
-        word_id2 = await backend.add_word("nl", "kat", "noun")
-        assert word_id1 is not None and word_id2 is not None
+        # Add first word with detail
+        _, payload1 = await add_word_with_detail(detailed_backend, "hond")
 
-        # Add detail for first word only
-        payload1 = {"article": "de", "plural": "honden"}
-        await backend.upsert_word_details("word_details_nl_ru", word_id1, "noun", "nl_ru_noun", 1, json.dumps(payload1))
+        # Add second word to corpus (no detail)
+        word_id2 = await detailed_backend.add_word("nl", "kat", "noun")
+        assert word_id2 is not None
 
         # Configure extractor for second word
         payload2 = {"article": "de", "plural": "katten"}

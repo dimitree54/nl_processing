@@ -7,11 +7,12 @@ Usage:
 import json
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel
 
 from nl_processing.extract_word_details.models import NlRuNounDetails, NlRuVerbDetails
+from nl_processing.extract_word_details.prompts._prompt_helpers import make_example_ai
 
 
 class _NounDetailsBatch(BaseModel):
@@ -20,20 +21,6 @@ class _NounDetailsBatch(BaseModel):
 
 class _VerbDetailsBatch(BaseModel):
     details: list[NlRuVerbDetails]
-
-
-def _make_example_ai(details: list[dict], call_id: str, batch_name: str) -> AIMessage:
-    """Create an AIMessage with a tool_call for the batch model."""
-    return AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": batch_name,
-                "args": {"details": details},
-                "id": call_id,
-            }
-        ],
-    )
 
 
 def build_noun_prompt() -> ChatPromptTemplate:
@@ -63,7 +50,7 @@ def build_noun_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="huis"),
-        _make_example_ai([example_1], "call_noun_1", "_NounDetailsBatch"),
+        make_example_ai([example_1], "call_noun_1", "_NounDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_noun_1",
@@ -100,7 +87,7 @@ def build_verb_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="lopen"),
-        _make_example_ai([example_1], "call_verb_1", "_VerbDetailsBatch"),
+        make_example_ai([example_1], "call_verb_1", "_VerbDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_verb_1",

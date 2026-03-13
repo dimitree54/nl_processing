@@ -7,11 +7,12 @@ Usage:
 import json
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel
 
 from nl_processing.extract_word_details.models import NlRuAdjectiveDetails, NlRuAdverbDetails
+from nl_processing.extract_word_details.prompts._prompt_helpers import make_example_ai
 
 
 class _AdjectiveDetailsBatch(BaseModel):
@@ -20,20 +21,6 @@ class _AdjectiveDetailsBatch(BaseModel):
 
 class _AdverbDetailsBatch(BaseModel):
     details: list[NlRuAdverbDetails]
-
-
-def _make_example_ai(details: list[dict], call_id: str, batch_name: str) -> AIMessage:
-    """Create an AIMessage with a tool_call for the batch model."""
-    return AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": batch_name,
-                "args": {"details": details},
-                "id": call_id,
-            }
-        ],
-    )
 
 
 def build_adjective_prompt() -> ChatPromptTemplate:
@@ -63,7 +50,7 @@ def build_adjective_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="groot"),
-        _make_example_ai([example_1], "call_adj_1", "_AdjectiveDetailsBatch"),
+        make_example_ai([example_1], "call_adj_1", "_AdjectiveDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_adj_1",
@@ -95,7 +82,7 @@ def build_adverb_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="snel"),
-        _make_example_ai([example_1], "call_adv_1", "_AdverbDetailsBatch"),
+        make_example_ai([example_1], "call_adv_1", "_AdverbDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_adv_1",

@@ -144,6 +144,23 @@ BidirectionalTextTranslator.translate  # type: ignore[misc]
 # Re-export module __all__ variable — used for module interface but flagged as unused
 image_encoding_all  # noqa: F821
 
+# extract_word_details — Pydantic model fields used at runtime (flagged as unused variables)
+usage_explanation  # noqa: F821
+shared  # noqa: F821
+jij  # noqa: F821
+hij  # noqa: F821
+wij  # noqa: F821
+zij  # noqa: F821
+past_participle  # noqa: F821
+conjugation_explanation  # noqa: F821
+
+# Test fixtures / mock class members — used by pytest discovery or test assertions
+reset_db  # noqa: F821
+some_other_method  # noqa: F821
+field  # noqa: F821
+required  # noqa: F821
+optional  # noqa: F821
+
 __all__ = [
     "DatabaseService",
     "ConfigurationError",

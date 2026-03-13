@@ -7,7 +7,7 @@ Usage:
 import json
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel
 
@@ -17,6 +17,7 @@ from nl_processing.extract_word_details.models import (
     NlRuPrepositionDetails,
     NlRuPronounDetails,
 )
+from nl_processing.extract_word_details.prompts._prompt_helpers import make_example_ai
 
 
 class _PrepositionDetailsBatch(BaseModel):
@@ -33,20 +34,6 @@ class _PronounDetailsBatch(BaseModel):
 
 class _ArticleDetailsBatch(BaseModel):
     details: list[NlRuArticleDetails]
-
-
-def _make_example_ai(details: list[dict], call_id: str, batch_name: str) -> AIMessage:
-    """Create an AIMessage with a tool_call for the batch model."""
-    return AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": batch_name,
-                "args": {"details": details},
-                "id": call_id,
-            }
-        ],
-    )
 
 
 def build_preposition_prompt() -> ChatPromptTemplate:
@@ -74,7 +61,7 @@ def build_preposition_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="naar"),
-        _make_example_ai([example_1], "call_prep_1", "_PrepositionDetailsBatch"),
+        make_example_ai([example_1], "call_prep_1", "_PrepositionDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_prep_1",
@@ -108,7 +95,7 @@ def build_conjunction_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="en"),
-        _make_example_ai([example_1], "call_conj_1", "_ConjunctionDetailsBatch"),
+        make_example_ai([example_1], "call_conj_1", "_ConjunctionDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_conj_1",
@@ -142,7 +129,7 @@ def build_pronoun_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="ik"),
-        _make_example_ai([example_1], "call_pron_1", "_PronounDetailsBatch"),
+        make_example_ai([example_1], "call_pron_1", "_PronounDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_pron_1",
@@ -179,7 +166,7 @@ def build_article_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="de"),
-        _make_example_ai([example_1], "call_art_1", "_ArticleDetailsBatch"),
+        make_example_ai([example_1], "call_art_1", "_ArticleDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_art_1",

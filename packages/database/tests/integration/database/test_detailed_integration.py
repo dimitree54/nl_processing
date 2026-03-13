@@ -7,21 +7,8 @@ import pytest
 
 from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.detailed_exceptions import SourceWordNotFoundError
-from nl_processing.database.detailed_models import DetailedWordRecord
 from nl_processing.database.detailed_store import DetailedWordStore
 from nl_processing.database.service import DatabaseService
-
-
-class FakeExtractor:
-    """Mock extractor for testing."""
-
-    def __init__(self, results: list[DetailedWordRecord]) -> None:
-        self.extract_calls: list[list[Word]] = []
-        self._results = results
-
-    async def extract(self, words: list[Word]) -> list[DetailedWordRecord]:
-        self.extract_calls.append(words)
-        return self._results
 
 
 class TestDetailedWordStoreIntegration:

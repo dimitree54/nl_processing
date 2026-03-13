@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
+from nl_processing.database.detailed_models import DetailedWordRecord, JsonValue
 from nl_processing.database.models import EnrichedWordPairSnapshot
 import pytest_asyncio
 
@@ -33,6 +34,17 @@ def make_scored_pair(
         source_word_id=source_word_id,
         target_word_id=source_word_id + 1000,
         added_at=datetime(2025, 1, 15, 12, 0, tzinfo=UTC),
+    )
+
+
+def make_remote_record(source_word: str, payload: dict[str, JsonValue]) -> DetailedWordRecord:
+    """Create a DetailedWordRecord with noun defaults for unit tests."""
+    return DetailedWordRecord(
+        source_word=source_word,
+        word_type="noun",
+        schema_key="nl_ru_noun",
+        schema_version=1,
+        payload=payload,
     )
 
 

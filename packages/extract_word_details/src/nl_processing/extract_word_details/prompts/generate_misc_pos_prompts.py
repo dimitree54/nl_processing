@@ -7,11 +7,12 @@ Usage:
 import json
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel
 
 from nl_processing.extract_word_details.models import NlRuInterjectionDetails, NlRuNumeralDetails, NlRuPhraseDetails
+from nl_processing.extract_word_details.prompts._prompt_helpers import make_example_ai
 
 
 class _NumeralDetailsBatch(BaseModel):
@@ -24,20 +25,6 @@ class _InterjectionDetailsBatch(BaseModel):
 
 class _PhraseDetailsBatch(BaseModel):
     details: list[NlRuPhraseDetails]
-
-
-def _make_example_ai(details: list[dict], call_id: str, batch_name: str) -> AIMessage:
-    """Create an AIMessage with a tool_call for the batch model."""
-    return AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": batch_name,
-                "args": {"details": details},
-                "id": call_id,
-            }
-        ],
-    )
 
 
 def build_numeral_prompt() -> ChatPromptTemplate:
@@ -67,7 +54,7 @@ def build_numeral_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="een"),
-        _make_example_ai([example_1], "call_num_1", "_NumeralDetailsBatch"),
+        make_example_ai([example_1], "call_num_1", "_NumeralDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_num_1",
@@ -101,7 +88,7 @@ def build_interjection_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="wow"),
-        _make_example_ai([example_1], "call_int_1", "_InterjectionDetailsBatch"),
+        make_example_ai([example_1], "call_int_1", "_InterjectionDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_int_1",
@@ -149,7 +136,7 @@ def build_phrase_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         SystemMessage(content=system_instruction),
         HumanMessage(content="boter op het hoofd hebben"),
-        _make_example_ai([example_1], "call_phrase_1", "_PhraseDetailsBatch"),
+        make_example_ai([example_1], "call_phrase_1", "_PhraseDetailsBatch"),
         ToolMessage(
             content=json.dumps({"details": [example_1]}, ensure_ascii=False),
             tool_call_id="call_phrase_1",

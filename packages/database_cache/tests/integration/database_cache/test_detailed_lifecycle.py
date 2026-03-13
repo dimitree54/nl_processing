@@ -1,32 +1,25 @@
 """Integration test for detailed cache lifecycle."""
 
-import json
-from pathlib import Path
+import pathlib
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
-from nl_processing.database.detailed_models import DetailedWordRecord
 import pytest
 
 from nl_processing.database_cache._detailed_local_store import DetailedLocalStore
 from nl_processing.database_cache.detailed_cache import DetailedWordCacheService
+from tests.integration.database_cache.conftest import make_remote_record
 from tests.integration.database_cache.integration_mocks import MockRemoteDetailedWordStore
 
 
 @pytest.mark.asyncio
-async def test_full_lifecycle_cache_empty_to_populated(tmp_path: Path) -> None:
+async def test_full_lifecycle_cache_empty_to_populated(tmp_path: pathlib.Path) -> None:
     """Test full lifecycle: cache empty → fetch → cache populated → second fetch is a hit."""
     # Create real SQLite file
     db_path = tmp_path / "test_details.db"
     local_store = DetailedLocalStore(str(db_path))
 
     # Create mock remote with test data
-    remote_record = DetailedWordRecord(
-        source_word="huis",
-        word_type="noun",
-        schema_key="nl_ru_noun",
-        schema_version=1,
-        payload={"definition": "house", "gender": "neuter"},
-    )
+    remote_record = make_remote_record("huis", {"definition": "house", "gender": "neuter"})
     mock_remote = MockRemoteDetailedWordStore([remote_record])
 
     service = DetailedWordCacheService(Language.NL, Language.RU, remote_store=mock_remote, local_store=local_store)
@@ -46,7 +39,7 @@ async def test_full_lifecycle_cache_empty_to_populated(tmp_path: Path) -> None:
     cached = await local_store.get_cached_detail("huis", "noun")
     assert cached is not None
     assert cached["source_word"] == "huis"
-    assert json.loads(cached["payload"]) == {"definition": "house", "gender": "neuter"}
+    assert cached["payload"] == '{"definition": "house", "gender": "neuter"}'
 
     # Second call: cache hit, should NOT fetch from remote
     result2 = await service.get_or_fetch_details([word])

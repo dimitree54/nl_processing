@@ -1,13 +1,11 @@
 """Tests for DetailedWordCacheService cache hits and misses."""
 
-import json
-
 from nl_processing.core.models import Language, PartOfSpeech, Word
-from nl_processing.database.detailed_models import DetailedWordRecord
 import pytest
 
 from nl_processing.database_cache._detailed_local_store import DetailedLocalStore
 from nl_processing.database_cache.detailed_cache import DetailedWordCacheService
+from tests.unit.database_cache.conftest import make_remote_record
 from tests.unit.database_cache.detailed_mocks import MockRemoteDetailedWordStore
 
 
@@ -32,7 +30,7 @@ async def test_get_or_fetch_details_all_hits() -> None:
         record_data["word_type"],
         record_data["schema_key"],
         record_data["schema_version"],
-        json.dumps(record_data["payload"]),
+        '{"definition": "house"}',
     )
 
     # Create mock remote (should not be called)
@@ -56,13 +54,7 @@ async def test_get_or_fetch_details_all_misses() -> None:
     local_store = DetailedLocalStore(":memory:")
 
     # Create mock remote with test data
-    remote_record = DetailedWordRecord(
-        source_word="tafel",
-        word_type="noun",
-        schema_key="nl_ru_noun",
-        schema_version=1,
-        payload={"definition": "table"},
-    )
+    remote_record = make_remote_record("tafel", {"definition": "table"})
     mock_remote = MockRemoteDetailedWordStore([remote_record])
 
     service = DetailedWordCacheService(Language.NL, Language.RU, remote_store=mock_remote, local_store=local_store)
@@ -93,16 +85,10 @@ async def test_get_or_fetch_details_mixed_hits_and_misses() -> None:
     await local_store.open()
 
     # Pre-populate cache with one record
-    await local_store.upsert_cached_detail("huis", "noun", "nl_ru_noun", 1, json.dumps({"definition": "house"}))
+    await local_store.upsert_cached_detail("huis", "noun", "nl_ru_noun", 1, '{"definition": "house"}')
 
     # Create mock remote with another record
-    remote_record = DetailedWordRecord(
-        source_word="tafel",
-        word_type="noun",
-        schema_key="nl_ru_noun",
-        schema_version=1,
-        payload={"definition": "table"},
-    )
+    remote_record = make_remote_record("tafel", {"definition": "table"})
     mock_remote = MockRemoteDetailedWordStore([remote_record])
 
     service = DetailedWordCacheService(Language.NL, Language.RU, remote_store=mock_remote, local_store=local_store)

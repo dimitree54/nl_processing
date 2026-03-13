@@ -1,7 +1,5 @@
 """Tests for DetailedWordCacheService schema validation and failure handling."""
 
-import json
-
 from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.database.detailed_models import DetailedWordRecord
 import pytest
@@ -18,7 +16,7 @@ async def test_schema_version_invalidation() -> None:
     await local_store.open()
 
     # Pre-populate cache with "incompatible" version
-    await local_store.upsert_cached_detail("huis", "noun", "nl_ru_noun", 1, json.dumps({"definition": "old_house"}))
+    await local_store.upsert_cached_detail("huis", "noun", "nl_ru_noun", 1, '{"definition": "old_house"}')
 
     # Create schema checker that marks version 1 as incompatible
     schema_checker = MockSchemaChecker({"nl_ru_noun": [2]})  # Only version 2 is compatible
@@ -49,7 +47,7 @@ async def test_schema_version_invalidation() -> None:
     cached = await local_store.get_cached_detail("huis", "noun")
     assert cached is not None
     assert cached["schema_version"] == 2
-    assert json.loads(cached["payload"]) == {"definition": "new_house"}
+    assert cached["payload"] == '{"definition": "new_house"}'
 
 
 @pytest.mark.asyncio
@@ -60,7 +58,7 @@ async def test_remote_failure_preserves_local_state() -> None:
 
     # Pre-populate cache
     await local_store.upsert_cached_detail(
-        "existing", "noun", "nl_ru_noun", 1, json.dumps({"definition": "existing_word"})
+        "existing", "noun", "nl_ru_noun", 1, '{"definition": "existing_word"}'
     )
 
     # Create mock remote that raises an error

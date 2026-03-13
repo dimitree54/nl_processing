@@ -47,6 +47,24 @@ class DetailedWordStore:
         self._source_table = source_language.value
         self._details_table = f"word_details_{source_language.value}_{target_language.value}"
 
+    def _build_record(self, word: Word, detail_row: dict) -> DetailedWordRecord:
+        """Parse, validate, and construct a DetailedWordRecord from a backend row."""
+        payload_raw = detail_row["payload"]
+        payload = parse_payload_from_backend(payload_raw)
+        validate_payload_if_configured(
+            self._payload_validator,
+            str(detail_row["schema_key"]),
+            int(detail_row["schema_version"]),
+            payload,
+        )
+        return DetailedWordRecord(
+            source_word=word.normalized_form,
+            word_type=word.word_type.value,
+            schema_key=str(detail_row["schema_key"]),
+            schema_version=int(detail_row["schema_version"]),
+            payload=payload,
+        )
+
     async def get_details(self, words: list[Word]) -> list[DetailedWordRecord]:
         """Return persisted detailed records. Raise SourceWordNotFoundError for unknown words."""
         if not words:
@@ -66,26 +84,7 @@ class DetailedWordStore:
             # Get detailed record
             detail_row = await self._backend.get_word_details(self._details_table, source_word_id, word_type)
             if detail_row is not None:
-                payload_raw = detail_row["payload"]
-                payload = parse_payload_from_backend(payload_raw)
-
-                # Validate payload on read path
-                validate_payload_if_configured(
-                    self._payload_validator,
-                    str(detail_row["schema_key"]),
-                    int(detail_row["schema_version"]),
-                    payload,
-                )
-
-                result.append(
-                    DetailedWordRecord(
-                        source_word=word.normalized_form,
-                        word_type=word_type,
-                        schema_key=str(detail_row["schema_key"]),
-                        schema_version=int(detail_row["schema_version"]),
-                        payload=payload,  # asyncpg returns JSONB as dict, mock as string
-                    )
-                )
+                result.append(self._build_record(word, detail_row))
 
         return result
 
@@ -167,25 +166,6 @@ class DetailedWordStore:
 
                 if detail_key in existing_lookup:
                     detail_row = existing_lookup[detail_key]
-                    payload_raw = detail_row["payload"]
-                    payload = parse_payload_from_backend(payload_raw)
-
-                    # Validate payload on read path
-                    validate_payload_if_configured(
-                        self._payload_validator,
-                        str(detail_row["schema_key"]),
-                        int(detail_row["schema_version"]),
-                        payload,
-                    )
-
-                    result.append(
-                        DetailedWordRecord(
-                            source_word=word.normalized_form,
-                            word_type=word.word_type.value,
-                            schema_key=str(detail_row["schema_key"]),
-                            schema_version=int(detail_row["schema_version"]),
-                            payload=payload,
-                        )
-                    )
+                    result.append(self._build_record(word, detail_row))
 
         return result

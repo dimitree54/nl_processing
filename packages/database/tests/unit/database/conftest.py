@@ -3,9 +3,36 @@
 from nl_processing.core.models import Language, PartOfSpeech, Word
 import pytest
 
+from nl_processing.database.detailed_models import DetailedWordRecord
+from nl_processing.database.detailed_store import DetailedWordStore
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.service import DatabaseService
 from tests.unit.database.mock_backend import MockBackend
+
+
+class FakeValidator:
+    """Mock payload validator for testing."""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.calls: list[tuple[str, int, dict]] = []
+        self._error = error
+
+    def validate_payload(self, schema_key: str, schema_version: int, payload: dict) -> None:
+        self.calls.append((schema_key, schema_version, payload))
+        if self._error is not None:
+            raise self._error
+
+
+class FakeExtractor:
+    """Mock extractor for testing."""
+
+    def __init__(self, results: list[DetailedWordRecord] | None = None) -> None:
+        self.extract_calls: list[list[Word]] = []
+        self._results = results or []
+
+    async def extract(self, words: list[Word]) -> list[DetailedWordRecord]:
+        self.extract_calls.append(words)
+        return self._results
 
 
 class MockTranslator:
@@ -54,6 +81,74 @@ def progress_store(mock_backend: MockBackend) -> ExerciseProgressStore:
         exercise_types=["flashcard"],
         backend=mock_backend,
     )
+
+
+@pytest.fixture
+def detailed_backend() -> MockBackend:
+    """Create a mock backend for detailed store testing."""
+    return MockBackend()
+
+
+@pytest.fixture
+def detailed_store(detailed_backend: MockBackend) -> DetailedWordStore:
+    """Create a DetailedWordStore with mock backend."""
+    return DetailedWordStore(
+        source_language=Language.NL,
+        target_language=Language.RU,
+        backend=detailed_backend,
+    )
+
+
+def make_detailed_record(
+    source_word: str = "kat",
+    word_type: str = "noun",
+    schema_key: str = "nl_ru_noun",
+    schema_version: int = 1,
+    payload: dict | None = None,
+) -> DetailedWordRecord:
+    """Create a DetailedWordRecord with sensible defaults."""
+    return DetailedWordRecord(
+        source_word=source_word,
+        word_type=word_type,
+        schema_key=schema_key,
+        schema_version=schema_version,
+        payload=payload or {},
+    )
+
+
+async def add_word_with_detail(
+    backend: MockBackend,
+    normalized_form: str = "hond",
+    word_type: str = "noun",
+    schema_key: str = "nl_ru_noun",
+    payload: dict | None = None,
+) -> tuple[int, dict]:
+    """Add a word to corpus and persist a detailed record. Returns (word_id, payload)."""
+    import json
+
+    word_id = await backend.add_word("nl", normalized_form, word_type)
+    assert word_id is not None
+    actual_payload = payload or {"article": "de", "plural": "honden"}
+    await backend.upsert_word_details(
+        f"word_details_nl_ru", word_id, word_type, schema_key, 1, json.dumps(actual_payload)
+    )
+    return word_id, actual_payload
+
+
+async def setup_extraction_test(
+    backend: MockBackend,
+    extractor: "FakeExtractor",
+    normalized_form: str = "kat",
+    payload: dict | None = None,
+) -> tuple[int, dict, Word]:
+    """Add word to corpus and configure extractor with a matching record."""
+    actual_payload = payload or {"article": "de", "plural": "katten"}
+    word_id = await backend.add_word("nl", normalized_form, "noun")
+    assert word_id is not None
+    record = make_detailed_record(source_word=normalized_form, payload=actual_payload)
+    extractor._results = [record]
+    word = Word(normalized_form=normalized_form, word_type=PartOfSpeech.NOUN, language=Language.NL)
+    return word_id, actual_payload, word
 
 
 async def setup_word_with_translation(service: DatabaseService, mock_backend: MockBackend) -> int:

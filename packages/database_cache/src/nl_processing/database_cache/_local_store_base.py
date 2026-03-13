@@ -26,14 +26,19 @@ class LocalStoreBase:
             raise CacheStorageError("LocalStore is not open")
         return self._db
 
+    async def _init_connection(self) -> aiosqlite.Connection:
+        """Open SQLite connection with standard settings (WAL mode, Row factory)."""
+        db = await aiosqlite.connect(self._db_path)
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA journal_mode=WAL")
+        return db
+
     async def open(self) -> None:
         """Open the SQLite connection and create tables."""
         if self._db is not None:
             return
         try:
-            self._db = await aiosqlite.connect(self._db_path)
-            self._db.row_factory = aiosqlite.Row
-            await self._db.execute("PRAGMA journal_mode=WAL")
+            self._db = await self._init_connection()
             for ddl in ALL_DDL:
                 await self._db.execute(ddl)
             # Schema migration: add added_at column if it doesn't exist

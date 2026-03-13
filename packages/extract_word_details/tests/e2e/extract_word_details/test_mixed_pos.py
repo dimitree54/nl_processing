@@ -6,14 +6,17 @@ import pytest
 from nl_processing.extract_word_details.service import WordDetailsExtractor
 
 
-@pytest.mark.asyncio
-async def test_mixed_pos_extraction() -> None:
-    """Test end-to-end extraction for words with different POS types."""
-    extractor = WordDetailsExtractor(
+@pytest.fixture
+def extractor() -> WordDetailsExtractor:
+    return WordDetailsExtractor(
         source_language=Language.NL,
         target_language=Language.RU,
     )
 
+
+@pytest.mark.asyncio
+async def test_mixed_pos_extraction(extractor: WordDetailsExtractor) -> None:
+    """Test end-to-end extraction for words with different POS types."""
     words = [
         Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL),
         Word(normalized_form="lopen", word_type=PartOfSpeech.VERB, language=Language.NL),
@@ -48,13 +51,8 @@ async def test_mixed_pos_extraction() -> None:
 
 
 @pytest.mark.asyncio
-async def test_comprehensive_pos_extraction() -> None:
+async def test_comprehensive_pos_extraction(extractor: WordDetailsExtractor) -> None:
     """Test extraction for as many POS types as possible."""
-    extractor = WordDetailsExtractor(
-        source_language=Language.NL,
-        target_language=Language.RU,
-    )
-
     words = [
         Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL),
         Word(normalized_form="lopen", word_type=PartOfSpeech.VERB, language=Language.NL),
@@ -84,13 +82,8 @@ async def test_comprehensive_pos_extraction() -> None:
 
 
 @pytest.mark.asyncio
-async def test_batch_processing_efficiency() -> None:
+async def test_batch_processing_efficiency(extractor: WordDetailsExtractor) -> None:
     """Test that multiple words of same POS are processed efficiently in batches."""
-    extractor = WordDetailsExtractor(
-        source_language=Language.NL,
-        target_language=Language.RU,
-    )
-
     # Create multiple nouns for batch processing
     words = [
         Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL),
@@ -113,13 +106,8 @@ async def test_batch_processing_efficiency() -> None:
 
 
 @pytest.mark.asyncio
-async def test_complex_mixed_order_preservation() -> None:
+async def test_complex_mixed_order_preservation(extractor: WordDetailsExtractor) -> None:
     """Test order preservation in complex mixed POS scenarios."""
-    extractor = WordDetailsExtractor(
-        source_language=Language.NL,
-        target_language=Language.RU,
-    )
-
     # Create a complex mixed pattern: adj, noun, adverb, verb, adj, noun
     words = [
         Word(normalized_form="groot", word_type=PartOfSpeech.ADJECTIVE, language=Language.NL),
@@ -144,13 +132,8 @@ async def test_complex_mixed_order_preservation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_single_word_per_pos() -> None:
+async def test_single_word_per_pos(extractor: WordDetailsExtractor) -> None:
     """Test edge case of single word per POS type."""
-    extractor = WordDetailsExtractor(
-        source_language=Language.NL,
-        target_language=Language.RU,
-    )
-
     # Single word of each type to test individual chain calls
     words = [
         Word(normalized_form="water", word_type=PartOfSpeech.NOUN, language=Language.NL),
@@ -167,13 +150,8 @@ async def test_single_word_per_pos() -> None:
 
 
 @pytest.mark.asyncio
-async def test_payload_structure_completeness() -> None:
+async def test_payload_structure_completeness(extractor: WordDetailsExtractor) -> None:
     """Test that extracted payloads have expected structure and completeness."""
-    extractor = WordDetailsExtractor(
-        source_language=Language.NL,
-        target_language=Language.RU,
-    )
-
     words = [
         Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL),
         Word(normalized_form="lopen", word_type=PartOfSpeech.VERB, language=Language.NL),

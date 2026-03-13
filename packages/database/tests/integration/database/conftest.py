@@ -3,9 +3,23 @@
 from collections.abc import AsyncIterator
 import os
 
+from nl_processing.core.models import Word
 import pytest_asyncio
 
 from nl_processing.database.backend.neon import NeonBackend
+from nl_processing.database.detailed_models import DetailedWordRecord
+
+
+class FakeExtractor:
+    """Mock extractor for integration testing."""
+
+    def __init__(self, results: list[DetailedWordRecord] | None = None) -> None:
+        self.extract_calls: list[list[Word]] = []
+        self._results = results or []
+
+    async def extract(self, words: list[Word]) -> list[DetailedWordRecord]:
+        self.extract_calls.append(words)
+        return self._results
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]

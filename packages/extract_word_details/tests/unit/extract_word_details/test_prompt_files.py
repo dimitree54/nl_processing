@@ -3,33 +3,14 @@
 import json
 from pathlib import Path
 
-from langchain_core.load import load
 from langchain_core.prompts import ChatPromptTemplate
 import pytest
 
-
-def load_prompt(prompt_path: str | Path) -> ChatPromptTemplate:
-    """Load a ChatPromptTemplate from a LangChain-serialized JSON file.
-
-    Replicate core.prompts.load_prompt functionality without cross-package import.
-    """
-    path = Path(prompt_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
-
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    return load(data)
+from tests.unit.extract_word_details.conftest import load_prompt
 
 
 class TestPromptFiles:
     """Tests for prompt file existence and basic JSON validation."""
-
-    @pytest.fixture
-    def prompts_dir(self) -> Path:
-        """Path to the prompts directory."""
-        return Path(__file__).parents[3] / "src" / "nl_processing" / "extract_word_details" / "prompts"
 
     def test_all_13_prompt_files_exist(self, prompts_dir: Path) -> None:
         """Verify all 13 POS prompt JSON files exist."""
