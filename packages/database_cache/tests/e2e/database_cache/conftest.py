@@ -69,6 +69,13 @@ def make_database_service(user_id: str) -> DatabaseService:
     )
 
 
+async def seed_words(user_id: str) -> None:
+    """Add words to Neon and wait for translations."""
+    service = make_database_service(user_id)
+    await service.add_words(WORDS)
+    await wait_for_translations(len(WORDS))
+
+
 def make_cache_service(user_id: str, tmp_path: Path) -> DatabaseCacheService:
     """Create a DatabaseCacheService backed by real Neon + file-based SQLite."""
     return DatabaseCacheService(

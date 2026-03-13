@@ -9,16 +9,8 @@ import pytest
 from tests.e2e.database_cache.conftest import (
     WORDS,
     make_cache_service,
-    make_database_service,
-    wait_for_translations,
+    seed_words,
 )
-
-
-async def _seed(user_id: str) -> None:
-    """Add words to Neon and wait for translations."""
-    service = make_database_service(user_id)
-    await service.add_words(WORDS)
-    await wait_for_translations(len(WORDS))
 
 
 @pytest.mark.asyncio
@@ -26,7 +18,7 @@ async def _seed(user_id: str) -> None:
 async def test_list_personal_words_returns_complete_records(tmp_path: Path) -> None:
     """list_personal_words() returns PersonalWord objects with added_at and scores."""
     user_id = f"e2e_cache_{uuid4()}"
-    await _seed(user_id)
+    await seed_words(user_id)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 
@@ -50,7 +42,7 @@ async def test_list_personal_words_returns_complete_records(tmp_path: Path) -> N
 async def test_progress_summary_matches_reality(tmp_path: Path) -> None:
     """get_progress_summary() reports correct totals and negative counts."""
     user_id = f"e2e_cache_{uuid4()}"
-    await _seed(user_id)
+    await seed_words(user_id)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 
@@ -72,7 +64,7 @@ async def test_progress_summary_matches_reality(tmp_path: Path) -> None:
 async def test_delete_word_removes_from_cache_and_remote(tmp_path: Path) -> None:
     """delete_word() removes the word from remote and local cache."""
     user_id = f"e2e_cache_{uuid4()}"
-    await _seed(user_id)
+    await seed_words(user_id)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 
@@ -103,7 +95,7 @@ async def test_delete_word_removes_from_cache_and_remote(tmp_path: Path) -> None
 async def test_delete_word_clears_pending_events(tmp_path: Path) -> None:
     """delete_word() also removes pending score events for the word (BR-6)."""
     user_id = f"e2e_cache_{uuid4()}"
-    await _seed(user_id)
+    await seed_words(user_id)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 

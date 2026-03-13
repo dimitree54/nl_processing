@@ -9,16 +9,8 @@ import pytest
 from tests.e2e.database_cache.conftest import (
     WORDS,
     make_cache_service,
-    make_database_service,
-    wait_for_translations,
+    seed_words,
 )
-
-
-async def _seed(user_id: str) -> None:
-    """Add words to Neon and wait for translations."""
-    service = make_database_service(user_id)
-    await service.add_words(WORDS)
-    await wait_for_translations(len(WORDS))
 
 
 @pytest.mark.asyncio
@@ -26,7 +18,7 @@ async def _seed(user_id: str) -> None:
 async def test_full_lifecycle_init_read_write_flush(tmp_path: Path) -> None:
     """Init -> read -> write -> flush: complete cache round-trip against real Neon."""
     user_id = f"e2e_cache_{uuid4()}"
-    await _seed(user_id)
+    await seed_words(user_id)
     cache = make_cache_service(user_id, tmp_path)
 
     # 1. init -- bootstraps refresh from Neon
@@ -71,7 +63,7 @@ async def test_full_lifecycle_init_read_write_flush(tmp_path: Path) -> None:
 async def test_idempotent_flush(tmp_path: Path) -> None:
     """Flushing twice has no side effects -- second flush is a no-op."""
     user_id = f"e2e_cache_{uuid4()}"
-    await _seed(user_id)
+    await seed_words(user_id)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 
@@ -106,7 +98,7 @@ async def test_idempotent_flush(tmp_path: Path) -> None:
 async def test_refresh_after_flush_restores_remote_state(tmp_path: Path) -> None:
     """After flush + refresh, scores match what was flushed (not doubled)."""
     user_id = f"e2e_cache_{uuid4()}"
-    await _seed(user_id)
+    await seed_words(user_id)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 
