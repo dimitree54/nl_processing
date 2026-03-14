@@ -227,3 +227,98 @@ The module sits on the hot path for practice session generation. By default it r
 
 - D-1: Introduce richer sampling policies only when the simple sign-based rule is proven insufficient.
 - D-2: Revisit default provider selection after `database_cache` adoption decisions.
+
+## 5. Tiered Mixed-Exercise Extension
+
+### Change Summary
+
+This extension adds a new tiered mixed-exercise sampling surface without changing the existing `WordSampler`, its weighting rules, or current progress-report semantics. The additive path is preferred over widening `sample()` because tiered mode must return both a word pair and the exact exercise selected for that word.
+
+### Tiered-Mode Assumptions
+
+| ID | Assumption | Status | Notes |
+| --- | --- | --- | --- |
+| TA-1 | When a fully finished word is still sampled for review, the tiered sampler shows the most complex participating exercise. | Temporary Working Assumption | The user confirmed finished words stay eligible with down-weighting, but did not pin the review exercise explicitly. |
+
+### Tiered Functional Requirements
+
+| ID | Requirement | Priority | Notes |
+| --- | --- | --- | --- |
+| TFR-1 | The module must add a separate tiered sampling API such as `TieredExerciseSampler(user_id, source_language, target_language, mode_slug, exercise_types, finished_word_weight, tiered_store?)`. | Must | Keeps the existing `WordSampler` contract unchanged. |
+| TFR-2 | Tiered `exercise_types` must be interpreted as ordered from lowest to highest complexity. | Must | Order is semantic in this mode. |
+| TFR-3 | Tiered sampling must return records that include `WordPair`, `source_word_id`, the chosen `exercise_type`, and whether the word is currently in repeat mode. | Must | Returning only `WordPair` is insufficient for mixed exercise mode. |
+| TFR-4 | A candidate word must have full sampling weight while any participating exercise score is `<= 0`. | Must | Tiered mode treats unfinished words uniformly. |
+| TFR-5 | A fully finished word where all participating exercise scores are `> 0` must remain eligible, but must use a configurable `finished_word_weight` with a default of `0.01`. | Must | User-confirmed behavior. |
+| TFR-6 | In normal tiered mode, the selected exercise for a sampled word must be the most complex participating exercise whose score is `<= 0`. | Must | User-confirmed behavior. |
+| TFR-7 | In repeat mode, the selected exercise for a sampled word must be the most complex participating exercise whose score is `> 0`. | Must | User-confirmed behavior. |
+| TFR-8 | The sampler must not mutate repeat state or scores directly; it must reflect provider-owned state and leave answer recording to persistence modules. | Must | Preserves the module's stateless ownership boundary. |
+| TFR-9 | Existing `WordSampler.sample()` and `sample_adversarial()` behavior must remain unchanged when tiered mode is not used. | Must | User explicitly requested no regression in current sampling logic. |
+
+### Tiered Rules and Invariants
+
+- TBR-1: Tiered mode must never reorder the configured exercise list internally.
+- TBR-2: Tiered sampling remains without-replacement within one call.
+- TBR-3: `finished_word_weight` must be in `(0, 1]`.
+- TBR-4: Missing participating scores are treated as `0`.
+- TBR-5: A provider record marked as repeat mode but containing no positive participating score is invalid and must raise an explicit error instead of falling back silently.
+
+### Tiered Interfaces and Dependencies
+
+| ID | Type | Direction | Counterparty | Contract or Data | Notes |
+| --- | --- | --- | --- | --- | --- |
+| TIF-1 | Python API | Inbound | Callers | `await sample(limit) -> list[TieredExerciseSelection]` on the new tiered sampler surface | Additive API dedicated to mixed exercise mode. |
+| TIF-2 | Protocol | Inbound | `database`, `database_cache`, or mocks | Tiered candidate provider returning ordered scores plus repeat-state per word | Separate from the existing `ScoredPairProvider`. |
+| TIF-3 | Change reference | Outbound | `database` | Remote tiered repeat-state persistence and mixed progress summary | See the database tiered extension section. |
+| TIF-4 | Change reference | Outbound | `database_cache` | Local tiered repeat-state mirror and tiered answer-event replay | See the database_cache tiered extension section. |
+
+### Tiered Data and State Ownership
+
+| Entity or State | Ownership | Description | Lifecycle or Retention | Notes |
+| --- | --- | --- | --- | --- |
+| Tiered sampler configuration | Owned | Ordered exercises, `mode_slug`, finished-word weight, and provider reference. | Runtime only | No durable state is owned here. |
+| Tiered candidate records | Referenced | Word pair, stable source ID, per-exercise scores, and repeat-state supplied by persistence. | Runtime per call | Owned by `database` or `database_cache`. |
+| `TieredExerciseSelection` results | Owned | Stateless output describing which exercise to show for each sampled word. | Runtime per call | Returned directly to callers. |
+
+### Tiered Processing Flow
+
+1. The tiered sampler validates ordered `exercise_types`, `finished_word_weight`, and `mode_slug`, then chooses the injected provider or the default remote tiered progress store.
+2. For each candidate word, the sampler assigns weight `1.0` while any participating score is `<= 0`; otherwise it uses `finished_word_weight`.
+3. After selecting a word, the sampler chooses the exact exercise from the ordered list using repeat-state aware rules instead of returning only the pair.
+4. Callers record the result through persistence modules, which update the exercise score as usual and mutate repeat state outside `sampling`.
+
+### Tiered Decisions
+
+| ID | Decision | Status | Rationale | Consequence |
+| --- | --- | --- | --- | --- |
+| TDEC-1 | Keep the existing `WordSampler` untouched and add a separate tiered sampler surface. | Decided | Protects current callers and test coverage. | Tiered callers opt into a new API. |
+| TDEC-2 | Keep tiered mode stateless inside `sampling`; repeat-state persistence stays in `database` and `database_cache`. | Decided | Avoids splitting ownership of answer state. | The provider contract must supply repeat state explicitly. |
+| TDEC-3 | Weight tiered candidates by "fully finished vs not fully finished" rather than by minimum score magnitude. | Decided | Matches the requested mixed-exercise semantics. | Tiered weighting intentionally differs from the classic sampler. |
+| TDEC-4 | Identify one persisted tiered configuration by explicit `mode_slug` plus ordered exercises. | Decided | Prevents collisions if more than one mixed mode is introduced later. | Persistence and cache layers must validate that the stored order matches the configured mode. |
+
+### Tiered Validation
+
+**Acceptance Criteria:**
+
+- TAC-1: Existing `WordSampler` unit and contract behavior remains unchanged.
+- TAC-2: Tiered sampling returns unique selections that include both the word pair and the exercise chosen for that pair.
+- TAC-3: Unfinished words sample with full weight, and fully finished words sample with configurable down-weighting defaulting to `0.01`.
+- TAC-4: Non-repeat selections choose the most complex non-positive exercise, while repeat selections choose the most complex positive exercise.
+
+**Testing Strategy:**
+
+- Unit: ordered-tier selection, finished-word weighting, without-replacement sampling, and invalid repeat-state detection.
+- Contract: provider mocks plus real `database` and `database_cache` tiered providers must satisfy the same candidate-provider shape.
+- Regression: existing classic sampler tests remain unchanged and continue to guard the legacy path.
+
+### Tiered Risks
+
+| ID | Risk | Impact | Mitigation or Next Step |
+| --- | --- | --- | --- |
+| TRISK-1 | Returning only `WordPair` would hide the selected exercise and force caller-side reimplementation. | Different callers could diverge on which tier to show. | Keep tiered mode on a dedicated selection-returning API. |
+| TRISK-2 | Tiered provider state could drift from the requested exercise order. | The sampler could choose the wrong tier for the same word. | Persist and validate an explicit `mode_slug` plus ordered exercise list. |
+
+### Tiered Open Questions
+
+| ID | Question | Status | Owner or Next Step | Notes |
+| --- | --- | --- | --- | --- |
+| TOQ-1 | Should the tiered provider contract live in `sampling` first or be promoted into `core` once the shape stabilizes? | Open | Decide during implementation if a new cross-package shared contract is needed | The lower-risk path is to keep the existing `core` contract untouched initially. |
