@@ -1,5 +1,12 @@
-# Python interpreter
-Always run python through uv.
+## Project Context
+- This is a UV + pyproject managed Python repo. All commands run through `uv`.
+- All secrets are managed through `doppler` envs
+- The repo has multi-package structure. When working on new features - you will work with one (or if needed several packages). Do not over-explore unrelated packages. Each package has its own docs, tests, linters and so on.
+- Before and after the task, `make check` of the affected modules must be 100% green. This is non-negotiable.
+- We write production software. Always prefer proper solutions over quick hacks. No compromises. No workarounds.
+
+## Documentation driven repo
+All code should always be 100% in sync with docs. We write code based on the docs, never otherwise. We do not change docs to match code. If during work you find that some existing code is not documented or contradicts with docs - stop your work and report to user.
 
 # Core development principles:
 - Fail fast on unexpected situations
