@@ -1,11 +1,4 @@
 from nl_processing.database_core.backend.abstract import AbstractBackend
-from nl_processing.database_core.backend._neon_tiered import (
-    create_tiered_tables,
-    delete_repeat_state_impl,
-    get_repeat_state_impl,
-    get_repeat_states_impl,
-    upsert_repeat_state_impl,
-)
 from nl_processing.database_core.backend.neon import NeonBackend
 from nl_processing.database_core._database_config import _init_backend_and_tables
 
@@ -28,11 +21,6 @@ kwargs  # noqa: F821
 cls  # noqa: F821
 
 _init_backend_and_tables  # type: ignore[misc]
-create_tiered_tables  # type: ignore[misc]
-upsert_repeat_state_impl  # type: ignore[misc]
-delete_repeat_state_impl  # type: ignore[misc]
-get_repeat_states_impl  # type: ignore[misc]
-get_repeat_state_impl  # type: ignore[misc]
 integration_schema_ready  # noqa: F821
 _integration_schema_ready  # noqa: F821
 

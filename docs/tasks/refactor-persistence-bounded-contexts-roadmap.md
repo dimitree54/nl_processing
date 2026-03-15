@@ -1,79 +1,64 @@
 ---
-title: "Roadmap: Refactor Persistence Stack Into Bounded Contexts"
+title: "Roadmap: Refactor Database Modules"
 document_type: "task-roadmap"
 umbrella_task: "./refactor-persistence-bounded-contexts.md"
 ---
 
-# Roadmap: Refactor Persistence Stack Into Bounded Contexts
+# Roadmap: Refactor Database Modules
 
 ## Purpose
 
-This roadmap splits the umbrella persistence refactor into focused execution tasks. The tasks must be implemented in order. After each task:
+This roadmap breaks the database refactor into focused execution tasks. Each task must leave the repository in a meaningful working state.
 
-- the repository remains working;
-- affected package checks are green;
-- the system gains a meaningful architectural improvement rather than a half-migrated intermediate state.
+The series is intentionally scoped to:
 
-Use this roadmap for execution order. Use the umbrella task for the full target architecture and cross-cutting rationale:
+- `packages/database_core`
+- `packages/database`
+- `packages/database_cache`
 
-- `docs/tasks/refactor-persistence-bounded-contexts.md`
+External modules should remain largely untouched.
 
 ## Execution Order
 
 ### Task 1
 
-- `docs/tasks/persistence-01-shared-contract-foundation.md`
+- `docs/tasks/persistence-01-remove-unsupported-tiered-surface.md`
 
 Outcome:
 
-- shared persistence ports and DTOs exist in `core`;
-- current contract drift is repaired;
-- existing public import paths continue to work through compatibility re-exports.
+- tiered persistence/cache surface is removed from `database_*` code, tests, and docs;
+- the supported target state becomes explicit before deeper refactoring starts.
 
 ### Task 2
 
-- `docs/tasks/persistence-02-tiered-domain-and-sampling-cleanup.md`
+- `docs/tasks/persistence-02-database-cache-isolation.md`
 
 Outcome:
 
-- one shared tiered repeat-state implementation exists;
-- remote/cache tiered logic uses the same state machine;
-- `sampling` is aligned to its documented algorithm-only contract.
+- `database_cache` is cleaned up around its supported non-tiered behavior;
+- local cache internals become clearer and more self-contained without broad external refactors.
 
 ### Task 3
 
-- `docs/tasks/persistence-03-cache-protocolization.md`
+- `docs/tasks/persistence-03-database-bounded-context-refactor.md`
 
 Outcome:
 
-- `database_cache` is driven by shared ports and models, not concrete `database` classes;
-- local schema handling becomes explicit and fail-fast;
-- cache behavior remains working and validated.
+- `database` stops behaving like one god-module internally;
+- public non-tiered facades stay stable.
 
 ### Task 4
 
-- `docs/tasks/persistence-04-database-bounded-context-split.md`
+- `docs/tasks/persistence-04-database-core-provider-cleanup.md`
 
 Outcome:
 
-- `database` stops being a god-module internally;
-- bounded-context repositories/application services exist behind stable public facades;
-- current runtime behavior remains intact.
-
-### Task 5
-
-- `docs/tasks/persistence-05-database-core-thin-provider-layer.md`
-
-Outcome:
-
-- `database_core` is reduced to a thin provider/runtime layer;
-- `database` repositories consume low-level storage primitives rather than a fat domain backend;
-- the full target architecture from the umbrella task is implemented.
+- `database_core` is reduced to a slimmer provider/runtime layer;
+- the full non-tiered database refactor target is implemented.
 
 ## Rules For All Tasks
 
-- Do not split the physical PostgreSQL database.
-- Do not rename current table families in this refactor series.
-- Preserve current public service import paths.
-- Keep every touched package green with its own `make check`.
-- Stop and report any code/spec contradiction before changing behavior.
+- Keep scope centered on `database_*`.
+- Prefer adapting `database_*` to the existing state of `core`, `sampling`, `translate_*`, and `extract_*`.
+- Remove unsupported tiered persistence/cache code rather than repairing or extending it.
+- Keep package-local `make check` green for every touched package.
