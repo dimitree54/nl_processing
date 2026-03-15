@@ -1,4 +1,4 @@
-from nl_processing.database_core.exceptions import ConfigurationError, DatabaseError
+from nl_processing.database_core.exceptions import DatabaseError
 
 
 class WordNotFoundError(DatabaseError):
