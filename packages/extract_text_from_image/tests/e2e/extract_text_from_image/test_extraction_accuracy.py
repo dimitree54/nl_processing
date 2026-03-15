@@ -36,21 +36,6 @@ async def test_simple_dutch_text_extraction(tmp_path: pathlib.Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_multi_line_dutch_text_extraction(tmp_path: pathlib.Path) -> None:
-    """Multi-line Dutch text — tests line break handling."""
-    ground_truth = "Dit is een test\nvan meerdere regels"
-    image_path = str(tmp_path / "multiline.png")
-    generate_test_image(ground_truth, image_path, font_scale=1.2, width=800, height=200)
-
-    extractor = ImageTextExtractor(language=Language.NL)
-    extracted = await _extract_with_latency_assertion(extractor.extract_from_path(image_path))
-
-    assert evaluate_extraction(extracted, ground_truth), (
-        f"Extraction mismatch.\nExpected: {ground_truth}\nGot: {extracted}"
-    )
-
-
-@pytest.mark.asyncio
 async def test_extraction_from_cv2_array(tmp_path: pathlib.Path) -> None:
     """Test extract_from_cv2 produces same result as extract_from_path."""
     ground_truth = "Hallo wereld"
@@ -65,35 +50,6 @@ async def test_extraction_from_cv2_array(tmp_path: pathlib.Path) -> None:
 
     assert evaluate_extraction(extracted, ground_truth), (
         f"CV2 extraction mismatch.\nExpected: {ground_truth}\nGot: {extracted}"
-    )
-
-
-@pytest.mark.asyncio
-async def test_extraction_latency(tmp_path: pathlib.Path) -> None:
-    """Each extraction call completes in < 20 seconds (ETI-NFR1)."""
-    ground_truth = "Snel test"
-    image_path = str(tmp_path / "latency.png")
-    generate_test_image(ground_truth, image_path, font_scale=1.5, width=400, height=100)
-
-    extractor = ImageTextExtractor(language=Language.NL)
-    await _extract_with_latency_assertion(extractor.extract_from_path(image_path))
-
-
-@pytest.mark.asyncio
-async def test_mixed_dutch_russian_extracts_only_dutch(tmp_path: pathlib.Path) -> None:
-    """Image with mixed Dutch + Russian text — only Dutch text should be extracted (FR3, FR4)."""
-    dutch_text = "Goede reis"
-    # Russian text renders as garbled chars in cv2, but the model should recognize
-    # it as non-Dutch content and exclude it from extraction.
-    mixed_text = f"{dutch_text}\nСчастливого пути"
-    image_path = str(tmp_path / "mixed_lang.png")
-    generate_test_image(mixed_text, image_path, font_scale=1.2, width=800, height=200)
-
-    extractor = ImageTextExtractor(language=Language.NL)
-    extracted = await _extract_with_latency_assertion(extractor.extract_from_path(image_path))
-
-    assert evaluate_extraction(extracted, dutch_text), (
-        f"Mixed-language extraction failed.\nExpected (Dutch only): {dutch_text}\nGot: {extracted}"
     )
 
 

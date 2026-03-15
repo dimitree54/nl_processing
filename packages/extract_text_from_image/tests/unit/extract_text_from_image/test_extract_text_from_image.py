@@ -153,6 +153,7 @@ async def test_both_methods_converge_to_chain(monkeypatch: pytest.MonkeyPatch, t
     for call_input in extractor._chain.ainvoke_calls:
         assert "images" in call_input
         assert len(call_input["images"]) == 1
+        assert call_input["images"][0].content[0]["type"] == "image_url"
 
 
 @pytest.mark.asyncio

@@ -1,57 +1,34 @@
 import json
 import pathlib
+from typing import NotRequired, TypedDict
 
 from langchain_core.load import load
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableSerializable
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel
-
-from nl_processing.core.models import Language
 
 
-def build_translation_chain(
+class ChatOpenAIKwargs(TypedDict):
+    model: str
+    service_tier: NotRequired[str]
+    reasoning_effort: NotRequired[str]
+    temperature: NotRequired[float]
+
+
+def build_llm_kwargs(
     *,
-    source_language: Language,
-    target_language: Language,
-    prompts_dir: pathlib.Path,
-    tool_schema: type[BaseModel],
     model: str,
-    reasoning_effort: str | None = None,
-    service_tier: str | None = None,
-    temperature: float | None = 0,
-) -> RunnableSerializable:  # type: ignore[type-arg]
-    """Load a pair-specific prompt and return a prompt|llm chain.
-
-    This is shared infrastructure for translation-style services that follow the
-    pattern: resolve prompt file → load JSON prompt → bind_tools → compose chain.
-
-    Args:
-        source_language: Source language enum value used in the prompt filename.
-        target_language: Target language enum value used in the prompt filename.
-        prompts_dir: Directory containing ``<src>_<tgt>.json`` prompt files.
-        tool_schema: Pydantic model class to bind as a tool.
-        model: OpenAI model identifier string.
-        reasoning_effort: Optional reasoning effort level for the model.
-        service_tier: Optional service tier for the OpenAI API.
-        temperature: LLM temperature (default 0 for deterministic output).
-
-    Returns:
-        A ``prompt | llm`` RunnableSerializable ready for ``ainvoke()``.
-    """
-    prompt_file = f"{source_language.value}_{target_language.value}.json"
-    prompt = load_prompt(str(prompts_dir / prompt_file))
-
-    llm = ChatOpenAI(
-        model=model,
-        temperature=temperature,
-        reasoning_effort=reasoning_effort,
-        service_tier=service_tier,
-    ).bind_tools(
-        [tool_schema],
-        tool_choice=tool_schema.__name__,
-    )
-    return prompt | llm
+    service_tier: str | None,
+    reasoning_effort: str | None,
+    temperature: float | None,
+) -> ChatOpenAIKwargs:
+    """Build ChatOpenAI kwargs without forwarding None-valued options."""
+    kwargs: ChatOpenAIKwargs = {"model": model}
+    if service_tier is not None:
+        kwargs["service_tier"] = service_tier
+    if reasoning_effort is not None:
+        kwargs["reasoning_effort"] = reasoning_effort
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    return kwargs
 
 
 def load_prompt(prompt_path: str) -> ChatPromptTemplate:

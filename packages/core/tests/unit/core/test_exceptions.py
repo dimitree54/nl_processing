@@ -2,7 +2,7 @@ import pytest
 
 from nl_processing.core.exceptions import (
     APIError,
-    TargetLanguageNotFoundError,
+    TargetLanguageNotFoundInInputError,
     UnsupportedImageFormatError,
     UnsupportedLanguageError,
 )
@@ -31,18 +31,6 @@ def test_api_error_can_wrap_exception() -> None:
         assert str(e.__cause__) == "original error"
 
 
-def test_target_language_not_found_error_can_be_raised_and_caught() -> None:
-    """Test TargetLanguageNotFoundError can be raised and caught."""
-    with pytest.raises(TargetLanguageNotFoundError):
-        raise TargetLanguageNotFoundError("no Dutch")
-
-
-def test_target_language_not_found_error_preserves_message() -> None:
-    """Test TargetLanguageNotFoundError preserves message string."""
-    error = TargetLanguageNotFoundError("no Dutch text found")
-    assert str(error) == "no Dutch text found"
-
-
 def test_unsupported_image_format_error_can_be_raised_and_caught() -> None:
     """Test UnsupportedImageFormatError can be raised and caught."""
     with pytest.raises(UnsupportedImageFormatError):
@@ -53,6 +41,18 @@ def test_unsupported_image_format_error_preserves_message() -> None:
     """Test UnsupportedImageFormatError preserves message string."""
     error = UnsupportedImageFormatError(".bmp format not supported")
     assert str(error) == ".bmp format not supported"
+
+
+def test_target_language_not_found_in_input_error_can_be_raised_and_caught() -> None:
+    """Test TargetLanguageNotFoundInInputError can be raised and caught."""
+    with pytest.raises(TargetLanguageNotFoundInInputError):
+        raise TargetLanguageNotFoundInInputError("expected Dutch input")
+
+
+def test_target_language_not_found_in_input_error_preserves_message() -> None:
+    """Test TargetLanguageNotFoundInInputError preserves message string."""
+    error = TargetLanguageNotFoundInInputError("expected Dutch input")
+    assert str(error) == "expected Dutch input"
 
 
 def test_unsupported_language_error_can_be_raised_and_caught() -> None:
@@ -70,20 +70,21 @@ def test_unsupported_language_error_preserves_message() -> None:
 def test_all_exceptions_are_subclasses_of_exception() -> None:
     """Test all exceptions are subclasses of Exception."""
     assert issubclass(APIError, Exception)
-    assert issubclass(TargetLanguageNotFoundError, Exception)
     assert issubclass(UnsupportedImageFormatError, Exception)
+    assert issubclass(TargetLanguageNotFoundInInputError, Exception)
     assert issubclass(UnsupportedLanguageError, Exception)
 
 
-def test_exceptions_are_distinct_types() -> None:
-    """Test exceptions are distinct types - catching one does not catch another."""
-    # APIError does not catch TargetLanguageNotFoundError
-    with pytest.raises(TargetLanguageNotFoundError):
-        try:
-            raise TargetLanguageNotFoundError("test")
-        except APIError:
-            pytest.fail("APIError should not catch TargetLanguageNotFoundError")
+def test_runtime_and_initialization_language_errors_have_expected_base_types() -> None:
+    """Test language-related errors distinguish runtime from initialization failures."""
+    assert issubclass(TargetLanguageNotFoundInInputError, RuntimeError)
+    assert not issubclass(TargetLanguageNotFoundInInputError, ValueError)
+    assert issubclass(UnsupportedLanguageError, ValueError)
+    assert not issubclass(UnsupportedLanguageError, RuntimeError)
 
+
+def test_exceptions_are_distinct_types() -> None:
+    """Test exceptions are distinct types where catch boundaries are expected to stay separate."""
     # APIError does not catch UnsupportedImageFormatError
     with pytest.raises(UnsupportedImageFormatError):
         try:
@@ -91,12 +92,12 @@ def test_exceptions_are_distinct_types() -> None:
         except APIError:
             pytest.fail("APIError should not catch UnsupportedImageFormatError")
 
-    # TargetLanguageNotFoundError does not catch UnsupportedImageFormatError
-    with pytest.raises(UnsupportedImageFormatError):
+    # Runtime input-language failure does not catch initialization-language failure
+    with pytest.raises(UnsupportedLanguageError):
         try:
-            raise UnsupportedImageFormatError("test")
-        except TargetLanguageNotFoundError:
-            pytest.fail("TargetLanguageNotFoundError should not catch UnsupportedImageFormatError")
+            raise UnsupportedLanguageError("test")
+        except TargetLanguageNotFoundInInputError:
+            pytest.fail("TargetLanguageNotFoundInInputError should not catch UnsupportedLanguageError")
 
     # UnsupportedImageFormatError does not catch UnsupportedLanguageError
     with pytest.raises(UnsupportedLanguageError):
@@ -109,24 +110,24 @@ def test_exceptions_are_distinct_types() -> None:
 def test_exceptions_accept_empty_message() -> None:
     """Test exceptions accept empty message string."""
     api_error = APIError("")
-    target_error = TargetLanguageNotFoundError("")
     format_error = UnsupportedImageFormatError("")
+    missing_input_language_error = TargetLanguageNotFoundInInputError("")
     language_error = UnsupportedLanguageError("")
 
     assert str(api_error) == ""
-    assert str(target_error) == ""
     assert str(format_error) == ""
+    assert str(missing_input_language_error) == ""
     assert str(language_error) == ""
 
 
 def test_exceptions_accept_no_args() -> None:
     """Test exceptions accept no-args construction."""
     api_error = APIError()
-    target_error = TargetLanguageNotFoundError()
     format_error = UnsupportedImageFormatError()
+    missing_input_language_error = TargetLanguageNotFoundInInputError()
     language_error = UnsupportedLanguageError()
 
     assert str(api_error) == ""
-    assert str(target_error) == ""
     assert str(format_error) == ""
+    assert str(missing_input_language_error) == ""
     assert str(language_error) == ""

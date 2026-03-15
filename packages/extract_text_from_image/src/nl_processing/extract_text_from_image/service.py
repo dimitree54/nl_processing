@@ -1,7 +1,5 @@
 import pathlib
-from typing import NotRequired, TypedDict
 
-from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from nl_processing.core.exceptions import (
@@ -10,12 +8,13 @@ from nl_processing.core.exceptions import (
     UnsupportedLanguageError,
 )
 from nl_processing.core.image_encoding import (
+    build_image_human_message,
     encode_cv2_to_base64,
-    encode_path_to_base64,
+    encode_image_path,
     validate_image_format,
 )
 from nl_processing.core.models import ExtractedText, Language
-from nl_processing.core.prompts import load_prompt
+from nl_processing.core.prompts import build_llm_kwargs, load_prompt
 import numpy
 from pydantic import ValidationError
 
@@ -23,30 +22,6 @@ from nl_processing.extract_text_from_image.exceptions import ImageTextFileNotFou
 
 # Resolve prompts directory relative to this file
 _PROMPTS_DIR = pathlib.Path(__file__).parent / "prompts"
-
-
-class _ChatOpenAIKwargs(TypedDict):
-    model: str
-    service_tier: NotRequired[str]
-    reasoning_effort: NotRequired[str]
-    temperature: NotRequired[float]
-
-
-def _build_llm_kwargs(
-    *,
-    model: str,
-    service_tier: str | None,
-    reasoning_effort: str | None,
-    temperature: float | None,
-) -> _ChatOpenAIKwargs:
-    kwargs: _ChatOpenAIKwargs = {"model": model}
-    if service_tier is not None:
-        kwargs["service_tier"] = service_tier
-    if reasoning_effort is not None:
-        kwargs["reasoning_effort"] = reasoning_effort
-    if temperature is not None:
-        kwargs["temperature"] = temperature
-    return kwargs
 
 
 def _load_prompt_for_language(language: Language) -> ChatPromptTemplate:
@@ -57,14 +32,6 @@ def _load_prompt_for_language(language: Language) -> ChatPromptTemplate:
         raise UnsupportedLanguageError(msg)
 
     return load_prompt(str(prompt_path))
-
-
-def _encode_image_path(path: str) -> tuple[str, str]:
-    try:
-        return encode_path_to_base64(path)
-    except FileNotFoundError as exc:
-        msg = f"Image file not found: {path}"
-        raise ImageTextFileNotFoundError(msg) from exc
 
 
 def _parse_extracted_text(response: object) -> ExtractedText:
@@ -106,7 +73,7 @@ class ImageTextExtractor:
         self._language = language
         prompt = _load_prompt_for_language(language)
 
-        llm_kwargs = _build_llm_kwargs(
+        llm_kwargs = build_llm_kwargs(
             model=model,
             service_tier=service_tier,
             reasoning_effort=reasoning_effort,
@@ -132,7 +99,11 @@ class ImageTextExtractor:
             TargetLanguageNotFoundError: Extraction returns blank or whitespace-only text.
         """
         validate_image_format(path)
-        base64_string, media_type = _encode_image_path(path)
+        try:
+            base64_string, media_type = encode_image_path(path)
+        except FileNotFoundError as exc:
+            msg = f"Image file not found: {path}"
+            raise ImageTextFileNotFoundError(msg) from exc
         return await self._aextract(base64_string, media_type)
 
     async def extract_from_cv2(self, image: "numpy.ndarray") -> str:
@@ -153,11 +124,7 @@ class ImageTextExtractor:
 
     async def _aextract(self, base64_string: str, media_type: str) -> str:
         """Internal: run the extraction chain with the base64 image."""
-        human_message = HumanMessage(
-            content=[
-                {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{base64_string}"}},
-            ]
-        )
+        human_message = build_image_human_message(base64_string, media_type)
         try:
             response = await self._chain.ainvoke({"images": [human_message]})
         except Exception as exc:

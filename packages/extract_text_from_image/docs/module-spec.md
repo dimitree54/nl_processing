@@ -13,7 +13,7 @@ related_docs:
 
 ### Summary
 
-`extract_text_from_image` provides image-to-text extraction for the `nl_processing` system. It accepts a supported image file path or an OpenCV image array, submits the image for multimodal extraction, and returns markdown-formatted text in the requested target language. The module's supported contract is limited to its public extractor API and typed failure behavior.
+`extract_text_from_image` provides image-to-text extraction for the `nl_processing` system. It accepts a supported image file path or an OpenCV image array, submits the image for multimodal extraction, and returns markdown-formatted text in the requested target language. The module's supported contract is limited to its public extractor API and typed failure behavior; model-kwargs shaping and multimodal image request construction are delegated to shared `core` utilities.
 
 ### System Context
 
@@ -64,6 +64,7 @@ The module sits at the beginning of the text-processing workflow and produces ex
 - BR-4: Public extraction behavior is asynchronous.
 - BR-5: Successful extraction returns text only; it does not return confidence scores, bounding boxes, or structured OCR metadata.
 - BR-6: The implementation may change the default model selection without a contract change when tuning the quality-speed balance.
+- BR-7: Shared `core` helpers are the supported source for ChatOpenAI kwarg shaping, image-path encoding, and multimodal image-message construction.
 
 ### Non-Functional Requirements
 
@@ -119,7 +120,7 @@ Documented public support is limited to these interfaces.
 
 | ID | Dependency or Constraint | Why It Matters | Behavioral Assumption or Limit | Notes |
 | --- | --- | --- | --- | --- |
-| EC-1 | `nl_processing.core` shared types and exceptions | The module's caller-visible contract depends on shared `Language`, `ExtractedText`, and exception definitions including `UnsupportedLanguageError` | Compatibility depends on `core` preserving these shared contracts | Cross-module coordination is required for breaking changes. |
+| EC-1 | `nl_processing.core` shared types, exceptions, prompt helpers, and image helpers | The module's caller-visible contract depends on shared `Language`, `ExtractedText`, `UnsupportedLanguageError`, `build_llm_kwargs(...)`, `encode_image_path(...)`, and `build_image_human_message(...)` | Compatibility depends on `core` preserving these shared contracts | Cross-module coordination is required for breaking changes. |
 | EC-2 | Runtime prompt assets for supported languages | Extraction behavior requires a prompt asset for the requested language | Missing bundled prompt assets make the language unsupported at construction time | Language support is asset-backed, not enum-only. |
 | EC-3 | Upstream multimodal model service | Extraction success depends on external model availability and response shape | Upstream outages or malformed responses surface as `APIError` | The module does not define fallback behavior. |
 

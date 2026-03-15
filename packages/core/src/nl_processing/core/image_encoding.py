@@ -2,6 +2,7 @@ import base64
 import pathlib
 
 import cv2
+from langchain_core.messages import HumanMessage
 import numpy
 
 from nl_processing.core.exceptions import UnsupportedImageFormatError
@@ -39,6 +40,11 @@ def encode_path_to_base64(path: str) -> tuple[str, str]:
     return base64_string, media_type
 
 
+def encode_image_path(path: str) -> tuple[str, str]:
+    """Read an image file path and return (base64_string, media_type)."""
+    return encode_path_to_base64(path)
+
+
 def encode_cv2_to_base64(image: numpy.ndarray) -> tuple[str, str]:
     """Encode an OpenCV image array to base64 PNG.
 
@@ -50,6 +56,12 @@ def encode_cv2_to_base64(image: numpy.ndarray) -> tuple[str, str]:
         raise ValueError(msg)
     base64_string = base64.b64encode(buffer.tobytes()).decode("utf-8")
     return base64_string, "image/png"
+
+
+def build_image_human_message(base64_string: str, media_type: str) -> HumanMessage:
+    """Build a HumanMessage for one base64-encoded image payload."""
+    image_url = f"data:{media_type};base64,{base64_string}"
+    return HumanMessage(content=[{"type": "image_url", "image_url": {"url": image_url}}])
 
 
 def _suffix_to_media_type(suffix: str) -> str:

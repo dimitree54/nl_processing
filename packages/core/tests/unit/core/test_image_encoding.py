@@ -8,7 +8,9 @@ import pytest
 from nl_processing.core.exceptions import UnsupportedImageFormatError
 from nl_processing.core.image_encoding import (
     SUPPORTED_EXTENSIONS,
+    build_image_human_message,
     encode_cv2_to_base64,
+    encode_image_path,
     encode_path_to_base64,
     validate_image_format,
 )
@@ -68,6 +70,13 @@ def test_encode_path_to_base64_round_trips_file_content(tmp_path: Path) -> None:
     assert base64.b64decode(base64_str) == original_bytes
 
 
+def test_encode_image_path_matches_encode_path_to_base64(tmp_path: Path) -> None:
+    """Test encode_image_path is the public path helper for image-file encoding."""
+    png_path = _create_tiny_png(tmp_path / "test.png")
+
+    assert encode_image_path(str(png_path)) == encode_path_to_base64(str(png_path))
+
+
 def test_encode_path_to_base64_jpeg_media_type(tmp_path: Path) -> None:
     """Test encode_path_to_base64 returns image/jpeg for .jpg files."""
     jpg_path = tmp_path / "test.jpg"
@@ -98,6 +107,15 @@ def test_encode_cv2_to_base64_returns_png() -> None:
     assert media_type == "image/png"
     decoded = base64.b64decode(base64_str)
     assert decoded[:4] == b"\x89PNG"
+
+
+def test_build_image_human_message_uses_data_url_payload() -> None:
+    """Test build_image_human_message wraps image bytes in one data URL block."""
+    message = build_image_human_message("YWJj", "image/png")
+
+    assert message.content == [
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,YWJj"}},
+    ]
 
 
 def test_encode_cv2_to_base64_preserves_pixel_data() -> None:

@@ -5,7 +5,31 @@ from langchain_core.load import dumpd
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 import pytest
 
-from nl_processing.core.prompts import load_prompt
+from nl_processing.core.prompts import build_llm_kwargs, load_prompt
+
+
+def test_build_llm_kwargs_includes_only_non_none_values() -> None:
+    """Test build_llm_kwargs omits optional values when they are None."""
+    kwargs = build_llm_kwargs(model="gpt-4.1-mini", service_tier=None, reasoning_effort=None, temperature=None)
+
+    assert kwargs == {"model": "gpt-4.1-mini"}
+
+
+def test_build_llm_kwargs_preserves_all_explicit_values() -> None:
+    """Test build_llm_kwargs forwards all explicitly configured values."""
+    kwargs = build_llm_kwargs(
+        model="o4-mini",
+        service_tier="priority",
+        reasoning_effort="high",
+        temperature=0.2,
+    )
+
+    assert kwargs == {
+        "model": "o4-mini",
+        "service_tier": "priority",
+        "reasoning_effort": "high",
+        "temperature": 0.2,
+    }
 
 
 def _write_prompt_json(path: Path, prompt: ChatPromptTemplate) -> Path:
