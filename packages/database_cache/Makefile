@@ -7,6 +7,7 @@ JCSPD := npx jscpd --config .jscpd.json --exitCode 1
 .PHONY: lint test test-unit test-integration test-e2e check
 
 lint:
+	uv sync --group dev
 	uv run ruff format src tests
 	uv run ruff check --fix src tests
 	$(PYLINT) src tests --disable=all --enable=C0302 --max-module-lines=200
@@ -17,14 +18,17 @@ lint:
 test: test-unit test-integration test-e2e
 
 test-unit:
+	uv sync --group dev
 	$(PYTEST) -n auto tests/unit
 
 test-integration:
+	uv sync --group dev
 	@if [ -d tests/integration ]; then \
 		doppler run -- env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run pytest -n auto tests/integration; \
 	fi
 
 test-e2e:
+	uv sync --group dev
 	@if [ -d tests/e2e ]; then \
 		doppler run -- env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run pytest -n auto tests/e2e; \
 	fi

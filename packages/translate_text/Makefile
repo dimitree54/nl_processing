@@ -1,4 +1,5 @@
 lint:
+	uv sync --group dev
 	uv run ruff format src tests
 	uv run ruff check --fix src tests
 	uv run pylint src tests --load-plugins=pylint.extensions.bad_builtin --disable=all --enable=C0302,W0141 --max-module-lines=200 --bad-functions=hasattr,getattr,setattr
@@ -6,9 +7,11 @@ lint:
 	@output=$$(npx jscpd --config .jscpd.json --exitCode 1 src tests 2>&1); rc=$$?; [ $$rc -eq 0 ] || { echo "$$output"; exit $$rc; }
 
 test-unit:
+	uv sync --group dev
 	uv run pytest -n auto tests/unit
 
 test-e2e:
+	uv sync --group dev
 	doppler run -- uv run pytest -n auto tests/e2e
 
 check: lint test-unit test-e2e
