@@ -59,9 +59,4 @@ class ScoredWordPair(BaseModel):
     pair: WordPair
     scores: dict[str, int]
     source_word_id: int
-
-
-class WordPairSnapshot(ScoredWordPair):
-    """Remote sync snapshot with stable source and target IDs for cache rebuilds."""
-
     target_word_id: int
