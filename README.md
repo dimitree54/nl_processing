@@ -22,6 +22,7 @@ packages/
   translate_text/
   translate_word/
   database/
+  database_core/
   database_cache/
   sampling/
 docs/
@@ -49,6 +50,7 @@ Each package has its own:
 | `translate_text` | `TextTranslator` | Translate text (NL -> RU) with markdown preservation | [docs](packages/translate_text/docs/module-spec.md) |
 | `translate_word` | `WordTranslator` | Batch-translate words (NL -> RU) | [docs](packages/translate_word/docs/module-spec.md) |
 | `database` | `DatabaseService` | Remote source of truth and default progress/sync provider | [docs](packages/database/docs/module-spec.md) |
+| `database_core` | `NeonBackend` | Extracted backend/provider core for database modules | [docs](packages/database_core/docs/module-spec.md) |
 | `database_cache` | `DatabaseCacheService` | Local-first SQLite cache with injectable remote progress sync | [docs](packages/database_cache/docs/module-spec.md) |
 | `sampling` | `WordSampler` | Weighted word sampling over any compatible scored-pair provider | [docs](packages/sampling/docs/module-spec.md) |
 

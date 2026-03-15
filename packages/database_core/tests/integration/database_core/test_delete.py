@@ -1,10 +1,10 @@
-"""Integration tests for delete operations with real Neon DB."""
+"""Integration tests for database_core delete operations with real Neon DB."""
 
 import uuid
 
 import pytest
 
-from nl_processing.database.backend.neon import NeonBackend
+from nl_processing.database_core.backend.neon import NeonBackend
 
 
 @pytest.mark.asyncio

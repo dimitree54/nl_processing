@@ -3,9 +3,9 @@
 from collections import Counter
 
 from nl_processing.core.models import WordPair
+from nl_processing.core.protocols import ScoredPairProvider
 import pytest
 
-from nl_processing.sampling.ports import ScoredPairProvider
 from nl_processing.sampling.service import WordSampler
 from tests.unit.sampling.conftest import MockProgressStore, make_scored_pair, patch_store
 

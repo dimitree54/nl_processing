@@ -9,7 +9,7 @@ description = "Database package for nl_processing"
 requires-python = ">=3.12"
 dependencies = [
   "nl-processing-core",
-  "asyncpg>=0.30,<1",
+  "nl-processing-database-core",
   "pydantic>=2.0,<3",
 ]
 
@@ -31,4 +31,5 @@ dev = [
 
 [tool.uv.sources]
 nl-processing-core = { path = "../core" }
+nl-processing-database-core = { path = "../database_core" }
 nl-processing-translate-word = { path = "../translate_word" }

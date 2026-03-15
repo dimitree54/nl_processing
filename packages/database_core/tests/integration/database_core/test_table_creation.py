@@ -1,4 +1,4 @@
-"""Integration tests for table creation against real Neon PostgreSQL.
+"""Integration tests for database_core table creation against real Neon PostgreSQL.
 
 These tests verify ``create_tables`` (IF NOT EXISTS) and ``reset_database``
 using **isolated language codes** (``de``, ``fr``) so that they never touch
@@ -11,14 +11,14 @@ test uses a PostgreSQL advisory lock to serialize with CRUD workers.
 import os
 import uuid
 
-import pytest
-
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.testing import (
     count_words,
     drop_all_tables,
     reset_database,
 )
+import pytest
+
+from nl_processing.database_core.backend.neon import NeonBackend
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]

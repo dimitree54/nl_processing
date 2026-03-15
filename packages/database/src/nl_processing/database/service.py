@@ -9,13 +9,13 @@ from datetime import datetime
 from typing import Protocol
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
+from nl_processing.database_core._database_config import read_database_url
+from nl_processing.database_core.backend.abstract import AbstractBackend
+from nl_processing.database_core.backend.neon import NeonBackend
 
 from nl_processing.database import _translation
-from nl_processing.database._database_config import read_database_url
 from nl_processing.database._row_helpers import row_to_word_pair
 from nl_processing.database._service_helpers import get_words_impl
-from nl_processing.database.backend.abstract import AbstractBackend
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import WordNotFoundError
 from nl_processing.database.logging import get_logger
 from nl_processing.database.models import AddWordsResult, PersonalWord

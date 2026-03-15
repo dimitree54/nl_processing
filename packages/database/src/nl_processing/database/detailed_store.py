@@ -7,12 +7,12 @@ and retrieving detailed word records with schema metadata and JSON payloads.
 import json
 
 from nl_processing.core.models import Language, Word
+from nl_processing.database_core._database_config import read_database_url
+from nl_processing.database_core.backend.abstract import AbstractBackend
+from nl_processing.database_core.backend.neon import NeonBackend
 
-from nl_processing.database._database_config import read_database_url
 from nl_processing.database._payload_parsing import parse_payload_from_backend
 from nl_processing.database._validation import validate_payload_if_configured
-from nl_processing.database.backend.abstract import AbstractBackend
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.detailed_exceptions import (
     SourceWordNotFoundError,
 )

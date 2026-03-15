@@ -1,8 +1,8 @@
 """Service helper functions extracted to keep service.py under 200 lines."""
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
+from nl_processing.database_core.backend.abstract import AbstractBackend  # type: ignore[attr-defined]
 
-from nl_processing.database.backend.abstract import AbstractBackend  # type: ignore[attr-defined]
 from nl_processing.database.logging import get_logger
 
 _logger = get_logger("service")

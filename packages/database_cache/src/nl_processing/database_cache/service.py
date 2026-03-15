@@ -7,7 +7,7 @@ import tempfile
 from uuid import uuid4
 
 from nl_processing.core.models import Language, ScoredWordPair, Word, WordPair
-from nl_processing.core.ports import RemoteProgressSyncPort
+from nl_processing.core.protocols import RemoteProgressSyncPort
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.models import ExerciseProgressSummary, PersonalWord
 

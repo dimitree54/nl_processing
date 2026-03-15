@@ -3,9 +3,9 @@
 from uuid import uuid4
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
+from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from tests.e2e.database.conftest import make_service, wait_for_translations
 

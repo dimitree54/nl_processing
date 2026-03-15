@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 import random as stdlib_random
 
-from nl_processing.database.backend.abstract import AbstractBackend
+from nl_processing.database_core.backend.abstract import AbstractBackend
 
 
 class MockBackend(AbstractBackend):

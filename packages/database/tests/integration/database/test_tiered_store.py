@@ -4,11 +4,11 @@ import os
 import uuid
 
 from nl_processing.core.models import Language
+from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 import pytest_asyncio
 
 from nl_processing.database.backend._neon_tiered import create_tiered_tables
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.tiered_progress import TieredExerciseProgressStore
 
 

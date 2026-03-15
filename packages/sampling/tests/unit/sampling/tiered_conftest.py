@@ -1,8 +1,8 @@
 """Shared helpers for TieredMultiExerciseSampler unit tests."""
 
 from nl_processing.core.models import ScoredWordPair
+from nl_processing.core.protocols import ScoredPairProvider
 
-from nl_processing.sampling.ports import ScoredPairProvider
 from nl_processing.sampling.service import TieredMultiExerciseSampler
 from tests.unit.sampling.conftest import MockProgressStore, make_scored_pair
 

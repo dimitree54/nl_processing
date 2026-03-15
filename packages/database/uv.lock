@@ -426,8 +426,8 @@ name = "nl-processing-database"
 version = "1.0.4"
 source = { editable = "." }
 dependencies = [
-    { name = "asyncpg" },
     { name = "nl-processing-core" },
+    { name = "nl-processing-database-core" },
     { name = "pydantic" },
 ]
 
@@ -444,14 +444,39 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "asyncpg", specifier = ">=0.30,<1" },
     { name = "nl-processing-core", directory = "../core" },
+    { name = "nl-processing-database-core", directory = "../database_core" },
     { name = "pydantic", specifier = ">=2.0,<3" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "nl-processing-translate-word", directory = "../translate_word" },
+    { name = "pylint", specifier = ">=4.0.4,<5" },
+    { name = "pytest", specifier = ">=9.0.2,<10" },
+    { name = "pytest-asyncio", specifier = ">=1.3.0,<2" },
+    { name = "pytest-xdist", specifier = ">=3.8.0,<4" },
+    { name = "ruff", specifier = ">=0.15.0,<0.16" },
+    { name = "vulture", specifier = ">=2.14.0,<3" },
+]
+
+[[package]]
+name = "nl-processing-database-core"
+version = "1.0.4"
+source = { directory = "../database_core" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "nl-processing-core" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.30,<1" },
+    { name = "nl-processing-core", directory = "../core" },
+]
+
+[package.metadata.requires-dev]
+dev = [
     { name = "pylint", specifier = ">=4.0.4,<5" },
     { name = "pytest", specifier = ">=9.0.2,<10" },
     { name = "pytest-asyncio", specifier = ">=1.3.0,<2" },

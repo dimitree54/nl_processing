@@ -1,11 +1,11 @@
-"""Integration tests for NeonBackend CRUD operations against real Neon PostgreSQL."""
+"""Integration tests for database_core NeonBackend CRUD operations."""
 
 from datetime import datetime
 import uuid
 
 import pytest
 
-from nl_processing.database.backend.neon import NeonBackend
+from nl_processing.database_core.backend.neon import NeonBackend
 
 
 def _uid() -> str:

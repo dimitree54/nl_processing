@@ -5,6 +5,7 @@ document_type: "module-spec"
 related_docs:
   - "../../../docs/module-spec.md"
   - "../../core/docs/module-spec.md"
+  - "../../database_core/docs/module-spec.md"
   - "../../extract_word_details/docs/module-spec.md"
 ---
 
@@ -14,7 +15,7 @@ related_docs:
 
 ### Summary
 
-`database` is the authoritative remote persistence layer for `nl_processing`. It stores the shared corpus of words, translation links, pair-specific detailed-word records, per-user vocabulary membership, and per-user exercise progress in Neon PostgreSQL. The module is optimized for correctness and durable state, not hot-path local latency; cache and offline concerns are intentionally delegated to `database_cache`. It also provides the default remote implementation for the shared score-provider and cache-sync ports defined in `core`.
+`database` is the authoritative remote persistence layer for `nl_processing`. It owns the public domain-facing persistence services for canonical words, translation links, pair-specific detailed-word records, per-user vocabulary membership, and per-user exercise progress. Provider mechanics and the default Neon backend live in `database_core`; this module composes that lower layer without changing its own public service contracts.
 
 ### System Context
 
@@ -25,7 +26,8 @@ The module sits below the LLM-facing extract and translate packages and above do
 - `DatabaseService` for adding words, reading translated word pairs, reading full personal vocabulary entries, deleting personal vocabulary entries, and creating tables.
 - `DetailedWordStore` for pair-specific detailed-word persistence and get-or-extract behavior.
 - `ExerciseProgressStore` for score-aware reads, summaries, remote snapshots, and idempotent delta replay.
-- Remote schema, backend abstraction, structured logging, and test-only reset helpers.
+- Public persistence services, domain DTOs, structured logging, and test-only reset helpers.
+- Composition over the extracted `database_core` backend/provider layer.
 
 ### Out of Scope
 

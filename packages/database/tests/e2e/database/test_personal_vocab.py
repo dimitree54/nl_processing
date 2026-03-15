@@ -4,9 +4,9 @@ from datetime import datetime
 import uuid
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
+from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
-from nl_processing.database.backend.neon import NeonBackend
 from tests.e2e.database.conftest import make_service, wait_for_translations
 
 

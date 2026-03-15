@@ -23,6 +23,8 @@ packages = [
   "nl_processing.core",
   "nl_processing.database",
   "nl_processing.database.backend",
+  "nl_processing.database_core",
+  "nl_processing.database_core.backend",
   "nl_processing.database_cache",
   "nl_processing.extract_text_from_image",
   "nl_processing.extract_text_from_image.prompts",
@@ -47,6 +49,8 @@ packages = [
 "nl_processing.core" = "packages/core/src/nl_processing/core"
 "nl_processing.database" = "packages/database/src/nl_processing/database"
 "nl_processing.database.backend" = "packages/database/src/nl_processing/database/backend"
+"nl_processing.database_core" = "packages/database_core/src/nl_processing/database_core"
+"nl_processing.database_core.backend" = "packages/database_core/src/nl_processing/database_core/backend"
 "nl_processing.database_cache" = "packages/database_cache/src/nl_processing/database_cache"
 "nl_processing.extract_text_from_image" = "packages/extract_text_from_image/src/nl_processing/extract_text_from_image"
 "nl_processing.extract_text_from_image.prompts" = "packages/extract_text_from_image/src/nl_processing/extract_text_from_image/prompts"

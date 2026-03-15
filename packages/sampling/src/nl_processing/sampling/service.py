@@ -3,8 +3,7 @@
 import random
 
 from nl_processing.core.models import ScoredWordPair, Word, WordPair
-
-from nl_processing.sampling.ports import ScoredPairProvider
+from nl_processing.core.protocols import ScoredPairProvider
 
 
 class WordSampler:

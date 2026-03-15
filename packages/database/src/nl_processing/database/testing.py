@@ -2,7 +2,8 @@
 
 import os
 
-from nl_processing.database.backend.neon import NeonBackend
+from nl_processing.database_core.backend.neon import NeonBackend
+
 from nl_processing.database.exceptions import DatabaseError
 
 

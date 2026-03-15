@@ -4,9 +4,9 @@ import json
 import uuid
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
+from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.detailed_exceptions import SourceWordNotFoundError
 from nl_processing.database.detailed_store import DetailedWordStore
 from nl_processing.database.service import DatabaseService

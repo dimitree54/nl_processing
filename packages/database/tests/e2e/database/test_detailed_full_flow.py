@@ -4,9 +4,9 @@ from collections.abc import AsyncIterator
 import os
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
+from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.detailed_models import DetailedWordRecord
 from nl_processing.database.detailed_store import DetailedWordStore
 from nl_processing.database.service import DatabaseService

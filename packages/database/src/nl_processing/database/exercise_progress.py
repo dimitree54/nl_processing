@@ -7,11 +7,11 @@ sync contracts used by sampling and database_cache.
 from datetime import datetime
 
 from nl_processing.core.models import Language, ScoredWordPair
+from nl_processing.database_core._database_config import _init_backend_and_tables
+from nl_processing.database_core.backend.abstract import AbstractBackend
 
-from nl_processing.database._database_config import _init_backend_and_tables
 from nl_processing.database._progress_helpers import compute_progress_summary
 from nl_processing.database._row_helpers import row_to_word_pair
-from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.models import EnrichedWordPairSnapshot, ExerciseProgressSummary
 
 

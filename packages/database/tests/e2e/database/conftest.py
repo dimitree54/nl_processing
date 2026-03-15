@@ -5,10 +5,10 @@ from collections.abc import AsyncIterator
 import os
 
 from nl_processing.core.models import Language
+from nl_processing.database_core.backend.neon import NeonBackend
 from nl_processing.translate_word.service import WordTranslator
 import pytest_asyncio
 
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.service import DatabaseService
 from nl_processing.database.testing import (
     count_translation_links,
