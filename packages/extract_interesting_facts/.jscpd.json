@@ -1,0 +1,16 @@
+{
+  "threshold": 0,
+  "minLines": 10,
+  "reporters": ["console"],
+  "pattern": "**/*.py",
+  "ignore": [
+    "**/__pycache__/**",
+    "**/.venv/**",
+    "**/node_modules/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/*.egg-info/**",
+    "**/tests/**/conftest.py"
+  ],
+  "absolute": true
+}
