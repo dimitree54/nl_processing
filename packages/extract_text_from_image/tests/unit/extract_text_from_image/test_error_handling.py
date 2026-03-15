@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from nl_processing.core.exceptions import (
     APIError,
-    TargetLanguageNotFoundError,
+    TargetLanguageNotFoundInInputError,
     UnsupportedImageFormatError,
 )
 import numpy as np
@@ -50,10 +50,10 @@ async def test_unsupported_format_in_extract_from_path(monkeypatch: pytest.Monke
 
 @pytest.mark.asyncio
 async def test_target_language_not_found_empty_text(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
-    """Test that empty extracted text raises TargetLanguageNotFoundError."""
+    """Test that empty extracted text raises TargetLanguageNotFoundInInputError."""
     test_image_path, extractor = _setup_extractor_with_mock_chain(monkeypatch, tmp_path, "")
 
-    with pytest.raises(TargetLanguageNotFoundError, match="No text in the target language"):
+    with pytest.raises(TargetLanguageNotFoundInInputError, match="No text in the target language"):
         await extractor.extract_from_path(test_image_path)
 
 
@@ -61,10 +61,10 @@ async def test_target_language_not_found_empty_text(monkeypatch: pytest.MonkeyPa
 async def test_target_language_not_found_whitespace_text(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    """Test that whitespace-only extracted text raises TargetLanguageNotFoundError."""
+    """Test that whitespace-only extracted text raises TargetLanguageNotFoundInInputError."""
     test_image_path, extractor = _setup_extractor_with_mock_chain(monkeypatch, tmp_path, "   \n  \t  ")
 
-    with pytest.raises(TargetLanguageNotFoundError, match="No text in the target language"):
+    with pytest.raises(TargetLanguageNotFoundInInputError, match="No text in the target language"):
         await extractor.extract_from_path(test_image_path)
 
 

@@ -51,7 +51,7 @@ The module sits at the beginning of the text-processing workflow and produces ex
 | FR-2 | `ImageTextExtractor` construction must accept a target `language` and optional model configuration parameters that shape extraction behavior. | Must | The constructor contract is part of the public API; the exact default model choice is not part of the contract and may change silently. |
 | FR-3 | `extract_from_path(path)` must accept a file path, reject unsupported image formats before model invocation, and return extracted markdown text on success. | Must | Input validation must happen before any upstream request. |
 | FR-4 | `extract_from_cv2(image)` must accept a `numpy.ndarray` image and return extracted markdown text on success. | Must | Callers may use in-memory OpenCV images without writing files first. |
-| FR-5 | If extraction yields empty or whitespace-only text, the module must raise `TargetLanguageNotFoundError`. | Must | Blank extraction is not a successful result. |
+| FR-5 | If extraction yields empty or whitespace-only text, the module must raise `TargetLanguageNotFoundInInputError`. | Must | Blank extraction is not a successful result. |
 | FR-6 | If upstream invocation or response parsing fails, the module must raise `APIError`. | Must | The caller-facing failure contract stays typed and consistent. |
 | FR-7 | If the requested language is not supported by bundled runtime assets, construction must raise `UnsupportedLanguageError`. | Must | Unsupported-language detection happens during `ImageTextExtractor` initialization before extraction begins. |
 | FR-8 | If a required runtime file is missing, the module must raise `ImageTextFileNotFoundError`. | Must | This includes missing image inputs and any required supported-language assets that disappear unexpectedly at runtime. |
@@ -79,7 +79,7 @@ The module sits at the beginning of the text-processing workflow and produces ex
 | ID | Scenario | Expected Behavior | Notes |
 | --- | --- | --- | --- |
 | FM-1 | Unsupported file extension for path input | Raise `UnsupportedImageFormatError` before any upstream call | Caller must provide a supported image format. |
-| FM-2 | Image contains no target-language text or no text at all | Raise `TargetLanguageNotFoundError` | Blank output is treated as failure. |
+| FM-2 | Image contains no target-language text or no text at all | Raise `TargetLanguageNotFoundInInputError` | Blank output is treated as failure. |
 | FM-3 | Upstream model invocation or tool-response parsing fails | Raise `APIError` with the original exception chained | Caller may retry or surface the error. |
 | FM-4 | Requested language is unsupported because no bundled prompt asset exists for it | Raise `UnsupportedLanguageError` during construction | Unsupported languages are rejected before any extraction call can start. |
 | FM-5 | Requested path input does not exist | Raise `ImageTextFileNotFoundError` before extraction succeeds | Missing input files are surfaced as a typed module failure. |
@@ -145,7 +145,7 @@ Documented public support is limited to these interfaces.
 - AC-1: Callers can construct `ImageTextExtractor` through the documented public import path and use it as the supported extraction entry point.
 - AC-2: Supported path inputs and OpenCV-array inputs both produce markdown text on successful extraction.
 - AC-3: Unsupported path formats fail before upstream invocation.
-- AC-4: Blank or whitespace-only extraction results raise `TargetLanguageNotFoundError`.
+- AC-4: Blank or whitespace-only extraction results raise `TargetLanguageNotFoundInInputError`.
 - AC-5: Upstream invocation or parsing failures raise `APIError`.
 - AC-6: Unsupported languages raise `UnsupportedLanguageError` during `ImageTextExtractor` construction.
 - AC-7: Missing image files raise `ImageTextFileNotFoundError`.
@@ -157,7 +157,7 @@ Documented public support is limited to these interfaces.
 | VAL-1 | FR-1, FR-2, IF-1 | The public class can be constructed through the documented import path with supported configuration inputs | A caller can instantiate the extractor without relying on internal modules or unsupported entry points. |
 | VAL-2 | FR-3, IF-2 | Supported path input succeeds and unsupported path input fails locally | Successful calls return markdown text; unsupported formats raise `UnsupportedImageFormatError` before upstream invocation. |
 | VAL-3 | FR-4, IF-3 | OpenCV-array input succeeds through the public async method | Successful calls return markdown text from `extract_from_cv2`. |
-| VAL-4 | FR-5, FM-2 | Blank extraction is surfaced as a typed failure | Empty or whitespace-only extraction raises `TargetLanguageNotFoundError`. |
+| VAL-4 | FR-5, FM-2 | Blank extraction is surfaced as a typed failure | Empty or whitespace-only extraction raises `TargetLanguageNotFoundInInputError`. |
 | VAL-5 | FR-6, FM-3, NFR-2 | Upstream and parsing failures are not hidden or downgraded | Failures surface as `APIError` rather than fallback results. |
 | VAL-6 | FR-7, FM-4 | Unsupported languages fail during construction with a typed module exception | Constructing the extractor with an unsupported language raises `UnsupportedLanguageError` before extraction starts. |
 | VAL-7 | FR-8, FM-5 | Missing runtime files are surfaced as typed module failures | Missing image paths raise `ImageTextFileNotFoundError`. |

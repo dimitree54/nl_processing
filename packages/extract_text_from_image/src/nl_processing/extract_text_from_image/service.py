@@ -4,7 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from nl_processing.core.exceptions import (
     APIError,
-    TargetLanguageNotFoundError,
+    TargetLanguageNotFoundInInputError,
     UnsupportedLanguageError,
 )
 from nl_processing.core.image_encoding import (
@@ -96,7 +96,7 @@ class ImageTextExtractor:
             UnsupportedImageFormatError: `path` has an unsupported image extension.
             ImageTextFileNotFoundError: `path` does not exist.
             APIError: Upstream invocation or response parsing fails.
-            TargetLanguageNotFoundError: Extraction returns blank or whitespace-only text.
+            TargetLanguageNotFoundInInputError: Extraction returns blank or whitespace-only text.
         """
         validate_image_format(path)
         try:
@@ -117,7 +117,7 @@ class ImageTextExtractor:
 
         Raises:
             APIError: Upstream invocation or response parsing fails.
-            TargetLanguageNotFoundError: Extraction returns blank or whitespace-only text.
+            TargetLanguageNotFoundInInputError: Extraction returns blank or whitespace-only text.
         """
         base64_string, media_type = encode_cv2_to_base64(image)
         return await self._aextract(base64_string, media_type)
@@ -135,6 +135,6 @@ class ImageTextExtractor:
         # Check if target language text was found
         if not result.text.strip():
             msg = "No text in the target language was found in the image"
-            raise TargetLanguageNotFoundError(msg)
+            raise TargetLanguageNotFoundInInputError(msg)
 
         return result.text

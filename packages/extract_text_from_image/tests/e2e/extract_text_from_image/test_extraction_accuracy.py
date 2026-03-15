@@ -3,7 +3,7 @@ import time
 from typing import Coroutine
 
 import cv2
-from nl_processing.core.exceptions import TargetLanguageNotFoundError
+from nl_processing.core.exceptions import TargetLanguageNotFoundInInputError
 from nl_processing.core.models import Language
 import pytest
 
@@ -57,12 +57,12 @@ async def test_extraction_from_cv2_array(tmp_path: pathlib.Path) -> None:
 async def test_english_only_raises_target_language_not_found(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Image with English-only text should raise TargetLanguageNotFoundError (FR5)."""
+    """Image with English-only text should raise TargetLanguageNotFoundInInputError (FR5)."""
     english_text = "Remember to charge your phone before leaving tomorrow"
     image_path = str(tmp_path / "english_only.png")
     generate_test_image(english_text, image_path, font_scale=1.2, width=800, height=100)
 
     extractor = ImageTextExtractor(language=Language.NL)
 
-    with pytest.raises(TargetLanguageNotFoundError):
+    with pytest.raises(TargetLanguageNotFoundInInputError):
         await extractor.extract_from_path(image_path)
