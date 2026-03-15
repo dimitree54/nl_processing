@@ -25,7 +25,7 @@ Shared foundational package for the `nl_processing` repository. Provides domain 
 
 ### System Context
 
-`nl_processing.core` sits at the bottom of the dependency graph. It is consumed by every other package in the repository. It has no dependencies on sibling packages — only on third-party libraries (Pydantic, LangChain, OpenCV, NumPy).
+`nl_processing.core` sits at the bottom of the dependency graph. It is consumed by every other package in the repository. It has no dependencies on sibling packages — only on third-party libraries (Pydantic, LangChain, opencv-python, NumPy).
 
 ### Existing State and Change Impact
 
@@ -91,9 +91,9 @@ This spec documents the current code state as of 2026-03-15. No changes are prop
 | NFR-2 | Compatibility | Pydantic v2 | `>=2.0,<3` | Core model layer |
 | NFR-3 | Compatibility | LangChain Core | `>=0.3,<1` | Prompt infrastructure |
 | NFR-4 | Compatibility | LangChain OpenAI | `>=0.3,<1` | `build_translation_chain` |
-| NFR-5 | Compatibility | OpenCV | `>=4.0,<5` | Image encoding |
+| NFR-5 | Compatibility | opencv-python | `>=4.0,<5` | Image encoding |
 | NFR-6 | Code quality | Max 200 lines per module | Enforced by pylint | Signal for refactoring |
-| NFR-7 | Code quality | Zero code duplication | Enforced by jscpd (threshold 0, minLines 10) | |
+| NFR-7 | Code quality | Zero code duplication | Enforced by project static-check configuration | See `.jscpd.json` and `Makefile` |
 | NFR-8 | Code quality | No test skipping | Enforced by ruff banned imports | |
 
 ### Failure Modes and Edge Cases
@@ -132,12 +132,12 @@ This spec documents the current code state as of 2026-03-15. No changes are prop
 
 | ID | Type | Direction | Counterparty | Contract or Data | Notes |
 | --- | --- | --- | --- | --- | --- |
-| IF-1 | Python import | Outbound (consumed by) | All 9 consumer packages | `Language`, `PartOfSpeech`, `ExtractedText`, `Word`, `WordPair`, `ScoredWordPair` | Public model API |
-| IF-2 | Python import | Outbound (consumed by) | Translation packages | `build_translation_chain` | Returns `RunnableSerializable` |
-| IF-3 | Python import | Outbound (consumed by) | Translation packages | `load_prompt` | Returns `ChatPromptTemplate` |
-| IF-4 | Python import | Outbound (consumed by) | Image packages | `validate_image_format`, `encode_path_to_base64`, `encode_cv2_to_base64` | Image utilities |
-| IF-5 | Python import | Outbound (consumed by) | Image packages | `UnsupportedImageFormatError` | Exception type |
-| IF-6 | Python import | Outbound (consumed by) | All consumer packages | `APIError`, `TargetLanguageNotFoundError` | Exception types |
+| IF-1 | Python import | Outbound (consumed by) | All consumer packages | `nl_processing.core.models`: `Language`, `PartOfSpeech`, `ExtractedText`, `Word`, `WordPair`, `ScoredWordPair` | Public model API; consumers import from submodules directly |
+| IF-2 | Python import | Outbound (consumed by) | Translation packages | `nl_processing.core.prompts.build_translation_chain` | Returns `RunnableSerializable`; imported from submodule directly |
+| IF-3 | Python import | Outbound (consumed by) | Translation packages | `nl_processing.core.prompts.load_prompt` | Returns `ChatPromptTemplate`; imported from submodule directly |
+| IF-4 | Python import | Outbound (consumed by) | Image packages | `nl_processing.core.image_encoding`: `validate_image_format`, `encode_path_to_base64`, `encode_cv2_to_base64` | Image utilities; imported from submodule directly |
+| IF-5 | Python import | Outbound (consumed by) | Image packages | `nl_processing.core.exceptions.UnsupportedImageFormatError` | Exception type; imported from submodule directly |
+| IF-6 | Python import | Outbound (consumed by) | All consumer packages | `nl_processing.core.exceptions`: `APIError`, `TargetLanguageNotFoundError` | Exception types; imported from submodule directly |
 | IF-7 | Third-party | Inbound (depends on) | Pydantic v2 | `BaseModel` | Model definitions |
 | IF-8 | Third-party | Inbound (depends on) | LangChain Core + OpenAI | `ChatPromptTemplate`, `ChatOpenAI`, `load`, `dumpd` | Prompt infrastructure |
 | IF-9 | Third-party | Inbound (depends on) | OpenCV + NumPy | `cv2.imencode`, `numpy.ndarray` | Image encoding |
@@ -151,6 +151,8 @@ This spec documents the current code state as of 2026-03-15. No changes are prop
 | Prompt JSON files | Not owned | Serialized `ChatPromptTemplate` files | Managed by consumer packages | Core only provides load/save tooling |
 
 This package is stateless — it defines types and pure functions only. No runtime state, caching, or side effects beyond file I/O in prompt loading/saving and image encoding.
+
+The package-level `__init__.py` is intentionally empty. This is consistent with `ruff.toml` (`strictly-empty-init-modules = true`) and the package contract: consumers import public APIs from explicit submodules rather than from `nl_processing.core` directly.
 
 ### Processing Flow
 
@@ -194,7 +196,7 @@ This package is stateless — it defines types and pure functions only. No runti
 - CR-1: All public models use Pydantic v2 `BaseModel` — no dataclasses or attrs
 - CR-2: All enums use Python `enum.Enum` — no string literals for categorical values
 - CR-3: All files must stay under 200 lines (pylint enforced)
-- CR-4: No code duplication (jscpd threshold 0, minLines 10)
+- CR-4: No code duplication; enforcement details live in `.jscpd.json` and are executed via `Makefile`
 - CR-5: No test skipping — failing tests must be fixed or removed
 - CR-6: No `Any` types, no `typing.cast`, no `dict.get` fallbacks, no `os.getenv` silent defaults
 - CR-7: All imports are absolute — relative imports banned
@@ -227,10 +229,10 @@ This package is stateless — it defines types and pure functions only. No runti
 
 **Framework and Constraints:**
 
-- pytest with `pytest-xdist` for parallel execution (`-n auto`)
-- `pytest-asyncio` available for async tests
-- No test skipping allowed (enforced by ruff)
-- `--tb=short --no-header -q` output style
+- pytest-based test suite executed via the package `Makefile`
+- Active pytest behavior and CLI options are defined in `pytest.ini` and `Makefile`
+- `pytest-asyncio` is available for async tests
+- No test skipping allowed (enforced by `ruff.toml`)
 
 **Unit:**
 
@@ -246,21 +248,22 @@ This package is stateless — it defines types and pure functions only. No runti
 
 | ID | Target | Verification Level | Check or Test | When It Runs | Notes |
 | --- | --- | --- | --- | --- | --- |
-| QA-1 | FR-1 through FR-6 | Unit | `test_models.py` (19 tests) | `make check` | Covers enums and all Pydantic models |
-| QA-2 | FR-7 | Unit | `test_prompts.py` (9 tests) | `make check` | Covers all `load_prompt` error paths and round-trip |
-| QA-3 | FR-8 | Unit | `test_build_translation_chain.py` (6 tests) | `make check` | Chain construction, param passing, tool binding, error path |
-| QA-4 | FR-9, FR-10, FR-11 | Unit | `test_image_encoding.py` (10 tests) | `make check` | Format validation, base64 encoding, media types, pixel fidelity |
-| QA-5 | FR-12 | Unit | `test_exceptions.py` (10 tests) | `make check` | Covers all exception types |
+| QA-1 | FR-1 through FR-6 | Unit | `test_models.py`, `test_word_pairs.py` | `make check` | Covers enums and all Pydantic models |
+| QA-2 | FR-7 | Unit | `test_prompts.py` | `make check` | Covers all `load_prompt` error paths and round-trip |
+| QA-3 | FR-8 | Unit | `test_build_translation_chain.py` | `make check` | Chain construction, param passing, tool binding, error path |
+| QA-4 | FR-9, FR-10, FR-11 | Unit | `test_image_encoding.py` | `make check` | Format validation, base64 encoding, media types, pixel fidelity |
+| QA-5 | FR-12 | Unit | `test_exceptions.py` | `make check` | Covers all exception types |
+| QA-6 | FR-7 | Unit | `test_prompt_loading.py` | `make check` | Covers `load_prompt` happy path and missing-file error |
 
 #### Static Checks and Gates
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | `pylint --max-module-lines=200` | Enforce file size limit | `make check` | Any file >200 lines |
-| SC-2 | `jscpd --exitCode 1` | Detect code duplication | `make check` | Any duplicate ≥10 lines |
-| SC-3 | `ruff check` | Enforce coding standards, banned APIs | `make check` | Any lint violation |
-| SC-4 | `ruff format` | Enforce consistent formatting | `make check` | Any formatting deviation |
-| SC-5 | `vulture` | Detect unused code | `make check` | Unused code not in whitelist |
+| SC-1 | `Makefile` lint pipeline | Enforce file size limit and project lint gates | `make check` | Any configured lint failure |
+| SC-2 | `.jscpd.json` via `Makefile` | Detect code duplication | `make check` | Any configured duplication failure |
+| SC-3 | `ruff.toml` via `Makefile` | Enforce coding standards, banned APIs, and formatting | `make check` | Any configured Ruff failure |
+| SC-4 | `pytest.ini` plus pytest invocation in `Makefile` | Enforce package test execution contract | `make check` | Any unit-test failure |
+| SC-5 | `vulture` via `Makefile` | Detect unused code | `make check` | Unused code not in whitelist |
 
 #### Manual Verification Needed
 

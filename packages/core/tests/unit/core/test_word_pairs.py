@@ -1,0 +1,68 @@
+from pydantic import ValidationError
+import pytest
+
+from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair
+
+
+def test_word_pair_instantiation() -> None:
+    """Test WordPair can be created and accessed."""
+    source = Word(normalized_form="fiets", word_type=PartOfSpeech.NOUN, language=Language.NL)
+    target = Word(normalized_form="велосипед", word_type=PartOfSpeech.NOUN, language=Language.RU)
+
+    pair = WordPair(source=source, target=target)
+
+    assert pair.source == source
+    assert pair.target == target
+
+
+def test_word_pair_serialization() -> None:
+    """Test WordPair serialization via model_dump."""
+    pair = WordPair(
+        source=Word(normalized_form="lopen", word_type=PartOfSpeech.VERB, language=Language.NL),
+        target=Word(normalized_form="бежать", word_type=PartOfSpeech.VERB, language=Language.RU),
+    )
+
+    assert pair.model_dump(mode="json") == {
+        "source": {"normalized_form": "lopen", "word_type": "verb", "language": "nl"},
+        "target": {"normalized_form": "бежать", "word_type": "verb", "language": "ru"},
+    }
+
+
+def test_scored_word_pair_instantiation() -> None:
+    """Test ScoredWordPair can be created and accessed."""
+    pair = WordPair(
+        source=Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL),
+        target=Word(normalized_form="дом", word_type=PartOfSpeech.NOUN, language=Language.RU),
+    )
+
+    scored_pair = ScoredWordPair(
+        pair=pair,
+        scores={"reading": 3, "writing": 5},
+        source_word_id=11,
+        target_word_id=22,
+    )
+
+    assert scored_pair.pair == pair
+    assert scored_pair.scores == {"reading": 3, "writing": 5}
+    assert scored_pair.source_word_id == 11
+    assert scored_pair.target_word_id == 22
+
+
+def test_scored_word_pair_missing_fields() -> None:
+    """Test ScoredWordPair raises ValidationError on missing fields."""
+    pair = WordPair(
+        source=Word(normalized_form="zien", word_type=PartOfSpeech.VERB, language=Language.NL),
+        target=Word(normalized_form="видеть", word_type=PartOfSpeech.VERB, language=Language.RU),
+    )
+
+    with pytest.raises(ValidationError):
+        ScoredWordPair(scores={"reading": 1}, source_word_id=1, target_word_id=2)
+
+    with pytest.raises(ValidationError):
+        ScoredWordPair(pair=pair, source_word_id=1, target_word_id=2)
+
+    with pytest.raises(ValidationError):
+        ScoredWordPair(pair=pair, scores={"reading": 1}, target_word_id=2)
+
+    with pytest.raises(ValidationError):
+        ScoredWordPair(pair=pair, scores={"reading": 1}, source_word_id=1)

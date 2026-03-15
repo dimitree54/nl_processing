@@ -1,7 +1,12 @@
 from pydantic import ValidationError
 import pytest
 
-from nl_processing.core.models import ExtractedText, Language, PartOfSpeech, Word
+from nl_processing.core.models import (
+    ExtractedText,
+    Language,
+    PartOfSpeech,
+    Word,
+)
 
 
 def test_language_enum_values() -> None:

@@ -13,7 +13,7 @@ related_docs:
 
 ### Summary
 
-`extract_text_from_image` is the vision entrypoint of the `nl_processing` pipeline. It accepts either an image file path or an OpenCV image array, runs an LLM vision extraction flow, and returns markdown-formatted text for the target language. The current shipped prompt set is effectively Dutch-only, and the module wraps image transport, tool-calling output parsing, and basic benchmark helpers.
+`extract_text_from_image` is the vision entrypoint of the `nl_processing` pipeline. It accepts either an image file path or an OpenCV image array, runs an LLM vision extraction flow, and returns markdown-formatted text for the target language. The current shipped prompt set is effectively Dutch-only, and the module wraps image transport, tool-calling output parsing, and internal benchmark/prompt-development helpers.
 
 ### System Context
 
@@ -21,7 +21,7 @@ The module sits at the beginning of the text-processing workflow and feeds downs
 
 ### In Scope
 
-- Public `ImageTextExtractor` service with async path-based and cv2-based extraction methods.
+- Public `ImageTextExtractor` service with async path-based and cv2-based extraction methods. The package does not re-export from `__init__.py`; callers must import directly from the `service` submodule (`from nl_processing.extract_text_from_image.service import ImageTextExtractor`).
 - Image-to-base64 conversion and supported-format validation for file input.
 - Markdown-oriented target-language text extraction via OpenAI/LangChain tool calling.
 - Benchmark helpers for synthetic image generation and normalized exact-match comparison.
@@ -37,7 +37,7 @@ The module sits at the beginning of the text-processing workflow and feeds downs
 
 | ID | Assumption | Status | Notes |
 | --- | --- | --- | --- |
-| A-1 | `nl.json` remains the only shipped prompt asset unless new language prompts and tests are added together. | Needs Review | The current prompt directory contains only Dutch. |
+| A-1 | `nl.json` remains the only shipped runtime prompt asset unless new language prompts and tests are added together. | Needs Review | Internal prompt-development files may exist alongside runtime assets, but only language JSON prompt assets define supported runtime languages. |
 | A-2 | Normalized exact-match evaluation remains the benchmark gate for prompt/model changes. | Needs Review | Implemented by the local benchmark helpers. |
 
 ## 2. Requirements
@@ -46,19 +46,20 @@ The module sits at the beginning of the text-processing workflow and feeds downs
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must provide `ImageTextExtractor(language, model, reasoning_effort, service_tier, temperature)` with sensible defaults for async extraction. | Must | Current defaults are `model="gpt-4.1-mini"`, `reasoning_effort=None`, `service_tier=None`, `temperature=0`. |
+| FR-1 | The module must provide `ImageTextExtractor(language, model, reasoning_effort, service_tier, temperature)` with sensible defaults for async extraction. | Must | Current defaults are `model="gpt-4.1-mini"`, `reasoning_effort: str | None = None`, `service_tier: str | None = None`, `temperature: float | None = 0`. Passing `None` for `reasoning_effort` or `temperature` delegates to the model's own default. |
 | FR-2 | `extract_from_path(path)` must validate supported file extensions before invoking the model and must return markdown-formatted extracted text. | Must | Path input is fail-fast on extension errors. |
 | FR-3 | `extract_from_cv2(image)` must accept a `numpy.ndarray`, encode it as PNG, and return markdown-formatted extracted text. | Must | cv2 input converges into the same internal extraction path. |
 | FR-4 | Whitespace-only or empty extracted text must raise `TargetLanguageNotFoundError`. | Must | Covers blank images and images without target-language text. |
 | FR-5 | Upstream invocation or parsing failures must be mapped to `APIError`. | Must | Keeps the failure contract typed for callers. |
-| FR-6 | The module must keep local benchmark helpers for synthetic image generation and normalized exact-match evaluation. | Should | Internal development support, not part of the public API. |
+| FR-6 | The module must keep local benchmark helpers for synthetic image generation and normalized exact-match evaluation. | Should | **Internal only** — not part of the public API. The `benchmark` submodule exposes `generate_test_image`, `normalize_text`, and `evaluate_extraction` for development and CI use. Callers of the package must not depend on these helpers. |
 
 ### Rules and Invariants
 
 - BR-1: Both public extraction methods must converge into one shared internal extraction pipeline after encoding.
 - BR-2: File-path inputs must reject unsupported extensions locally before any API call.
 - BR-3: cv2 inputs are always encoded to PNG for model submission.
-- BR-4: Prompt selection is driven by `Language.value`, but only languages with shipped prompt assets are actually supported.
+- BR-4: Prompt selection is driven by `Language.value`, but only languages with shipped runtime prompt assets are actually supported.
+- BR-5: Prompt-development utilities and examples under `prompts/` are internal implementation assets and are not part of the public module API.
 
 ### Non-Functional Requirements
 
@@ -99,20 +100,20 @@ The module sits at the beginning of the text-processing workflow and feeds downs
 | --- | --- | --- | --- | --- | --- |
 | IF-1 | Python API | Inbound | Callers | `await extract_from_path(path: str) -> str` | Validates extension before invoke. |
 | IF-2 | Python API | Inbound | Callers | `await extract_from_cv2(image: numpy.ndarray) -> str` | Encodes arrays as PNG. |
-| IF-3 | Asset/API | Outbound | Prompt assets + OpenAI | `prompts/<language>.json`, tool schema `ExtractedText`, OpenAI/LangChain chain | Current shipped asset is `nl.json`. |
+| IF-3 | Asset/API | Outbound | Prompt assets + OpenAI | `prompts/<language>.json`, tool schema `ExtractedText`, OpenAI/LangChain chain | Runtime prompt loading uses language JSON assets such as `nl.json`. Other files under `prompts/` are internal development tooling and examples only. |
 
 ### Data and State Ownership
 
 | Entity or State | Ownership | Description | Lifecycle or Retention | Notes |
 | --- | --- | --- | --- | --- |
 | Service instance state | Owned | Target language and pre-built chain. | Runtime only | No persistence across runs. |
-| Prompt assets | Owned | Language-specific extraction prompts. | Versioned with the package | Only Dutch is currently shipped. |
-| Benchmark helpers | Owned | Synthetic image generation and normalized comparison utilities. | Versioned with the package | Internal tooling. |
+| Prompt assets and tooling | Owned | Runtime language prompt JSON assets plus prompt-development utilities and examples under `prompts/`. | Versioned with the package | Only JSON language assets participate in runtime prompt loading; development scripts/examples are internal only. |
+| Benchmark helpers | Owned | Synthetic image generation and normalized comparison utilities in `benchmark.py`. | Versioned with the package | Internal tooling only; not a supported caller interface. |
 | Extracted text payload | Referenced | `core.models.ExtractedText` tool schema. | Shared contract | Used for tool-call parsing. |
 
 ### Processing Flow
 
-1. The constructor loads the prompt JSON for the requested language and binds `ExtractedText` as the tool schema on `ChatOpenAI`.
+1. The constructor loads the runtime prompt JSON for the requested language and binds `ExtractedText` as the tool schema on `ChatOpenAI`.
 2. `extract_from_path()` validates the extension, reads bytes, and encodes the image to base64 with the correct media type.
 3. `extract_from_cv2()` encodes the provided array to PNG base64.
 4. The internal extractor submits a multimodal `HumanMessage`, parses the first tool call into `ExtractedText`, and returns `text` or raises the appropriate typed error.
@@ -125,11 +126,14 @@ The module sits at the beginning of the text-processing workflow and feeds downs
 | DEC-2 | Offer two public input methods but one internal extraction pipeline. | Decided | Keeps the external API ergonomic without duplicating invoke logic. | Path and cv2 inputs must both stay compatible with `_aextract()`. |
 | DEC-3 | Use typed tool-calling output via `ExtractedText`. | Decided | Keeps output clean and machine-parseable. | Malformed tool responses surface as typed API failures. |
 | DEC-4 | Keep benchmark tooling inside this package rather than `core`. | Decided | It is specific to image extraction behavior. | Benchmark helpers stay internal and package-local. |
+| DEC-5 | Keep prompt-generation scripts and examples in the package-local `prompts/` directory. | Decided | Prompt authoring context belongs next to the shipped runtime prompt assets. | Only the runtime JSON assets are supported by callers; scripts and examples remain internal-only. |
 
 ### Consistency Rules
 
 - CR-1: Supported languages require both a prompt asset and tests; changing `Language` alone is insufficient.
 - CR-2: Public extraction methods remain async and must not diverge in result semantics.
+- CR-3: The package `__init__.py` must remain empty. There are no re-exports; callers import directly from submodules (e.g. `from nl_processing.extract_text_from_image.service import ImageTextExtractor`).
+- CR-4: `benchmark.py` and non-JSON files under `prompts/` are internal development assets only and must not be treated as part of the supported public API.
 
 ### Requirement Traceability
 
