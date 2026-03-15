@@ -1,7 +1,6 @@
 preview = true
 
 line-length = 120
-src = ["src", "tests"]
 
 [lint]
 select = [
@@ -82,6 +81,3 @@ section-order = ["future", "standard-library", "third-party", "first-party", "lo
 force-sort-within-sections = true
 combine-as-imports = true
 split-on-trailing-comma = true
-
-[lint.per-file-ignores]
-"src/nl_processing/core/scripts/*" = ["T201", "S603"]
