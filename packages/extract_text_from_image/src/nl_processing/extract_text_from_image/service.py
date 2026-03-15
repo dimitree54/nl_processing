@@ -4,7 +4,11 @@ from typing import NotRequired, TypedDict
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from nl_processing.core.exceptions import APIError, TargetLanguageNotFoundError
+from nl_processing.core.exceptions import (
+    APIError,
+    TargetLanguageNotFoundError,
+    UnsupportedLanguageError,
+)
 from nl_processing.core.image_encoding import (
     encode_cv2_to_base64,
     encode_path_to_base64,
@@ -47,11 +51,12 @@ def _build_llm_kwargs(
 
 def _load_prompt_for_language(language: Language) -> ChatPromptTemplate:
     prompt_path = _PROMPTS_DIR / f"{language.value}.json"
-    try:
-        return load_prompt(str(prompt_path))
-    except FileNotFoundError as exc:
-        msg = f"Required prompt asset not found for language '{language.value}': {prompt_path}"
-        raise ImageTextFileNotFoundError(msg) from exc
+    if not prompt_path.is_file():
+        supported_languages = sorted(path.stem for path in _PROMPTS_DIR.glob("*.json"))
+        msg = f"Language '{language.value}' is not supported. Supported languages: {', '.join(supported_languages)}"
+        raise UnsupportedLanguageError(msg)
+
+    return load_prompt(str(prompt_path))
 
 
 def _encode_image_path(path: str) -> tuple[str, str]:
@@ -73,8 +78,8 @@ class ImageTextExtractor:
     """Asynchronously extract markdown text from images in a target language.
 
     Construction loads the prompt asset for the requested `language` and binds the
-    OpenAI chat model with the provided optional model-shaping parameters. Missing
-    prompt assets raise `ImageTextFileNotFoundError` during construction.
+    OpenAI chat model with the provided optional model-shaping parameters.
+    Unsupported languages raise `UnsupportedLanguageError` during construction.
     """
 
     def __init__(
@@ -96,7 +101,7 @@ class ImageTextExtractor:
             temperature: Optional sampling temperature passed to the model.
 
         Raises:
-            ImageTextFileNotFoundError: Required prompt asset for `language` is missing.
+            UnsupportedLanguageError: `language` is not supported by bundled prompt assets.
         """
         self._language = language
         prompt = _load_prompt_for_language(language)

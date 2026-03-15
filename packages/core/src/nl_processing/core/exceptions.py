@@ -8,3 +8,7 @@ class TargetLanguageNotFoundError(Exception):
 
 class UnsupportedImageFormatError(Exception):
     """Raised when the image format is not supported by the OpenAI API."""
+
+
+class UnsupportedLanguageError(Exception):
+    """Raised when the requested language is not supported by runtime assets."""

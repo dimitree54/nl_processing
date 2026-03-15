@@ -1,5 +1,6 @@
 import pathlib
 import time
+from typing import Coroutine
 
 import cv2
 from nl_processing.core.exceptions import TargetLanguageNotFoundError
@@ -11,6 +12,14 @@ from nl_processing.extract_text_from_image.service import ImageTextExtractor
 from tests.helpers.text_comparison import evaluate_extraction
 
 
+async def _extract_with_latency_assertion(coro: Coroutine[object, object, str]) -> str:
+    start = time.perf_counter()
+    result = await coro
+    elapsed = time.perf_counter() - start
+    assert elapsed < 20, f"Extraction took {elapsed:.2f}s - exceeds 20.00s QA gate"
+    return result
+
+
 @pytest.mark.asyncio
 async def test_simple_dutch_text_extraction(tmp_path: pathlib.Path) -> None:
     """Single line of simple Dutch text — baseline accuracy test."""
@@ -19,7 +28,7 @@ async def test_simple_dutch_text_extraction(tmp_path: pathlib.Path) -> None:
     generate_test_image(ground_truth, image_path, font_scale=1.5, width=900, height=100)
 
     extractor = ImageTextExtractor(language=Language.NL)
-    extracted = await extractor.extract_from_path(image_path)
+    extracted = await _extract_with_latency_assertion(extractor.extract_from_path(image_path))
 
     assert evaluate_extraction(extracted, ground_truth), (
         f"Extraction mismatch.\nExpected: {ground_truth}\nGot: {extracted}"
@@ -34,7 +43,7 @@ async def test_multi_line_dutch_text_extraction(tmp_path: pathlib.Path) -> None:
     generate_test_image(ground_truth, image_path, font_scale=1.2, width=800, height=200)
 
     extractor = ImageTextExtractor(language=Language.NL)
-    extracted = await extractor.extract_from_path(image_path)
+    extracted = await _extract_with_latency_assertion(extractor.extract_from_path(image_path))
 
     assert evaluate_extraction(extracted, ground_truth), (
         f"Extraction mismatch.\nExpected: {ground_truth}\nGot: {extracted}"
@@ -52,7 +61,7 @@ async def test_extraction_from_cv2_array(tmp_path: pathlib.Path) -> None:
     assert cv2_image is not None, f"Failed to load image from {image_path}"
 
     extractor = ImageTextExtractor(language=Language.NL)
-    extracted = await extractor.extract_from_cv2(cv2_image)
+    extracted = await _extract_with_latency_assertion(extractor.extract_from_cv2(cv2_image))
 
     assert evaluate_extraction(extracted, ground_truth), (
         f"CV2 extraction mismatch.\nExpected: {ground_truth}\nGot: {extracted}"
@@ -67,12 +76,7 @@ async def test_extraction_latency(tmp_path: pathlib.Path) -> None:
     generate_test_image(ground_truth, image_path, font_scale=1.5, width=400, height=100)
 
     extractor = ImageTextExtractor(language=Language.NL)
-    start = time.time()
-    await extractor.extract_from_path(image_path)
-    elapsed = time.time() - start
-
-    # NOTE: This is an integration test making a real API call; network latency is included.
-    assert elapsed < 20, f"Extraction took {elapsed:.2f}s — exceeds 20.00s QA gate"
+    await _extract_with_latency_assertion(extractor.extract_from_path(image_path))
 
 
 @pytest.mark.asyncio
@@ -86,7 +90,7 @@ async def test_mixed_dutch_russian_extracts_only_dutch(tmp_path: pathlib.Path) -
     generate_test_image(mixed_text, image_path, font_scale=1.2, width=800, height=200)
 
     extractor = ImageTextExtractor(language=Language.NL)
-    extracted = await extractor.extract_from_path(image_path)
+    extracted = await _extract_with_latency_assertion(extractor.extract_from_path(image_path))
 
     assert evaluate_extraction(extracted, dutch_text), (
         f"Mixed-language extraction failed.\nExpected (Dutch only): {dutch_text}\nGot: {extracted}"
@@ -97,7 +101,7 @@ async def test_mixed_dutch_russian_extracts_only_dutch(tmp_path: pathlib.Path) -
 async def test_english_only_raises_target_language_not_found(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Image with English-only text should raise TargetLanguageNotFoundError (FR7)."""
+    """Image with English-only text should raise TargetLanguageNotFoundError (FR5)."""
     english_text = "Remember to charge your phone before leaving tomorrow"
     image_path = str(tmp_path / "english_only.png")
     generate_test_image(english_text, image_path, font_scale=1.2, width=800, height=100)

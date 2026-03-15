@@ -1,11 +1,11 @@
 import os
 import pathlib
 
+from nl_processing.core.exceptions import UnsupportedLanguageError
 from nl_processing.core.models import Language
 import numpy as np
 import pytest
 
-from nl_processing.extract_text_from_image.exceptions import ImageTextFileNotFoundError
 from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
 from tests.unit.extract_text_from_image.conftest import _AsyncChainMock, make_tool_response
@@ -173,10 +173,10 @@ async def test_extract_handles_tool_calls_response(monkeypatch: pytest.MonkeyPat
 
 
 def test_extract_with_russian_language(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that constructor works with different language."""
+    """Unsupported languages fail during construction with a dedicated error."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    with pytest.raises(ImageTextFileNotFoundError, match="Required prompt asset not found"):
+    with pytest.raises(UnsupportedLanguageError, match="Language 'ru' is not supported"):
         ImageTextExtractor(language=Language.RU)
 
 

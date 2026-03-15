@@ -61,7 +61,7 @@ The spec must not document current implementation state as justification, intern
 
 - `Language` and `PartOfSpeech` enums
 - `ExtractedText`, `Word`, `WordPair`, and `ScoredWordPair` Pydantic models
-- `APIError`, `TargetLanguageNotFoundError`, and `UnsupportedImageFormatError`
+- `APIError`, `TargetLanguageNotFoundError`, `UnsupportedImageFormatError`, and `UnsupportedLanguageError`
 - `load_prompt` and `build_translation_chain`
 - Image format validation and base64 encoding helpers
 - Prompt authoring helper script in `packages/core/src/nl_processing/core/scripts/prompt_author.py`
@@ -100,7 +100,7 @@ The spec must not document current implementation state as justification, intern
 | FR-9 | Provide `validate_image_format(path)` that accepts only `.png`, `.jpg`, `.jpeg`, `.gif`, and `.webp` | Must | Supported set matches current OpenAI Vision usage |
 | FR-10 | Provide `encode_path_to_base64(path)` returning `(base64_string, media_type)` for supported suffix mapping | Must | Caller remains responsible for separate format validation |
 | FR-11 | Provide `encode_cv2_to_base64(image)` returning PNG base64 and media type `image/png` | Must | OpenCV array helper always encodes PNG |
-| FR-12 | Provide direct `Exception` subclasses `APIError`, `TargetLanguageNotFoundError`, and `UnsupportedImageFormatError` | Must | Exceptions must remain distinct and independently catchable |
+| FR-12 | Provide direct `Exception` subclasses `APIError`, `TargetLanguageNotFoundError`, `UnsupportedImageFormatError`, and `UnsupportedLanguageError` | Must | Exceptions must remain distinct and independently catchable |
 | FR-13 | Provide prompt-authoring helpers `serialize_prompt_to_json` and `save_prompt` usable from `prompt_author.py` | Must | Output must be consumable by `load_prompt` |
 
 ### Rules and Invariants
@@ -302,7 +302,7 @@ The spec must not document current implementation state as justification, intern
 | QA-9 | FR-9 | Unit | `test_validate_image_format_accepts_supported`, `test_validate_image_format_normalizes_suffix_case`, `test_validate_image_format_rejects_unsupported`, `test_validate_image_format_rejects_no_extension`, `test_supported_extensions_contains_expected_formats` | PR CI / local | Covers supported suffix policy |
 | QA-10 | FR-10 | Unit | `test_encode_path_to_base64_returns_valid_base64`, `test_encode_path_to_base64_round_trips_file_content`, `test_encode_path_to_base64_jpeg_media_type`, `test_encode_path_to_base64_maps_other_media_types` | PR CI / local | Covers file-path encoding contract |
 | QA-11 | FR-11, NFR-9 | Unit | `test_encode_cv2_to_base64_returns_png`, `test_encode_cv2_to_base64_preserves_pixel_data` | PR CI / local | Failure branch exists in implementation; success path is automated |
-| QA-12 | FR-12 | Unit | `test_api_error_can_be_raised_and_caught`, `test_target_language_not_found_error_can_be_raised_and_caught`, `test_unsupported_image_format_error_can_be_raised_and_caught`, `test_all_exceptions_are_subclasses_of_exception`, `test_exceptions_are_distinct_types` | PR CI / local | Covers exception hierarchy and independence |
+| QA-12 | FR-12 | Unit | `test_api_error_can_be_raised_and_caught`, `test_target_language_not_found_error_can_be_raised_and_caught`, `test_unsupported_image_format_error_can_be_raised_and_caught`, `test_unsupported_language_error_can_be_raised_and_caught`, `test_all_exceptions_are_subclasses_of_exception`, `test_exceptions_are_distinct_types` | PR CI / local | Covers exception hierarchy and independence |
 | QA-13 | FR-13 | Unit | `test_load_prompt_round_trip` plus prompt serialization path in `prompt_author.py` contract | PR CI / local | Confirms `dumpd`/`load` compatibility |
 | QA-14 | NFR-6 | Static | `uv run pylint ... --max-module-lines=200` via `make lint` | PR CI / local | Enforces file-size rule |
 | QA-15 | NFR-7 | Static | `npx jscpd --config .jscpd.json --exitCode 1 src tests` via `make lint` | PR CI / local | Enforces zero duplication threshold |
