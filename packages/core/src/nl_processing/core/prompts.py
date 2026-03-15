@@ -21,14 +21,14 @@ def build_translation_chain(
     service_tier: str | None = None,
     temperature: float | None = 0,
 ) -> RunnableSerializable:  # type: ignore[type-arg]
-    """Validate a language pair, load its prompt, and return a prompt|llm chain.
+    """Load a pair-specific prompt and return a prompt|llm chain.
 
     This is shared infrastructure for translation-style services that follow the
-    pattern: validate pair → load JSON prompt → bind_tools → compose chain.
+    pattern: resolve prompt file → load JSON prompt → bind_tools → compose chain.
 
     Args:
-        source_language: Source language enum value.
-        target_language: Target language enum value.
+        source_language: Source language enum value used in the prompt filename.
+        target_language: Target language enum value used in the prompt filename.
         prompts_dir: Directory containing ``<src>_<tgt>.json`` prompt files.
         tool_schema: Pydantic model class to bind as a tool.
         model: OpenAI model identifier string.
@@ -66,8 +66,6 @@ def load_prompt(prompt_path: str) -> ChatPromptTemplate:
         A ChatPromptTemplate ready for chain composition.
     """
     path = pathlib.Path(prompt_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
 
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)

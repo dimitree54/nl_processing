@@ -8,6 +8,8 @@
 ## Documentation driven repo
 All code should always be 100% in sync with docs. We write code based on the docs, never otherwise. We do not change docs to match code. If during work you find that some existing code is not documented or contradicts with docs - stop your work and report to user.
 
+You can change docs when explicitly requested by user.
+
 # Core development principles:
 - Fail fast on unexpected situations
   - Zero fallbacks tolerance - fail fast, no defaults, no fallbacks.

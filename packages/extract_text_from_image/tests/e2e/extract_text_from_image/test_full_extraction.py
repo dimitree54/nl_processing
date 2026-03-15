@@ -5,8 +5,10 @@ from nl_processing.core.exceptions import TargetLanguageNotFoundError, Unsupport
 import numpy
 import pytest
 
-from nl_processing.extract_text_from_image.benchmark import evaluate_extraction, generate_test_image, normalize_text
+from nl_processing.extract_text_from_image.exceptions import ImageTextFileNotFoundError
+from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
+from tests.helpers.text_comparison import evaluate_extraction, normalize_text
 
 _FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures"
 
@@ -61,6 +63,14 @@ async def test_supported_image_formats(tmp_path: pathlib.Path) -> None:
         cv2.imwrite(path, img)
         extractor = ImageTextExtractor()
         await extractor.extract_from_path(path)
+
+
+@pytest.mark.asyncio
+async def test_missing_image_path_raises_typed_error() -> None:
+    """E2e: missing image path raises ImageTextFileNotFoundError."""
+    extractor = ImageTextExtractor()
+    with pytest.raises(ImageTextFileNotFoundError):
+        await extractor.extract_from_path("missing.png")
 
 
 @pytest.mark.asyncio

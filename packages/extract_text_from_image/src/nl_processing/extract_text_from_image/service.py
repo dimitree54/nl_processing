@@ -1,6 +1,8 @@
 import pathlib
+from typing import NotRequired, TypedDict
 
 from langchain_core.messages import HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from nl_processing.core.exceptions import APIError, TargetLanguageNotFoundError
 from nl_processing.core.image_encoding import (
@@ -11,18 +13,68 @@ from nl_processing.core.image_encoding import (
 from nl_processing.core.models import ExtractedText, Language
 from nl_processing.core.prompts import load_prompt
 import numpy
+from pydantic import ValidationError
+
+from nl_processing.extract_text_from_image.exceptions import ImageTextFileNotFoundError
 
 # Resolve prompts directory relative to this file
 _PROMPTS_DIR = pathlib.Path(__file__).parent / "prompts"
 
 
-class ImageTextExtractor:
-    """Extract language-specific text from images using OpenAI Vision API.
+class _ChatOpenAIKwargs(TypedDict):
+    model: str
+    service_tier: NotRequired[str]
+    reasoning_effort: NotRequired[str]
+    temperature: NotRequired[float]
 
-    Usage:
-        extractor = ImageTextExtractor()
-        text = await extractor.extract_from_path("image.png")
-        text = await extractor.extract_from_cv2(cv2_image)
+
+def _build_llm_kwargs(
+    *,
+    model: str,
+    service_tier: str | None,
+    reasoning_effort: str | None,
+    temperature: float | None,
+) -> _ChatOpenAIKwargs:
+    kwargs: _ChatOpenAIKwargs = {"model": model}
+    if service_tier is not None:
+        kwargs["service_tier"] = service_tier
+    if reasoning_effort is not None:
+        kwargs["reasoning_effort"] = reasoning_effort
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    return kwargs
+
+
+def _load_prompt_for_language(language: Language) -> ChatPromptTemplate:
+    prompt_path = _PROMPTS_DIR / f"{language.value}.json"
+    try:
+        return load_prompt(str(prompt_path))
+    except FileNotFoundError as exc:
+        msg = f"Required prompt asset not found for language '{language.value}': {prompt_path}"
+        raise ImageTextFileNotFoundError(msg) from exc
+
+
+def _encode_image_path(path: str) -> tuple[str, str]:
+    try:
+        return encode_path_to_base64(path)
+    except FileNotFoundError as exc:
+        msg = f"Image file not found: {path}"
+        raise ImageTextFileNotFoundError(msg) from exc
+
+
+def _parse_extracted_text(response: object) -> ExtractedText:
+    try:
+        return ExtractedText(**response.tool_calls[0]["args"])  # type: ignore[attr-defined]
+    except (AttributeError, IndexError, KeyError, TypeError, ValidationError) as exc:
+        raise APIError(str(exc)) from exc
+
+
+class ImageTextExtractor:
+    """Asynchronously extract markdown text from images in a target language.
+
+    Construction loads the prompt asset for the requested `language` and binds the
+    OpenAI chat model with the provided optional model-shaping parameters. Missing
+    prompt assets raise `ImageTextFileNotFoundError` during construction.
     """
 
     def __init__(
@@ -34,29 +86,62 @@ class ImageTextExtractor:
         service_tier: str | None = None,
         temperature: float | None = 0,
     ) -> None:
-        self._language = language
-        prompt_path = str(_PROMPTS_DIR / f"{language.value}.json")
-        prompt = load_prompt(prompt_path)
+        """Create an extractor for one target language.
 
-        llm = ChatOpenAI(
-            model=model, service_tier=service_tier, reasoning_effort=reasoning_effort, temperature=temperature
-        ).bind_tools([ExtractedText], tool_choice=ExtractedText.__name__)
+        Args:
+            language: Target language for extracted markdown text.
+            model: OpenAI model name used for multimodal extraction.
+            reasoning_effort: Optional reasoning setting passed to the model.
+            service_tier: Optional service tier passed to the model.
+            temperature: Optional sampling temperature passed to the model.
+
+        Raises:
+            ImageTextFileNotFoundError: Required prompt asset for `language` is missing.
+        """
+        self._language = language
+        prompt = _load_prompt_for_language(language)
+
+        llm_kwargs = _build_llm_kwargs(
+            model=model,
+            service_tier=service_tier,
+            reasoning_effort=reasoning_effort,
+            temperature=temperature,
+        )
+        llm = ChatOpenAI(**llm_kwargs).bind_tools([ExtractedText], tool_choice=ExtractedText.__name__)
 
         self._chain = prompt | llm
 
     async def extract_from_path(self, path: str) -> str:
-        """Extract text from image at the given file path.
+        """Extract markdown text from a supported image file path.
 
-        Returns markdown-formatted text in the target language.
+        Args:
+            path: Path to a supported image file.
+
+        Returns:
+            Markdown-formatted text in the configured target language.
+
+        Raises:
+            UnsupportedImageFormatError: `path` has an unsupported image extension.
+            ImageTextFileNotFoundError: `path` does not exist.
+            APIError: Upstream invocation or response parsing fails.
+            TargetLanguageNotFoundError: Extraction returns blank or whitespace-only text.
         """
         validate_image_format(path)
-        base64_string, media_type = encode_path_to_base64(path)
+        base64_string, media_type = _encode_image_path(path)
         return await self._aextract(base64_string, media_type)
 
     async def extract_from_cv2(self, image: "numpy.ndarray") -> str:
-        """Extract text from OpenCV image array.
+        """Extract markdown text from an in-memory OpenCV image array.
 
-        Returns markdown-formatted text in the target language.
+        Args:
+            image: OpenCV image array to extract text from.
+
+        Returns:
+            Markdown-formatted text in the configured target language.
+
+        Raises:
+            APIError: Upstream invocation or response parsing fails.
+            TargetLanguageNotFoundError: Extraction returns blank or whitespace-only text.
         """
         base64_string, media_type = encode_cv2_to_base64(image)
         return await self._aextract(base64_string, media_type)
@@ -70,9 +155,10 @@ class ImageTextExtractor:
         )
         try:
             response = await self._chain.ainvoke({"images": [human_message]})
-            result = ExtractedText(**response.tool_calls[0]["args"])  # type: ignore[attr-defined]
-        except Exception as e:
-            raise APIError(str(e)) from e
+        except Exception as exc:
+            raise APIError(str(exc)) from exc
+
+        result = _parse_extracted_text(response)
 
         # Check if target language text was found
         if not result.text.strip():

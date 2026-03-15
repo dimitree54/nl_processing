@@ -13,32 +13,33 @@ related_docs:
 
 ### Summary
 
-`extract_text_from_image` is the vision entrypoint of the `nl_processing` pipeline. It accepts either an image file path or an OpenCV image array, runs an LLM vision extraction flow, and returns markdown-formatted text for the target language. The current shipped prompt set is effectively Dutch-only, and the module wraps image transport, tool-calling output parsing, and internal benchmark/prompt-development helpers.
+`extract_text_from_image` provides image-to-text extraction for the `nl_processing` system. It accepts a supported image file path or an OpenCV image array, submits the image for multimodal extraction, and returns markdown-formatted text in the requested target language. The module's supported contract is limited to its public extractor API and typed failure behavior.
 
 ### System Context
 
-The module sits at the beginning of the text-processing workflow and feeds downstream extract/translate modules. It depends on `core` for shared models, exceptions, and prompt loading, but owns its multimodal message construction, image encoding, and image-format validation.
+The module sits at the beginning of the text-processing workflow and produces extracted text for downstream processing modules. It relies on `core` for shared language types, prompt loading, image encoding utilities, and common exception classes. Callers use this module as the image-extraction entry point; they do not depend on its internal prompt assets or development helpers.
 
 ### In Scope
 
-- Public `ImageTextExtractor` service with async path-based and cv2-based extraction methods. The package does not re-export from `__init__.py`; callers must import directly from the `service` submodule (`from nl_processing.extract_text_from_image.service import ImageTextExtractor`).
-- Image-to-base64 conversion and supported-format validation for file input.
-- Markdown-oriented target-language text extraction via OpenAI/LangChain tool calling.
-- Benchmark helpers for synthetic image generation and normalized exact-match comparison.
+- Public async image-text extraction through `ImageTextExtractor`.
+- Path-based extraction for supported image file formats.
+- OpenCV-array extraction for in-memory image data.
+- Markdown-formatted extracted text in the requested target language.
+- Typed failure behavior for missing files, unsupported formats, blank extraction results, and upstream invocation/parsing failures.
 
 ### Out of Scope
 
-- Video processing or batch extraction orchestration.
-- OCR fallback or hybrid OCR+LLM flows.
-- Alternative image inputs such as `PIL.Image` or raw bytes.
-- Production-ready support for languages without shipped prompt assets.
+- Video processing or batch orchestration.
+- OCR fallback or hybrid OCR-plus-LLM behavior.
+- Alternative image input forms such as raw bytes or `PIL.Image`.
+- Downstream translation or word-level post-processing.
+- Any internal benchmark or prompt-development tooling.
 
 ### Assumptions
 
 | ID | Assumption | Status | Notes |
 | --- | --- | --- | --- |
-| A-1 | `nl.json` remains the only shipped runtime prompt asset unless new language prompts and tests are added together. | Needs Review | Internal prompt-development files may exist alongside runtime assets, but only language JSON prompt assets define supported runtime languages. |
-| A-2 | Normalized exact-match evaluation remains the benchmark gate for prompt/model changes. | Needs Review | Implemented by the local benchmark helpers. |
+| A-1 | Runtime language support exists only where a prompt asset and validating tests exist. | Needs Review | This defines when a language is considered supported by the module contract. |
 
 ## 2. Requirements
 
@@ -46,188 +47,140 @@ The module sits at the beginning of the text-processing workflow and feeds downs
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must provide `ImageTextExtractor(language, model, reasoning_effort, service_tier, temperature)` with sensible defaults for async extraction. | Must | Current defaults are `model="gpt-4.1-mini"`, `reasoning_effort: str | None = None`, `service_tier: str | None = None`, `temperature: float | None = 0`. Passing `None` for `reasoning_effort` or `temperature` delegates to the model's own default. |
-| FR-2 | `extract_from_path(path)` must validate supported file extensions before invoking the model and must return markdown-formatted extracted text. | Must | Path input is fail-fast on extension errors. |
-| FR-3 | `extract_from_cv2(image)` must accept a `numpy.ndarray`, encode it as PNG, and return markdown-formatted extracted text. | Must | cv2 input converges into the same internal extraction path. |
-| FR-4 | Whitespace-only or empty extracted text must raise `TargetLanguageNotFoundError`. | Must | Covers blank images and images without target-language text. |
-| FR-5 | Upstream invocation or parsing failures must be mapped to `APIError`. | Must | Keeps the failure contract typed for callers. |
-| FR-6 | The module must keep local benchmark helpers for synthetic image generation and normalized exact-match evaluation. | Should | **Internal only** — not part of the public API. The `benchmark` submodule exposes `generate_test_image`, `normalize_text`, and `evaluate_extraction` for development and CI use. Callers of the package must not depend on these helpers. |
+| FR-1 | The module must provide a public `ImageTextExtractor` class for asynchronous image-text extraction. | Must | This is the supported module entry point for callers. |
+| FR-2 | `ImageTextExtractor` construction must accept a target `language` and optional model configuration parameters that shape extraction behavior. | Must | The constructor contract is part of the public API; the exact default model choice is not part of the contract and may change silently. |
+| FR-3 | `extract_from_path(path)` must accept a file path, reject unsupported image formats before model invocation, and return extracted markdown text on success. | Must | Input validation must happen before any upstream request. |
+| FR-4 | `extract_from_cv2(image)` must accept a `numpy.ndarray` image and return extracted markdown text on success. | Must | Callers may use in-memory OpenCV images without writing files first. |
+| FR-5 | If extraction yields empty or whitespace-only text, the module must raise `TargetLanguageNotFoundError`. | Must | Blank extraction is not a successful result. |
+| FR-6 | If upstream invocation or response parsing fails, the module must raise `APIError`. | Must | The caller-facing failure contract stays typed and consistent. |
+| FR-7 | If a required runtime file is missing, the module must raise `ImageTextFileNotFoundError`. | Must | This includes missing image inputs and missing prompt assets for the requested language. |
 
 ### Rules and Invariants
 
-- BR-1: Both public extraction methods must converge into one shared internal extraction pipeline after encoding.
-- BR-2: File-path inputs must reject unsupported extensions locally before any API call.
-- BR-3: cv2 inputs are always encoded to PNG for model submission.
-- BR-4: Prompt selection is driven by `Language.value`, but only languages with shipped runtime prompt assets are actually supported.
-- BR-5: Prompt-development utilities and examples under `prompts/` are internal implementation assets and are not part of the public module API.
+- BR-1: Both supported extraction entry points must produce the same result semantics: either markdown text or a typed exception.
+- BR-2: Unsupported path formats must fail locally before any upstream model call.
+- BR-3: Public extraction behavior is asynchronous.
+- BR-4: Successful extraction returns text only; it does not return confidence scores, bounding boxes, or structured OCR metadata.
+- BR-5: The implementation may change the default model selection without a contract change when tuning the quality-speed balance.
 
 ### Non-Functional Requirements
 
 | ID | Category | Requirement | Target or Constraint | Notes |
 | --- | --- | --- | --- | --- |
-| NFR-1 | Performance | A single extraction call should stay within the current image-extraction latency budget. | Current integration gate <20s per call | The default `gpt-4.1-mini` profile balances cost and quality. |
-| NFR-2 | Quality | Prompt/model changes should preserve normalized exact-match benchmark behavior on synthetic fixtures. | 100% pass on curated benchmark set | Uses local benchmark helpers. |
-| NFR-3 | Dependencies | Keep image handling self-contained inside the module. | `numpy` + `opencv-python` only | No extra image stack is introduced. |
+| NFR-1 | Performance | A single extraction call must stay within the current package latency budget. | Under 20 seconds per call | Matches the package's current validation expectation. |
+| NFR-2 | Reliability | Failures must surface as explicit typed exceptions rather than silent fallbacks or partial success values. | No hidden fallback behavior | Aligns with repository fail-fast policy. |
+| NFR-3 | Compatibility | The supported public API must remain importable from `nl_processing.extract_text_from_image.service`. | Stable import path | The package does not support `__init__.py` re-export usage. |
 
 ### Failure Modes and Edge Cases
 
-| ID | Scenario | Expected Behavior | Handling or Recovery |
+| ID | Scenario | Expected Behavior | Notes |
 | --- | --- | --- | --- |
-| FM-1 | Unsupported file extension for path input. | Raise `UnsupportedImageFormatError` before any API call. | Caller chooses a supported input format. |
-| FM-2 | Image contains no target-language text or no text at all. | Raise `TargetLanguageNotFoundError`. | Caller can log/skip the item. |
-| FM-3 | Prompt, API, or tool-call parsing fails. | Raise `APIError` with the original exception chained. | Caller can retry or surface the failure. |
-| FM-4 | Prompt asset for the requested language is missing. | Constructor fails fast during prompt load. | Add the prompt asset and tests before claiming support. |
+| FM-1 | Unsupported file extension for path input | Raise `UnsupportedImageFormatError` before any upstream call | Caller must provide a supported image format. |
+| FM-2 | Image contains no target-language text or no text at all | Raise `TargetLanguageNotFoundError` | Blank output is treated as failure. |
+| FM-3 | Upstream model invocation or tool-response parsing fails | Raise `APIError` with the original exception chained | Caller may retry or surface the error. |
+| FM-4 | Requested language is not supported at runtime because its prompt asset is missing | Raise `ImageTextFileNotFoundError` during construction | Unsupported languages are not treated as a successful degraded mode. |
+| FM-5 | Requested path input does not exist | Raise `ImageTextFileNotFoundError` before extraction succeeds | Missing input files are surfaced as a typed module failure. |
 
-## 3. Module Design
+## 3. Public Contract
 
 ### Responsibilities and Boundaries
 
-**Owns:**
+**Responsible For:**
 
-- Vision-specific message construction and image transport.
-- File-format validation plus path/cv2 encoding helpers.
-- Local benchmark helpers for extraction quality regression.
+- Accepting supported image inputs through the public extractor API.
+- Producing markdown-formatted extracted text in the requested target language.
+- Enforcing typed failure behavior for missing files, unsupported formats, blank results, and upstream failures.
 
-**Does Not Own:**
+**Not Responsible For:**
 
-- Shared DTOs or exception definitions.
-- Downstream word extraction or translation logic.
-- Any persistent state, cache, or job scheduling.
+- Defining shared exceptions, language enums, or shared models from `core`.
+- Providing OCR fallback, post-processing, translation, or workflow orchestration.
+- Exposing internal benchmarking or prompt-authoring utilities as supported public API.
 
-### Interfaces and Dependencies
+### Public Interfaces
 
-| ID | Type | Direction | Counterparty | Contract or Data | Notes |
+| ID | Interface Type | Direction | Counterparty | Contract Summary | Expected Behavior |
 | --- | --- | --- | --- | --- | --- |
-| IF-1 | Python API | Inbound | Callers | `await extract_from_path(path: str) -> str` | Validates extension before invoke. |
-| IF-2 | Python API | Inbound | Callers | `await extract_from_cv2(image: numpy.ndarray) -> str` | Encodes arrays as PNG. |
-| IF-3 | Asset/API | Outbound | Prompt assets + OpenAI | `prompts/<language>.json`, tool schema `ExtractedText`, OpenAI/LangChain chain | Runtime prompt loading uses language JSON assets such as `nl.json`. Other files under `prompts/` are internal development tooling and examples only. |
+| IF-1 | Python class | Inbound | Callers | `ImageTextExtractor(language, model, reasoning_effort, service_tier, temperature)` | Creates an async extractor configured for the requested language and model options. The exact default model is implementation-defined. |
+| IF-2 | Async method | Inbound | Callers | `await extract_from_path(path: str) -> str` | Validates path input, extracts target-language text, and returns markdown text or raises a typed exception. |
+| IF-3 | Async method | Inbound | Callers | `await extract_from_cv2(image: numpy.ndarray) -> str` | Accepts an OpenCV image array, extracts target-language text, and returns markdown text or raises a typed exception. |
 
-### Data and State Ownership
+Documented public support is limited to these interfaces.
 
-| Entity or State | Ownership | Description | Lifecycle or Retention | Notes |
+### Internal and Non-Contract Notes
+
+- Private benchmark and prompt-development helpers: Internal only; they may move, rename, or disappear without notice.
+- Package-local prompt-development files and examples: Internal only; callers must not depend on them.
+- `_aextract` and other underscore-prefixed implementation details: Internal only; not a supported interface.
+
+### External Dependencies and Constraints
+
+| ID | Dependency or Constraint | Why It Matters | Behavioral Assumption or Limit | Notes |
 | --- | --- | --- | --- | --- |
-| Service instance state | Owned | Target language and pre-built chain. | Runtime only | No persistence across runs. |
-| Prompt assets and tooling | Owned | Runtime language prompt JSON assets plus prompt-development utilities and examples under `prompts/`. | Versioned with the package | Only JSON language assets participate in runtime prompt loading; development scripts/examples are internal only. |
-| Benchmark helpers | Owned | Synthetic image generation and normalized comparison utilities in `benchmark.py`. | Versioned with the package | Internal tooling only; not a supported caller interface. |
-| Extracted text payload | Referenced | `core.models.ExtractedText` tool schema. | Shared contract | Used for tool-call parsing. |
+| EC-1 | `nl_processing.core` shared types and exceptions | The module's caller-visible contract depends on shared `Language`, `ExtractedText`, and exception definitions | Compatibility depends on `core` preserving these shared contracts | Cross-module coordination is required for breaking changes. |
+| EC-2 | Runtime prompt assets for supported languages | Extraction behavior requires a prompt asset for the requested language | Missing runtime assets make the language unsupported | Language support is asset-backed, not enum-only. |
+| EC-3 | Upstream multimodal model service | Extraction success depends on external model availability and response shape | Upstream outages or malformed responses surface as `APIError` | The module does not define fallback behavior. |
 
-### Processing Flow
+### Cross-Module Change References
 
-1. The constructor loads the runtime prompt JSON for the requested language and binds `ExtractedText` as the tool schema on `ChatOpenAI`.
-2. `extract_from_path()` validates the extension, reads bytes, and encodes the image to base64 with the correct media type.
-3. `extract_from_cv2()` encodes the provided array to PNG base64.
-4. The internal extractor submits a multimodal `HumanMessage`, parses the first tool call into `ExtractedText`, and returns `text` or raises the appropriate typed error.
+| Affected Module | Why It Must Change | External Spec or Doc Reference | Ownership Status |
+| --- | --- | --- | --- |
+| `core` | Shared exception, language, prompt-loading, or extracted-text contract changes can change this module's public behavior | `../../core/docs/module-spec.md` | Exists |
 
-### Decisions
+### Compatibility Notes
 
-| ID | Decision | Status | Rationale | Consequence |
+| ID | Area | Expectation | Impact if Broken | Notes |
 | --- | --- | --- | --- | --- |
-| DEC-1 | Use LLM vision extraction instead of classical OCR in this module. | Decided | Preserves context-aware extraction and markdown-like structure. | The module depends on multimodal prompting and external API quality. |
-| DEC-2 | Offer two public input methods but one internal extraction pipeline. | Decided | Keeps the external API ergonomic without duplicating invoke logic. | Path and cv2 inputs must both stay compatible with `_aextract()`. |
-| DEC-3 | Use typed tool-calling output via `ExtractedText`. | Decided | Keeps output clean and machine-parseable. | Malformed tool responses surface as typed API failures. |
-| DEC-4 | Keep benchmark tooling inside this package rather than `core`. | Decided | It is specific to image extraction behavior. | Benchmark helpers stay internal and package-local. |
-| DEC-5 | Keep prompt-generation scripts and examples in the package-local `prompts/` directory. | Decided | Prompt authoring context belongs next to the shipped runtime prompt assets. | Only the runtime JSON assets are supported by callers; scripts and examples remain internal-only. |
+| COMP-1 | Import path | Callers import from `nl_processing.extract_text_from_image.service` | Consumer code breaks at import time | This is the supported public import path. |
+| COMP-2 | Result contract | Successful extraction returns a `str`; failures raise typed exceptions | Callers may mis-handle results or error paths | The module must not switch to mixed success/error payloads without a contract change. |
+| COMP-3 | Async API shape | Public extraction methods remain async | Existing callers would need code changes | Any sync alternative would be additive, not replacement. |
 
-### Consistency Rules
-
-- CR-1: Supported languages require both a prompt asset and tests; changing `Language` alone is insufficient.
-- CR-2: Public extraction methods remain async and must not diverge in result semantics.
-- CR-3: The package `__init__.py` must remain empty. There are no re-exports; callers import directly from submodules (e.g. `from nl_processing.extract_text_from_image.service import ImageTextExtractor`).
-- CR-4: `benchmark.py` and non-JSON files under `prompts/` are internal development assets only and must not be treated as part of the supported public API.
-
-### Requirement Traceability
-
-| Requirement | Covered By | Verified By |
-| --- | --- | --- |
-| FR-2 | IF-1, DEC-2, CR-2 | QA-1 |
-| FR-4 | IF-3, DEC-3 | QA-2 |
-| FR-6 | DEC-4, A-2 | QA-3 |
-
-## 4. Delivery and Validation
+## 4. Acceptance and Validation
 
 ### Acceptance Criteria
 
-- AC-1: Supported file-path and cv2 inputs both return markdown text through the same observable extraction behavior.
-- AC-2: Unsupported path formats fail before the model call, and blank/non-target-language images raise `TargetLanguageNotFoundError`.
-- AC-3: Unit, integration, and e2e tests continue covering encoding, parsing, and real-image extraction flows.
+- AC-1: Callers can construct `ImageTextExtractor` through the documented public import path and use it as the supported extraction entry point.
+- AC-2: Supported path inputs and OpenCV-array inputs both produce markdown text on successful extraction.
+- AC-3: Unsupported path formats fail before upstream invocation.
+- AC-4: Blank or whitespace-only extraction results raise `TargetLanguageNotFoundError`.
+- AC-5: Upstream invocation or parsing failures raise `APIError`.
+- AC-6: Missing image files and missing prompt assets raise `ImageTextFileNotFoundError`.
 
-### Testing Strategy
+### High-Level Validation Coverage
 
-**Framework and Constraints:**
-
-- Reuse package-local `pytest`, `pytest-asyncio`, and existing fixtures under `tests/unit`, `tests/integration`, and `tests/e2e`.
-- Treat live API tests as the source of truth for extraction quality.
-
-**Unit:**
-
-- Image encoding helpers, extension validation, constructor behavior, and error wrapping.
-
-**Integration:**
-
-- Synthetic-image extraction accuracy, multilingual negative cases, and latency budgets against the live API.
-
-**Contract:**
-
-- Tool-call parsing into `ExtractedText` and typed error mapping.
-
-**E2E or UI Workflow:**
-
-- Full extraction against shipped image fixtures, including mixed-language and rotated-image scenarios.
-
-**Operational or Non-Functional:**
-
-- Benchmark helper outputs remain available for prompt/model comparison work.
-
-### Quality Automation Plan
-
-#### Automated Coverage Matrix
-
-| ID | Target | Verification Level | Check or Test to Add | When It Runs | Notes |
-| --- | --- | --- | --- | --- | --- |
-| QA-1 | FR-2 | Unit | Path validation and base64 encoding tests | PR CI | Catches format regressions locally. |
-| QA-2 | FR-4 | Integration | Live extraction tests for blank/non-target-language scenarios | PR CI / nightly | Depends on API credentials. |
-| QA-3 | FR-6 | Unit | Benchmark helper tests for normalized comparison | PR CI | Keeps the benchmark contract stable. |
-
-#### Static Checks and Gates
-
-| ID | Check | Purpose | Trigger | Fails On |
-| --- | --- | --- | --- | --- |
-| SC-1 | Package-local `make check` flow | Protect code quality and packaging. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
-| SC-2 | Package tests | Preserve extraction behavior and fixtures. | PR CI | Unit/integration/e2e failures. |
-
-#### Manual Verification Needed
-
-| Target | Why It Is Not Reliably Automated | Manual Verification Approach | Evidence |
+| ID | Target | What Must Be True | Observable Evidence or Result |
 | --- | --- | --- | --- |
-| Real-world extraction quality | Synthetic fixtures do not cover all layouts or image artifacts. | Run the extractor on representative scans/photos and inspect markdown fidelity. | Sample extracted outputs and reviewer notes. |
+| VAL-1 | FR-1, FR-2, IF-1 | The public class can be constructed through the documented import path with supported configuration inputs | A caller can instantiate the extractor without relying on internal modules or unsupported entry points. |
+| VAL-2 | FR-3, IF-2 | Supported path input succeeds and unsupported path input fails locally | Successful calls return markdown text; unsupported formats raise `UnsupportedImageFormatError` before upstream invocation. |
+| VAL-3 | FR-4, IF-3 | OpenCV-array input succeeds through the public async method | Successful calls return markdown text from `extract_from_cv2`. |
+| VAL-4 | FR-5, FM-2 | Blank extraction is surfaced as a typed failure | Empty or whitespace-only extraction raises `TargetLanguageNotFoundError`. |
+| VAL-5 | FR-6, FM-3, NFR-2 | Upstream and parsing failures are not hidden or downgraded | Failures surface as `APIError` rather than fallback results. |
+| VAL-6 | FR-7, FM-4, FM-5 | Missing runtime files are surfaced as typed module failures | Missing image paths and missing prompt assets raise `ImageTextFileNotFoundError`. |
+| VAL-7 | NFR-1 | Extraction stays within the package latency budget | Validation evidence shows calls remain under the stated threshold. |
 
 ### Risks
 
 | ID | Risk | Impact | Mitigation or Next Step |
 | --- | --- | --- | --- |
-| RISK-1 | Model defaults and docs drift apart. | Operators may tune the wrong model or performance expectations. | Keep this spec aligned to `service.py` defaults and test budgets. |
-| RISK-2 | The module claims benchmark capabilities beyond what the current helper set implements. | Contributors may assume a missing comparison runner exists. | Document benchmark helpers honestly and add a runner only when implemented. |
+| RISK-1 | Runtime language support may be assumed from enum presence alone | Callers may expect unsupported languages to work | Keep supported-language expectations explicit and asset-backed. |
+| RISK-2 | Upstream model behavior may change without a local contract change | Extraction quality or failure patterns may shift unexpectedly | Validate public outcomes regularly against representative inputs. |
 
 ### Open Questions
 
 | ID | Question | Status | Owner or Next Step | Notes |
 | --- | --- | --- | --- | --- |
-| OQ-1 | Should unsupported languages raise a dedicated module-level error instead of surfacing prompt-load failures? | Open | Project owner to decide before adding more languages | Current behavior is prompt-asset driven. |
+| OQ-1 | Should unsupported-language construction failures remain prompt-load failures or be normalized into a dedicated module-level exception? | Resolved | Implemented in module spec | Missing prompt assets are a typed `ImageTextFileNotFoundError` failure. |
 
 ### Assumption Review Outcomes
 
 | ID | Source | User Response | Outcome | Promoted To |
 | --- | --- | --- | --- | --- |
-| RV-1 | A-1 | Not yet reviewed | Kept as active assumption | A-1 |
-| RV-2 | A-2 | Not yet reviewed | Kept as active assumption | A-2 |
 
 ### Open Question Resolution
 
 | ID | Source | Resolution Status | Outcome | Promoted To or Next Step |
 | --- | --- | --- | --- | --- |
-| RV-3 | OQ-1 | Unresolved | Remains open pending future language-support work | Revisit when adding the next prompt asset |
 
 ### Deferred Work
 
-- D-1: Support additional image input types only if a downstream workflow needs them.
-- D-2: Add a benchmark runner if model-comparison workflows become part of normal development.
+- D-1: Define an explicit supported-language contract if the module expands beyond its current runtime prompt set.

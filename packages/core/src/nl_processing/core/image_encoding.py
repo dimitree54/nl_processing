@@ -9,7 +9,7 @@ from nl_processing.core.exceptions import UnsupportedImageFormatError
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 
-def get_image_format(path: str) -> str:
+def _get_image_format(path: str) -> str:
     """Return the file extension (lowercase) for the given image path."""
     return pathlib.Path(path).suffix.lower()
 
@@ -20,7 +20,7 @@ def validate_image_format(path: str) -> None:
     Raises:
         UnsupportedImageFormatError: If the file extension is not in SUPPORTED_EXTENSIONS.
     """
-    suffix = get_image_format(path)
+    suffix = _get_image_format(path)
     if suffix not in SUPPORTED_EXTENSIONS:
         msg = f"Unsupported image format '{suffix}'. Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
         raise UnsupportedImageFormatError(msg)
@@ -31,7 +31,7 @@ def encode_path_to_base64(path: str) -> tuple[str, str]:
 
     Does NOT validate format — caller is responsible for validation.
     """
-    suffix = get_image_format(path)
+    suffix = _get_image_format(path)
     media_type = _suffix_to_media_type(suffix)
     with open(path, "rb") as f:
         image_bytes = f.read()

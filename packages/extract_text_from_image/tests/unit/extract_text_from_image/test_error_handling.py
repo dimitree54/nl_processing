@@ -1,4 +1,5 @@
 import pathlib
+from types import SimpleNamespace
 
 from nl_processing.core.exceptions import (
     APIError,
@@ -8,7 +9,8 @@ from nl_processing.core.exceptions import (
 import numpy as np
 import pytest
 
-from nl_processing.extract_text_from_image.benchmark import generate_test_image
+from nl_processing.extract_text_from_image.exceptions import ImageTextFileNotFoundError
+from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
 from tests.unit.extract_text_from_image.conftest import (
     _AsyncChainMock,
@@ -64,6 +66,17 @@ async def test_target_language_not_found_whitespace_text(
 
     with pytest.raises(TargetLanguageNotFoundError, match="No text in the target language"):
         await extractor.extract_from_path(test_image_path)
+
+
+@pytest.mark.asyncio
+async def test_missing_image_path_raises_typed_file_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that missing image paths raise ImageTextFileNotFoundError."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    extractor = ImageTextExtractor()
+
+    with pytest.raises(ImageTextFileNotFoundError, match="Image file not found"):
+        await extractor.extract_from_path("missing.png")
 
 
 @pytest.mark.asyncio
@@ -128,3 +141,27 @@ async def test_api_error_wrapping_cv2_path(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert exc_info.value.__cause__.__class__ == ValueError
     assert str(exc_info.value.__cause__) == "API error in cv2 path"
+
+
+@pytest.mark.asyncio
+async def test_api_error_wrapping_malformed_response(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
+    """Test that malformed tool response parsing failures raise APIError."""
+    test_image_path, extractor = _setup_extractor_with_mock_chain(monkeypatch, tmp_path, "ignored")
+    extractor._chain = _AsyncChainMock(SimpleNamespace())
+
+    with pytest.raises(APIError) as exc_info:
+        await extractor.extract_from_path(test_image_path)
+
+    assert exc_info.value.__cause__.__class__ == AttributeError
+
+
+@pytest.mark.asyncio
+async def test_api_error_wrapping_invalid_tool_args(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
+    """Test that invalid parsed payloads raise APIError."""
+    test_image_path, extractor = _setup_extractor_with_mock_chain(monkeypatch, tmp_path, "ignored")
+    extractor._chain = _AsyncChainMock(SimpleNamespace(tool_calls=[{"args": {}}]))
+
+    with pytest.raises(APIError) as exc_info:
+        await extractor.extract_from_path(test_image_path)
+
+    assert exc_info.value.__cause__ is not None

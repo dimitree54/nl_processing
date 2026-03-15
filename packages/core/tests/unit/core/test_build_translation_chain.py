@@ -1,3 +1,4 @@
+from collections.abc import Callable
 import json
 from pathlib import Path
 
@@ -9,6 +10,8 @@ import pytest
 
 from nl_processing.core.models import Language
 from nl_processing.core.prompts import build_translation_chain
+
+_BUILD_TRANSLATION_CHAIN: Callable[..., object] = build_translation_chain
 
 
 class _DummyToolSchema(BaseModel):
@@ -50,7 +53,7 @@ def test_returns_chain(tmp_path: Path) -> None:
     """Test build_translation_chain returns a prompt|llm chain."""
     _write_prompt_file(tmp_path, Language.NL, Language.RU)
 
-    chain = build_translation_chain(
+    chain = _BUILD_TRANSLATION_CHAIN(
         source_language=Language.NL,
         target_language=Language.RU,
         prompts_dir=tmp_path,
@@ -65,7 +68,7 @@ def test_constructs_correct_prompt_filename(tmp_path: Path) -> None:
     """Test build_translation_chain loads prompt from <source>_<target>.json."""
     _write_prompt_file(tmp_path, Language.RU, Language.NL)
 
-    chain = build_translation_chain(
+    chain = _BUILD_TRANSLATION_CHAIN(
         source_language=Language.RU,
         target_language=Language.NL,
         prompts_dir=tmp_path,
@@ -80,7 +83,7 @@ def test_passes_model_params(tmp_path: Path) -> None:
     """Test build_translation_chain passes model, temperature, reasoning_effort, service_tier."""
     _write_prompt_file(tmp_path, Language.NL, Language.RU)
 
-    build_translation_chain(
+    _BUILD_TRANSLATION_CHAIN(
         source_language=Language.NL,
         target_language=Language.RU,
         prompts_dir=tmp_path,
@@ -104,7 +107,7 @@ def test_binds_tool_schema(tmp_path: Path) -> None:
     """Test build_translation_chain binds tool_schema with tool_choice."""
     _write_prompt_file(tmp_path, Language.NL, Language.RU)
 
-    build_translation_chain(
+    _BUILD_TRANSLATION_CHAIN(
         source_language=Language.NL,
         target_language=Language.RU,
         prompts_dir=tmp_path,
@@ -120,9 +123,9 @@ def test_binds_tool_schema(tmp_path: Path) -> None:
 
 
 def test_missing_prompt_file(tmp_path: Path) -> None:
-    """Test build_translation_chain raises FileNotFoundError for missing prompt."""
-    with pytest.raises(FileNotFoundError, match="Prompt file not found"):
-        build_translation_chain(
+    """Test build_translation_chain raises FileNotFoundError from prompt-file access when absent."""
+    with pytest.raises(FileNotFoundError):
+        _BUILD_TRANSLATION_CHAIN(
             source_language=Language.NL,
             target_language=Language.RU,
             prompts_dir=tmp_path,
@@ -135,7 +138,7 @@ def test_default_temperature(tmp_path: Path) -> None:
     """Test build_translation_chain defaults temperature to 0."""
     _write_prompt_file(tmp_path, Language.NL, Language.RU)
 
-    build_translation_chain(
+    _BUILD_TRANSLATION_CHAIN(
         source_language=Language.NL,
         target_language=Language.RU,
         prompts_dir=tmp_path,

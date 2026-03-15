@@ -6,24 +6,12 @@ from nl_processing.core.exceptions import UnsupportedImageFormatError
 from nl_processing.core.image_encoding import (
     encode_cv2_to_base64,
     encode_path_to_base64,
-    get_image_format,
     validate_image_format,
 )
 import numpy as np
 import pytest
 
-from nl_processing.extract_text_from_image.benchmark import generate_test_image
-
-
-def test_get_image_format() -> None:
-    """Test get_image_format returns lowercase extensions."""
-    assert get_image_format("image.png") == ".png"
-    assert get_image_format("image.jpg") == ".jpg"
-    assert get_image_format("image.JPEG") == ".jpeg"
-    assert get_image_format("image.gif") == ".gif"
-    assert get_image_format("image.webp") == ".webp"
-    assert not get_image_format("image")
-    assert get_image_format("path/to/image.PNG") == ".png"
+from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
 
 
 def test_encode_path_to_base64(tmp_path: pathlib.Path) -> None:

@@ -31,6 +31,6 @@ def test_load_prompt_returns_stripped_content(tmp_path: Path) -> None:
 
 
 def test_load_prompt_missing_file_raises_file_not_found_error() -> None:
-    """Test load_prompt raises FileNotFoundError when prompt file does not exist."""
-    with pytest.raises(FileNotFoundError, match="Prompt file not found"):
+    """Test load_prompt raises the native FileNotFoundError for a missing file."""
+    with pytest.raises(FileNotFoundError):
         load_prompt("/nonexistent/path/missing_prompt.json")

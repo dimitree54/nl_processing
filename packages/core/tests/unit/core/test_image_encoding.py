@@ -10,7 +10,6 @@ from nl_processing.core.image_encoding import (
     SUPPORTED_EXTENSIONS,
     encode_cv2_to_base64,
     encode_path_to_base64,
-    get_image_format,
     validate_image_format,
 )
 
@@ -23,23 +22,17 @@ def _create_tiny_png(path: Path) -> Path:
     return path
 
 
-def test_get_image_format_lowercase() -> None:
-    """Test get_image_format returns lowercase extension."""
-    assert get_image_format("photo.PNG") == ".png"
-    assert get_image_format("photo.JpG") == ".jpg"
-
-
-def test_get_image_format_extracts_suffix() -> None:
-    """Test get_image_format extracts the file extension."""
-    assert get_image_format("/some/path/image.jpeg") == ".jpeg"
-    assert get_image_format("file.webp") == ".webp"
-    assert get_image_format("file.gif") == ".gif"
-
-
 def test_validate_image_format_accepts_supported() -> None:
     """Test validate_image_format accepts all supported extensions."""
     for ext in SUPPORTED_EXTENSIONS:
         validate_image_format(f"image{ext}")
+
+
+def test_validate_image_format_normalizes_suffix_case() -> None:
+    """Test validate_image_format accepts supported extensions with mixed case."""
+    validate_image_format("photo.PNG")
+    validate_image_format("photo.JpG")
+    validate_image_format("/some/path/image.jpeg")
 
 
 def test_validate_image_format_rejects_unsupported() -> None:
@@ -86,6 +79,16 @@ def test_encode_path_to_base64_jpeg_media_type(tmp_path: Path) -> None:
     assert media_type == "image/jpeg"
 
 
+def test_encode_path_to_base64_maps_other_media_types(tmp_path: Path) -> None:
+    """Test encode_path_to_base64 maps supported non-JPEG suffixes correctly."""
+    gif_path = tmp_path / "photo.GIF"
+    gif_path.write_bytes(b"gif-bytes")
+
+    _base64_str, media_type = encode_path_to_base64(str(gif_path))
+
+    assert media_type == "image/gif"
+
+
 def test_encode_cv2_to_base64_returns_png() -> None:
     """Test encode_cv2_to_base64 returns base64 PNG with correct media type."""
     image = numpy.zeros((2, 2, 3), dtype=numpy.uint8)
@@ -107,6 +110,20 @@ def test_encode_cv2_to_base64_preserves_pixel_data() -> None:
     decoded_array = numpy.frombuffer(decoded_bytes, dtype=numpy.uint8)
     decoded_image = cv2.imdecode(decoded_array, cv2.IMREAD_COLOR)
     numpy.testing.assert_array_equal(decoded_image, original)
+
+
+def test_encode_cv2_to_base64_handles_imencode_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test encode_cv2_to_base64 raises ValueError when OpenCV encoding fails."""
+
+    def _fail_imencode(_extension: str, _image: numpy.ndarray) -> tuple[bool, numpy.ndarray]:
+        return False, numpy.array([], dtype=numpy.uint8)
+
+    monkeypatch.setattr(cv2, "imencode", _fail_imencode)
+
+    image = numpy.zeros((1, 1, 3), dtype=numpy.uint8)
+
+    with pytest.raises(ValueError, match="Failed to encode image to PNG"):
+        encode_cv2_to_base64(image)
 
 
 def test_supported_extensions_contains_expected_formats() -> None:

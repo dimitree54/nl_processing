@@ -1,5 +1,7 @@
 """Test fixtures for extract_text_from_image unit tests."""
 
+from types import SimpleNamespace
+
 from tests.conftest import (
     AsyncChainMock as _AsyncChainMock,
     AsyncChainMockError as _AsyncChainMockError,
@@ -9,6 +11,6 @@ from tests.conftest import (
 __all__ = ["_AsyncChainMock", "_AsyncChainMockError", "make_tool_response"]
 
 
-def make_tool_response(text: str) -> object:
+def make_tool_response(text: str) -> SimpleNamespace:
     """Build a fake LLM response with tool_calls for ExtractedText."""
     return _make_response({"text": text})

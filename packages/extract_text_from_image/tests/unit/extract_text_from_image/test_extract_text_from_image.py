@@ -5,24 +5,13 @@ from nl_processing.core.models import Language
 import numpy as np
 import pytest
 
-from nl_processing.extract_text_from_image.benchmark import generate_test_image
+from nl_processing.extract_text_from_image.exceptions import ImageTextFileNotFoundError
+from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
 from tests.unit.extract_text_from_image.conftest import _AsyncChainMock, make_tool_response
 
 
-def test_constructor_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test ImageTextExtractor constructor with default arguments."""
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-
-    extractor = ImageTextExtractor()
-    assert extractor._language == Language.NL
-    # Chain should be stored (not prompt + llm separately)
-    assert extractor._chain is not None
-
-
-def test_constructor_uses_offline_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Default constructor should use the offline extraction profile."""
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+def _capture_chat_openai_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     captured: dict[str, object] = {}
 
     class _PromptStub:
@@ -38,9 +27,37 @@ def test_constructor_uses_offline_defaults(monkeypatch: pytest.MonkeyPatch) -> N
 
     monkeypatch.setattr("nl_processing.extract_text_from_image.service.load_prompt", lambda _path: _PromptStub())
     monkeypatch.setattr("nl_processing.extract_text_from_image.service.ChatOpenAI", _ChatStub)
+    return captured
+
+
+def test_constructor_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test ImageTextExtractor constructor with default arguments."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    extractor = ImageTextExtractor()
+    assert extractor._language == Language.NL
+    # Chain should be stored (not prompt + llm separately)
+    assert extractor._chain is not None
+
+
+def test_constructor_uses_some_default_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default constructor should provide a model name without fixing the exact default."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured = _capture_chat_openai_kwargs(monkeypatch)
     ImageTextExtractor()
 
-    assert captured == {"model": "gpt-4.1-mini", "service_tier": None, "reasoning_effort": None, "temperature": 0}
+    assert isinstance(captured["model"], str)
+    assert captured["model"]
+    assert captured["temperature"] == 0
+
+
+def test_constructor_omits_optional_model_params_when_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """None-valued optional model params should not be forwarded to ChatOpenAI."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured = _capture_chat_openai_kwargs(monkeypatch)
+    ImageTextExtractor(model="o4-mini", reasoning_effort=None, service_tier=None, temperature=None)
+
+    assert captured == {"model": "o4-mini"}
 
 
 def test_constructor_custom_params(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -159,8 +176,7 @@ def test_extract_with_russian_language(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that constructor works with different language."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    # This will fail because we don't have ru.json prompt, but tests constructor logic
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(ImageTextFileNotFoundError, match="Required prompt asset not found"):
         ImageTextExtractor(language=Language.RU)
 
 

@@ -30,8 +30,8 @@ def test_load_prompt_valid_file(tmp_path: Path) -> None:
 
 
 def test_load_prompt_missing_file() -> None:
-    """Test loading a non-existent prompt file raises FileNotFoundError."""
-    with pytest.raises(FileNotFoundError, match="Prompt file not found"):
+    """Test loading a non-existent prompt file raises the native FileNotFoundError."""
+    with pytest.raises(FileNotFoundError):
         load_prompt("nonexistent.json")
 
 
