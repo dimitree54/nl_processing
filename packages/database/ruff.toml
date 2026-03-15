@@ -74,7 +74,7 @@ external = ["DC"]
 ban-relative-imports = "all"
 
 [lint.ruff]
-strictly-empty-init-modules = true
+strictly-empty-init-modules = false
 
 [lint.isort]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]

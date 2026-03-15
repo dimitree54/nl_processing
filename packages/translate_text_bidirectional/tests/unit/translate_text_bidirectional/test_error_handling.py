@@ -47,3 +47,98 @@ async def test_api_error_preserves_cause(monkeypatch: pytest.MonkeyPatch) -> Non
         await translator.translate("Bidirectionele test boodschap")
     assert exc_info.value.__cause__ is original
     assert str(exc_info.value) == "Network timeout"
+
+
+@pytest.mark.asyncio
+async def test_malformed_response_missing_tool_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Response missing tool_calls attribute raises APIError."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    class MockResponseNoToolCalls:
+        pass
+
+    class MockChain:
+        async def ainvoke(self, _: object) -> MockResponseNoToolCalls:  # noqa: ARG002
+            return MockResponseNoToolCalls()
+
+    translator = BidirectionalTextTranslator(source_language=Language.NL, target_language=Language.RU)
+    translator._chain = MockChain()
+
+    with pytest.raises(APIError, match="LLM response missing tool_calls attribute"):
+        await translator.translate("test text")
+
+
+@pytest.mark.asyncio
+async def test_malformed_response_empty_tool_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Response with empty tool_calls list raises APIError."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    class MockResponseEmptyToolCalls:
+        tool_calls = []
+
+    class MockChain:
+        async def ainvoke(self, _: object) -> MockResponseEmptyToolCalls:  # noqa: ARG002
+            return MockResponseEmptyToolCalls()
+
+    translator = BidirectionalTextTranslator(source_language=Language.NL, target_language=Language.RU)
+    translator._chain = MockChain()
+
+    with pytest.raises(APIError, match="LLM response contains no tool calls"):
+        await translator.translate("test text")
+
+
+@pytest.mark.asyncio
+async def test_malformed_response_missing_args(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tool call missing args field raises APIError."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    class MockResponseMissingArgs:
+        tool_calls = [{"name": "some_tool"}]  # Missing args
+
+    class MockChain:
+        async def ainvoke(self, _: object) -> MockResponseMissingArgs:  # noqa: ARG002
+            return MockResponseMissingArgs()
+
+    translator = BidirectionalTextTranslator(source_language=Language.NL, target_language=Language.RU)
+    translator._chain = MockChain()
+
+    with pytest.raises(APIError, match="Tool call missing 'args' field"):
+        await translator.translate("test text")
+
+
+@pytest.mark.asyncio
+async def test_malformed_response_missing_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tool call args missing text field raises APIError."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    class MockResponseMissingText:
+        tool_calls = [{"name": "some_tool", "args": {"other_field": "value"}}]  # Missing text
+
+    class MockChain:
+        async def ainvoke(self, _: object) -> MockResponseMissingText:  # noqa: ARG002
+            return MockResponseMissingText()
+
+    translator = BidirectionalTextTranslator(source_language=Language.NL, target_language=Language.RU)
+    translator._chain = MockChain()
+
+    with pytest.raises(APIError, match="Tool call args missing 'text' field"):
+        await translator.translate("test text")
+
+
+@pytest.mark.asyncio
+async def test_malformed_response_non_string_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tool call args.text that is not a string raises APIError."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    class MockResponseNonStringText:
+        tool_calls = [{"name": "some_tool", "args": {"text": 123}}]  # Non-string text
+
+    class MockChain:
+        async def ainvoke(self, _: object) -> MockResponseNonStringText:  # noqa: ARG002
+            return MockResponseNonStringText()
+
+    translator = BidirectionalTextTranslator(source_language=Language.NL, target_language=Language.RU)
+    translator._chain = MockChain()
+
+    with pytest.raises(APIError, match="Tool call args.text is not a string"):
+        await translator.translate("test text")

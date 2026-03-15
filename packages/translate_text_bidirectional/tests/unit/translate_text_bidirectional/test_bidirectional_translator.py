@@ -10,17 +10,21 @@ from tests.unit.translate_text_bidirectional.conftest import (
 
 
 def test_constructor_valid_pair_nl_ru(monkeypatch: pytest.MonkeyPatch) -> None:
-    """NL, RU constructor order succeeds."""
+    """NL, RU constructor order succeeds and sets source-anchored semantics."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     translator = BidirectionalTextTranslator(source_language=Language.NL, target_language=Language.RU)
     assert translator._chain is not None
+    assert translator._source_language == Language.NL
+    assert translator._target_language == Language.RU
 
 
 def test_constructor_valid_pair_ru_nl(monkeypatch: pytest.MonkeyPatch) -> None:
-    """RU, NL constructor order succeeds (CR-1: unordered pair)."""
+    """RU, NL constructor order succeeds and creates distinct semantic behavior."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     translator = BidirectionalTextTranslator(source_language=Language.RU, target_language=Language.NL)
     assert translator._chain is not None
+    assert translator._source_language == Language.RU
+    assert translator._target_language == Language.NL
 
 
 def test_constructor_unsupported_pair(monkeypatch: pytest.MonkeyPatch) -> None:
