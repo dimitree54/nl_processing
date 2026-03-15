@@ -2,11 +2,11 @@ import os
 import pathlib
 
 from nl_processing.core.exceptions import UnsupportedLanguageError
+from nl_processing.core.image_encoding import generate_test_image
 from nl_processing.core.models import Language
 import numpy as np
 import pytest
 
-from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
 from tests.unit.extract_text_from_image.conftest import _AsyncChainMock, make_tool_response
 

@@ -6,12 +6,11 @@ from nl_processing.core.exceptions import UnsupportedImageFormatError
 from nl_processing.core.image_encoding import (
     encode_cv2_to_base64,
     encode_path_to_base64,
+    generate_test_image,
     validate_image_format,
 )
 import numpy as np
 import pytest
-
-from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
 
 
 def test_encode_path_to_base64(tmp_path: pathlib.Path) -> None:

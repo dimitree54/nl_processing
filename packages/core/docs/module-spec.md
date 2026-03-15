@@ -19,7 +19,7 @@ The spec must not document current implementation state as justification, intern
 
 ### Summary
 
-`nl_processing.core` is the shared foundational package for the repository. It owns the canonical domain enums and Pydantic models, a small shared exception set with explicit runtime-vs-initialization semantics, LangChain prompt-loading and model-configuration helpers, and reusable image encoding and multimodal-message utilities. Other packages depend on this package for shared types and low-level reusable helpers, while domain-specific pipeline logic stays outside this module.
+`nl_processing.core` is the shared foundational package for the repository. It owns the canonical domain enums and Pydantic models, a small shared exception set with explicit runtime-vs-initialization semantics, LangChain prompt-loading and model-configuration helpers, and reusable image encoding and multimodal-message utilities. Its public helper surface includes synthetic test-image generation, synthetic image data-URL generation, human multimodal image-message construction, and generic AI tool-call message construction so consumer packages can reuse one canonical contract instead of package-local prompt helpers.
 
 ### Package and Documentation Location
 
@@ -55,7 +55,8 @@ The spec must not document current implementation state as justification, intern
 | Area | Current Documented State | Requested Change | Impact or Refactor Scope | Safer Simpler Alternative | User Confirmation |
 | --- | --- | --- | --- | --- | --- |
 | Prompt helpers | `core` exposed prompt loading only | Add shared public ChatOpenAI kwarg shaping for consumer packages | Public API expansion in `nl_processing.core.prompts` | Keep service-local helpers, but that would preserve duplication | Confirmed |
-| Image helpers | `core` exposed validation and encoding helpers only | Add public path-encoding alias and multimodal image-message builder | Public API expansion in `nl_processing.core.image_encoding` | Keep service-local helpers, but that would preserve duplication | Confirmed |
+| Image helpers | `core` exposed validation and encoding helpers only | Add public path-encoding alias plus public synthetic image generation and data-URL helpers | Public API expansion in `nl_processing.core.image_encoding` | Keep service-local helpers, but that would preserve duplication | Confirmed |
+| AI message helpers | Consumer packages used package-local tool-call AI-message builders | Add shared public `build_tool_call_ai_message(...)` helper | Public API expansion in `nl_processing.core.prompts` | Keep service-local helpers, but that would preserve duplication | Confirmed |
 
 ### In Scope
 
@@ -64,7 +65,8 @@ The spec must not document current implementation state as justification, intern
 - `APIError`, `UnsupportedImageFormatError`, `TargetLanguageNotFoundInInputError`, and `UnsupportedLanguageError`
 - `load_prompt`
 - `ChatOpenAIKwargs` and `build_llm_kwargs(...)`
-- Image format validation, base64 encoding, path-encoding, and multimodal image-message helpers
+- Image format validation, base64 encoding, path-encoding, synthetic test-image generation, synthetic image data-URL generation, and multimodal image-message helpers
+- Public AI tool-call message construction for prompt examples and other LangChain tool-call flows
 - Prompt authoring helper script in `packages/core/src/nl_processing/core/scripts/prompt_author.py`
 - Package-level validation expectations for lint, duplication, and unit tests
 
@@ -98,10 +100,13 @@ The spec must not document current implementation state as justification, intern
 | FR-8 | Provide public `ChatOpenAIKwargs` plus `build_llm_kwargs(model, service_tier, reasoning_effort, temperature)` that omit `None`-valued optional model settings | Must | Shared OpenAI chat-model configuration helper |
 | FR-9 | Provide `validate_image_format(path)` that accepts only `.png`, `.jpg`, `.jpeg`, `.gif`, and `.webp` | Must | Supported set matches current OpenAI Vision usage |
 | FR-10 | Provide `encode_path_to_base64(path)` and `encode_image_path(path)` returning `(base64_string, media_type)` for supported suffix mapping | Must | Path encoding helpers do not hide file errors |
-| FR-11 | Provide `encode_cv2_to_base64(image)` returning PNG base64 and media type `image/png` | Must | OpenCV array helper always encodes PNG |
-| FR-12 | Provide `build_image_human_message(base64_string, media_type)` that creates one multimodal `HumanMessage` with a data URL image payload | Must | Shared image request-shaping helper |
-| FR-13 | Provide `APIError`, `UnsupportedImageFormatError`, `TargetLanguageNotFoundInInputError`, and `UnsupportedLanguageError` as distinct public exception types | Must | Runtime input-validation and initialization-time language failures must be separable |
-| FR-14 | Provide prompt-authoring helpers `serialize_prompt_to_json` and `save_prompt` usable from `prompt_author.py` | Must | Output must be consumable by `load_prompt` |
+| FR-11 | Provide `generate_test_image(text, output_path, *, width=800, height=200, font_scale=1.0, thickness=2) -> str` that writes a synthetic text image and returns the written path string | Must | Public shared test-image helper for consumer packages and tests |
+| FR-12 | Provide `generate_test_image_data_url(text, *, width=800, height=200, font_scale=1.2, thickness=2) -> str` that returns a `data:image/png;base64,...` URL for a synthetic text image | Must | Public replacement for package-local synthetic image data-URL helpers |
+| FR-13 | Provide `encode_cv2_to_base64(image)` returning PNG base64 and media type `image/png` | Must | OpenCV array helper always encodes PNG |
+| FR-14 | Provide `build_image_human_message(base64_string, media_type)` that creates one multimodal `HumanMessage` with a data URL image payload | Must | Shared image request-shaping helper |
+| FR-15 | Provide `build_tool_call_ai_message(tool_name, tool_args, call_id, *, content="")` that creates one `AIMessage` containing exactly one tool call with the supplied name, args, and id | Must | Shared AI-message helper must stay generic rather than package-specific |
+| FR-16 | Provide `APIError`, `UnsupportedImageFormatError`, `TargetLanguageNotFoundInInputError`, and `UnsupportedLanguageError` as distinct public exception types | Must | Runtime input-validation and initialization-time language failures must be separable |
+| FR-17 | Provide prompt-authoring helpers `serialize_prompt_to_json` and `save_prompt` usable from `prompt_author.py` | Must | Output must be consumable by `load_prompt` |
 
 ### Rules and Invariants
 
@@ -113,8 +118,11 @@ The spec must not document current implementation state as justification, intern
 - BR-6: `load_prompt` must surface native file access errors, `json.JSONDecodeError` for malformed JSON, and `TypeError` for non-dict JSON or non-`ChatPromptTemplate` LangChain objects.
 - BR-7: `build_llm_kwargs` must never forward optional keys whose values are `None`.
 - BR-8: `encode_path_to_base64` and `encode_image_path` do not perform format validation.
-- BR-9: `encode_cv2_to_base64` must raise `ValueError` if OpenCV PNG encoding fails.
-- BR-10: `build_image_human_message` must always emit exactly one `image_url` content block using a `data:<media_type>;base64,<payload>` URL.
+- BR-9: `generate_test_image` must render each newline-delimited input line into the output image and raise `ValueError` if the image cannot be written.
+- BR-10: `generate_test_image_data_url` must return a complete `data:image/png;base64,<payload>` URL and preserve `ValueError` or native file I/O failures from the helper operations it composes.
+- BR-11: `encode_cv2_to_base64` must raise `ValueError` if OpenCV PNG encoding fails.
+- BR-12: `build_image_human_message` must always emit exactly one `image_url` content block using a `data:<media_type>;base64,<payload>` URL.
+- BR-13: `build_tool_call_ai_message` must preserve caller-supplied `tool_name`, `tool_args`, and `call_id`, emit exactly one tool call, and default `content` to the empty string.
 
 ### Non-Functional Requirements
 
@@ -139,8 +147,10 @@ The spec must not document current implementation state as justification, intern
 | FM-4 | `load_prompt` deserializes a LangChain object that is not `ChatPromptTemplate` | Raise `TypeError` naming the actual type | Caller handles or propagates |
 | FM-5 | `validate_image_format` receives unsupported or extensionless path | Raise `UnsupportedImageFormatError` listing supported formats | Caller handles or propagates |
 | FM-6 | `encode_path_to_base64` or `encode_image_path` receives a missing path | Raise native `FileNotFoundError` | Caller handles or propagates |
-| FM-7 | `encode_cv2_to_base64` cannot encode the image as PNG | Raise `ValueError` | Caller handles or propagates |
-| FM-8 | Pydantic models receive invalid enum values or missing required fields | Raise `ValidationError` | Caller handles or propagates |
+| FM-7 | `generate_test_image` cannot write the output image | Raise `ValueError` | Caller handles or propagates |
+| FM-8 | `generate_test_image_data_url` cannot complete temporary-image generation or PNG path encoding | Raise the underlying `ValueError` or native file I/O exception | Caller handles or propagates |
+| FM-9 | `encode_cv2_to_base64` cannot encode the image as PNG | Raise `ValueError` | Caller handles or propagates |
+| FM-10 | Pydantic models receive invalid enum values or missing required fields | Raise `ValidationError` | Caller handles or propagates |
 
 ## 3. Module Design
 
@@ -150,8 +160,8 @@ The spec must not document current implementation state as justification, intern
 
 - Canonical shared enums and Pydantic data models
 - Shared exception types with explicit runtime-vs-initialization semantics
-- LangChain prompt loading and ChatOpenAI kwarg-shaping utilities
-- Image suffix validation, base64 encoding, path encoding, and multimodal image-message helpers
+- LangChain prompt loading, ChatOpenAI kwarg-shaping, and AI tool-call message utilities
+- Image suffix validation, base64 encoding, path encoding, synthetic image generation, synthetic image data-URL generation, and multimodal image-message helpers
 - Developer-facing prompt serialization helpers
 
 **Does Not Own:**
@@ -167,18 +177,18 @@ The spec must not document current implementation state as justification, intern
 | ID | Type | Direction | Counterparty | Contract or Data | Notes |
 | --- | --- | --- | --- | --- | --- |
 | IF-1 | Python import | Outbound | Consumer packages | `nl_processing.core.models` exports shared enums and models | Public shared schema surface |
-| IF-2 | Python import | Outbound | Consumer packages | `nl_processing.core.prompts.load_prompt`, `ChatOpenAIKwargs`, and `build_llm_kwargs(...)` | Returns prompt objects and model kwargs helpers |
-| IF-3 | Python import | Outbound | Image-processing packages | `nl_processing.core.image_encoding` helpers | Provides validation, encoding, and multimodal image-message helpers |
+| IF-2 | Python import | Outbound | Consumer packages | `nl_processing.core.prompts.load_prompt`, `ChatOpenAIKwargs`, `build_llm_kwargs(...)`, and `build_tool_call_ai_message(...)` | Returns prompt objects plus shared chat-model and AI-message helpers |
+| IF-3 | Python import | Outbound | Image-processing packages | `nl_processing.core.image_encoding` helpers | Provides validation, encoding, synthetic image generation, data-URL generation, and multimodal image-message helpers |
 | IF-4 | Python import | Outbound | Consumer packages | `nl_processing.core.exceptions` classes | Shared exception types |
 | IF-5 | Third-party library | Inbound | Pydantic v2 | `BaseModel` validation and schema generation | Used by all models |
-| IF-6 | Third-party library | Inbound | LangChain Core | `load`, `dumpd`, and `ChatPromptTemplate` | Prompt serialization/deserialization |
+| IF-6 | Third-party library | Inbound | LangChain Core | `load`, `dumpd`, `ChatPromptTemplate`, `HumanMessage`, and `AIMessage` | Prompt serialization/deserialization and message helper contracts |
 | IF-7 | Third-party library | Inbound | OpenCV and NumPy | `cv2.imencode`, `numpy.ndarray` | Image encoding implementation |
 
 ### Cross-Module Change References
 
 | Affected Module | Why It Must Change | External Spec or Doc Reference | Ownership Status |
 | --- | --- | --- | --- |
-| `extract_text_from_image` | The extractor consumes shared ChatOpenAI kwarg shaping and multimodal image helpers from `core` | `../../extract_text_from_image/docs/module-spec.md` | Exists |
+| `extract_text_from_image` | The extractor consumes shared ChatOpenAI kwarg shaping, synthetic image data-URL generation, multimodal image helpers, and AI tool-call message helpers from `core` | `../../extract_text_from_image/docs/module-spec.md` | Exists |
 
 ### Data and State Ownership
 
@@ -193,11 +203,14 @@ The spec must not document current implementation state as justification, intern
 
 1. `load_prompt` opens the supplied file path and parses JSON.
 2. `load_prompt` verifies the parsed value is a dict, deserializes it with LangChain, and validates the result type is `ChatPromptTemplate`.
-3. `validate_image_format` checks the lowercase suffix against `SUPPORTED_EXTENSIONS`.
+3. `validate_image_format` checks the lowercase suffix against the internal `_SUPPORTED_EXTENSIONS` set.
 4. `build_llm_kwargs` shapes ChatOpenAI kwargs and omits optional keys whose values are `None`.
 5. `encode_path_to_base64` and `encode_image_path` read bytes, map suffix to media type, and base64-encode the content.
-6. `encode_cv2_to_base64` encodes the array as PNG via OpenCV, then base64-encodes the PNG bytes.
-7. `build_image_human_message` wraps the encoded payload in a one-image multimodal `HumanMessage`.
+6. `generate_test_image` writes a synthetic image for the supplied text and returns the written path string.
+7. `generate_test_image_data_url` generates a synthetic PNG image and returns a complete base64 data URL.
+8. `encode_cv2_to_base64` encodes the array as PNG via OpenCV, then base64-encodes the PNG bytes.
+9. `build_image_human_message` wraps the encoded payload in a one-image multimodal `HumanMessage`.
+10. `build_tool_call_ai_message` wraps caller-supplied tool-call fields in a one-call `AIMessage`.
 
 ### Decisions
 
@@ -234,12 +247,15 @@ The spec must not document current implementation state as justification, intern
 | FR-10 | IF-3, BR-8, DEC-5 | QA-10 |
 | FR-11 | IF-3, BR-9 | QA-11 |
 | FR-12 | IF-3, BR-10 | QA-12 |
-| FR-13 | IF-4, BR-4, BR-5, DEC-2 | QA-13 |
-| FR-14 | IF-2, IF-6, DEC-1 | QA-14 |
-| NFR-5 | CR-3, package lint command | QA-15, SC-1 |
-| NFR-6 | package lint command | QA-16, SC-4 |
-| NFR-7 | CR-6, Ruff banned APIs | QA-17, SC-2 |
-| NFR-8 | BR-6, BR-9, CR-4 | QA-7, QA-11, SC-2 |
+| FR-13 | IF-3, BR-11 | QA-13 |
+| FR-14 | IF-3, BR-12 | QA-14 |
+| FR-15 | IF-2, BR-13 | QA-15 |
+| FR-16 | IF-4, BR-4, BR-5, DEC-2 | QA-16 |
+| FR-17 | IF-2, IF-6, DEC-1 | QA-17 |
+| NFR-5 | CR-3, package lint command | QA-18, SC-1 |
+| NFR-6 | package lint command | QA-18, SC-4 |
+| NFR-7 | CR-6, Ruff banned APIs | QA-20, SC-2 |
+| NFR-8 | BR-6, BR-9, BR-10, BR-11, CR-4 | QA-7, QA-11, QA-12, QA-13, SC-2 |
 
 ## 4. Delivery and Validation
 
@@ -249,8 +265,10 @@ The spec must not document current implementation state as justification, intern
 - AC-2: Shared enums and models validate and serialize as documented.
 - AC-3: Prompt loading accepts valid LangChain prompt JSON and rejects invalid file, JSON, and type inputs with explicit failures.
 - AC-4: Prompt helpers shape ChatOpenAI kwargs without forwarding `None` options.
-- AC-5: Image helpers accept only documented suffixes, return documented media types, build the documented multimodal message payload, and fail explicitly on unsupported formats, missing files, or PNG-encoding failure.
-- AC-6: Shared exceptions preserve the documented base-type split and remain distinct catch targets.
+- AC-5: Public synthetic image helpers write image files and produce `data:image/png;base64,...` URLs with the documented failure semantics.
+- AC-6: Image helpers accept only documented suffixes, return documented media types, build the documented multimodal message payload, and fail explicitly on unsupported formats, missing files, write failures, or PNG-encoding failure.
+- AC-7: `build_tool_call_ai_message(...)` returns an `AIMessage` with exactly one caller-shaped tool call and default empty-string content.
+- AC-8: Shared exceptions preserve the documented base-type split and remain distinct catch targets.
 
 ### Testing Strategy
 
@@ -265,8 +283,8 @@ The spec must not document current implementation state as justification, intern
 
 - Validate enums, models, serialization, and validation failures in `packages/core/tests/unit/core/test_models.py` and `packages/core/tests/unit/core/test_word_pairs.py`.
 - Validate exceptions in `packages/core/tests/unit/core/test_exceptions.py`.
-- Validate prompt loading and kwarg shaping in `packages/core/tests/unit/core/test_prompts.py` and `packages/core/tests/unit/core/test_prompt_loading.py`.
-- Validate image helpers in `packages/core/tests/unit/core/test_image_encoding.py`.
+- Validate prompt loading, kwarg shaping, and AI tool-call message construction in `packages/core/tests/unit/core/test_prompts.py` and `packages/core/tests/unit/core/test_prompt_loading.py`.
+- Validate image helpers, synthetic image generation, and synthetic image data-URL generation in `packages/core/tests/unit/core/test_image_encoding.py`.
 
 **Integration:**
 
@@ -274,7 +292,7 @@ The spec must not document current implementation state as justification, intern
 
 **Contract:**
 
-- Treat enum values, model field sets, prompt-loading return type, exception types, and image-helper return shapes as contract surfaces verified by unit tests.
+- Treat enum values, model field sets, prompt-loading return type, exception types, synthetic image helper results, AI-message tool-call shape, and image-helper return shapes as contract surfaces verified by unit tests.
 
 **E2E or UI Workflow:**
 
@@ -300,13 +318,16 @@ The spec must not document current implementation state as justification, intern
 | QA-8 | FR-8 | Unit | `test_build_llm_kwargs_includes_only_non_none_values`, `test_build_llm_kwargs_preserves_all_explicit_values` | PR CI / local | Covers shared ChatOpenAI kwarg shaping |
 | QA-9 | FR-9 | Unit | `test_validate_image_format_accepts_supported`, `test_validate_image_format_normalizes_suffix_case`, `test_validate_image_format_rejects_unsupported`, `test_validate_image_format_rejects_no_extension`, `test_supported_extensions_contains_expected_formats` | PR CI / local | Covers supported suffix policy |
 | QA-10 | FR-10 | Unit | `test_encode_path_to_base64_returns_valid_base64`, `test_encode_path_to_base64_round_trips_file_content`, `test_encode_path_to_base64_jpeg_media_type`, `test_encode_path_to_base64_maps_other_media_types`, `test_encode_image_path_matches_encode_path_to_base64` | PR CI / local | Covers file-path encoding contract |
-| QA-11 | FR-11, NFR-8 | Unit | `test_encode_cv2_to_base64_returns_png`, `test_encode_cv2_to_base64_preserves_pixel_data` | PR CI / local | Failure branch exists in implementation; success path is automated |
-| QA-12 | FR-12 | Unit | `test_build_image_human_message_uses_data_url_payload` | PR CI / local | Covers shared multimodal image message shape |
-| QA-13 | FR-13 | Unit | `test_api_error_can_be_raised_and_caught`, `test_unsupported_image_format_error_can_be_raised_and_caught`, `test_target_language_not_found_in_input_error_can_be_raised_and_caught`, `test_unsupported_language_error_can_be_raised_and_caught`, `test_runtime_and_initialization_language_errors_have_expected_base_types`, `test_all_exceptions_are_subclasses_of_exception`, `test_exceptions_are_distinct_types` | PR CI / local | Covers exception hierarchy, role split, and independence |
-| QA-14 | FR-14 | Unit | `test_load_prompt_round_trip` plus prompt serialization path in `prompt_author.py` contract | PR CI / local | Confirms `dumpd`/`load` compatibility |
-| QA-15 | NFR-5 | Static | `uv run pylint ... --max-module-lines=200` via `make lint` | PR CI / local | Enforces file-size rule |
-| QA-16 | NFR-6 | Static | `npx jscpd --config .jscpd.json --exitCode 1 src tests` via `make lint` | PR CI / local | Enforces zero duplication threshold |
-| QA-17 | NFR-7 | Static | `uv run ruff check --fix src tests` using banned APIs in `ruff.toml` | PR CI / local | Rejects skip helpers and banned fallback APIs |
+| QA-11 | FR-11, NFR-8 | Unit | `test_generate_test_image_writes_image_file` | PR CI / local | Covers shared synthetic image generation contract |
+| QA-12 | FR-12, NFR-8 | Unit | `test_generate_test_image_data_url_returns_png_data_url`, `test_generate_test_image_data_url_decodes_to_non_empty_png_bytes` | PR CI / local | Covers shared synthetic image data-URL contract |
+| QA-13 | FR-13, NFR-8 | Unit | `test_encode_cv2_to_base64_returns_png`, `test_encode_cv2_to_base64_preserves_pixel_data` | PR CI / local | Failure branch exists in implementation; success path is automated |
+| QA-14 | FR-14 | Unit | `test_build_image_human_message_uses_data_url_payload` | PR CI / local | Covers shared multimodal image message shape |
+| QA-15 | FR-15 | Unit | `test_build_tool_call_ai_message_defaults_content_to_empty_string`, `test_build_tool_call_ai_message_emits_single_tool_call` | PR CI / local | Covers generic AI tool-call message contract |
+| QA-16 | FR-16 | Unit | `test_api_error_can_be_raised_and_caught`, `test_unsupported_image_format_error_can_be_raised_and_caught`, `test_target_language_not_found_in_input_error_can_be_raised_and_caught`, `test_unsupported_language_error_can_be_raised_and_caught`, `test_runtime_and_initialization_language_errors_have_expected_base_types`, `test_all_exceptions_are_subclasses_of_exception`, `test_exceptions_are_distinct_types` | PR CI / local | Covers exception hierarchy, role split, and independence |
+| QA-17 | FR-17 | Unit | `test_load_prompt_round_trip` plus prompt serialization path in `prompt_author.py` contract | PR CI / local | Confirms `dumpd`/`load` compatibility |
+| QA-18 | NFR-5 | Static | `uv run pylint ... --max-module-lines=200` via `make lint` | PR CI / local | Enforces file-size rule |
+| QA-19 | NFR-6 | Static | `npx jscpd --config .jscpd.json --exitCode 1 src tests` via `make lint` | PR CI / local | Enforces zero duplication threshold |
+| QA-20 | NFR-7 | Static | `uv run ruff check --fix src tests` using banned APIs in `ruff.toml` | PR CI / local | Rejects skip helpers and banned fallback APIs |
 
 #### Static Checks and Gates
 
@@ -327,7 +348,7 @@ The spec must not document current implementation state as justification, intern
 
 | ID | Risk | Impact | Mitigation or Next Step |
 | --- | --- | --- | --- |
-| RISK-1 | Shared schema changes in core can break multiple consumer packages immediately | High | Treat model and enum changes as cross-package changes and validate consumers before release |
+| RISK-1 | Shared schema or helper-contract changes in core can break multiple consumer packages immediately | High | Treat model, image-helper, and message-helper changes as cross-package changes and validate consumers before release |
 | RISK-2 | Core carries NumPy/OpenCV dependencies for consumers that do not use image helpers | Low | Accept current trade-off unless package decomposition becomes necessary |
 
 ### Open Questions

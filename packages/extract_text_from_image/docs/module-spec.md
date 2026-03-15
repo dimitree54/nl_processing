@@ -13,11 +13,11 @@ related_docs:
 
 ### Summary
 
-`extract_text_from_image` provides image-to-text extraction for the `nl_processing` system. It accepts a supported image file path or an OpenCV image array, submits the image for multimodal extraction, and returns markdown-formatted text in the requested target language. The module's supported contract is limited to its public extractor API and typed failure behavior; model-kwargs shaping and multimodal image request construction are delegated to shared `core` utilities.
+`extract_text_from_image` provides image-to-text extraction for the `nl_processing` system. It accepts a supported image file path or an OpenCV image array, submits the image for multimodal extraction, and returns markdown-formatted text in the requested target language. The module's supported contract is limited to its public extractor API and typed failure behavior; model-kwargs shaping, multimodal image request construction, synthetic prompt-example image generation, and prompt-example AI tool-call message construction are delegated to shared `core` utilities.
 
 ### System Context
 
-The module sits at the beginning of the text-processing workflow and produces extracted text for downstream processing modules. It relies on `core` for shared language types, prompt loading, image encoding utilities, and common exception classes. Callers use this module as the image-extraction entry point; they do not depend on its internal prompt assets or development helpers.
+The module sits at the beginning of the text-processing workflow and produces extracted text for downstream processing modules. It relies on `core` for shared language types, prompt loading, image encoding utilities, prompt-example message helpers, and common exception classes. Callers use this module as the image-extraction entry point; they do not depend on its internal prompt assets or development helpers.
 
 ### In Scope
 
@@ -25,7 +25,7 @@ The module sits at the beginning of the text-processing workflow and produces ex
 - Path-based extraction for supported image file formats.
 - OpenCV-array extraction for in-memory image data.
 - Markdown-formatted extracted text in the requested target language.
-- Typed failure behavior for unsupported languages, missing files, unsupported formats, blank extraction results, and upstream invocation/parsing failures.
+- Typed failure behavior for unsupported languages, missing input files, unsupported formats, blank extraction results, and upstream invocation/parsing failures.
 
 ### Out of Scope
 
@@ -54,7 +54,7 @@ The module sits at the beginning of the text-processing workflow and produces ex
 | FR-5 | If extraction yields empty or whitespace-only text, the module must raise `TargetLanguageNotFoundInInputError`. | Must | Blank extraction is not a successful result. |
 | FR-6 | If upstream invocation or response parsing fails, the module must raise `APIError`. | Must | The caller-facing failure contract stays typed and consistent. |
 | FR-7 | If the requested language is not supported by bundled runtime assets, construction must raise `UnsupportedLanguageError`. | Must | Unsupported-language detection happens during `ImageTextExtractor` initialization before extraction begins. |
-| FR-8 | If a required runtime file is missing, the module must raise `ImageTextFileNotFoundError`. | Must | This includes missing image inputs and any required supported-language assets that disappear unexpectedly at runtime. |
+| FR-8 | If a required image input file is missing, `extract_from_path(...)` must surface native `FileNotFoundError`. | Must | Missing path inputs are not wrapped in a module-specific exception. |
 
 ### Rules and Invariants
 
@@ -64,7 +64,7 @@ The module sits at the beginning of the text-processing workflow and produces ex
 - BR-4: Public extraction behavior is asynchronous.
 - BR-5: Successful extraction returns text only; it does not return confidence scores, bounding boxes, or structured OCR metadata.
 - BR-6: The implementation may change the default model selection without a contract change when tuning the quality-speed balance.
-- BR-7: Shared `core` helpers are the supported source for ChatOpenAI kwarg shaping, image-path encoding, and multimodal image-message construction.
+- BR-7: Shared `core` helpers are the supported source for ChatOpenAI kwarg shaping, image-path encoding, synthetic prompt-example image generation, multimodal human image-message construction, and AI tool-call message construction.
 
 ### Non-Functional Requirements
 
@@ -82,7 +82,7 @@ The module sits at the beginning of the text-processing workflow and produces ex
 | FM-2 | Image contains no target-language text or no text at all | Raise `TargetLanguageNotFoundInInputError` | Blank output is treated as failure. |
 | FM-3 | Upstream model invocation or tool-response parsing fails | Raise `APIError` with the original exception chained | Caller may retry or surface the error. |
 | FM-4 | Requested language is unsupported because no bundled prompt asset exists for it | Raise `UnsupportedLanguageError` during construction | Unsupported languages are rejected before any extraction call can start. |
-| FM-5 | Requested path input does not exist | Raise `ImageTextFileNotFoundError` before extraction succeeds | Missing input files are surfaced as a typed module failure. |
+| FM-5 | Requested path input does not exist | Raise native `FileNotFoundError` before extraction succeeds | Missing input files are surfaced without a module-specific wrapper. |
 
 ## 3. Public Contract
 
@@ -92,7 +92,7 @@ The module sits at the beginning of the text-processing workflow and produces ex
 
 - Accepting supported image inputs through the public extractor API.
 - Producing markdown-formatted extracted text in the requested target language.
-- Enforcing typed failure behavior for unsupported languages, missing files, unsupported formats, blank results, and upstream failures.
+- Enforcing typed failure behavior for unsupported languages, missing input files, unsupported formats, blank results, and upstream failures.
 
 **Not Responsible For:**
 
@@ -120,7 +120,7 @@ Documented public support is limited to these interfaces.
 
 | ID | Dependency or Constraint | Why It Matters | Behavioral Assumption or Limit | Notes |
 | --- | --- | --- | --- | --- |
-| EC-1 | `nl_processing.core` shared types, exceptions, prompt helpers, and image helpers | The module's caller-visible contract depends on shared `Language`, `ExtractedText`, `UnsupportedLanguageError`, `build_llm_kwargs(...)`, `encode_image_path(...)`, and `build_image_human_message(...)` | Compatibility depends on `core` preserving these shared contracts | Cross-module coordination is required for breaking changes. |
+| EC-1 | `nl_processing.core` shared types, exceptions, prompt helpers, and image helpers | The module's caller-visible contract depends on shared `Language`, `ExtractedText`, `UnsupportedLanguageError`, `build_llm_kwargs(...)`, `encode_image_path(...)`, `generate_test_image_data_url(...)`, `build_image_human_message(...)`, and `build_tool_call_ai_message(...)` | Compatibility depends on `core` preserving these shared contracts | Cross-module coordination is required for breaking changes. |
 | EC-2 | Runtime prompt assets for supported languages | Extraction behavior requires a prompt asset for the requested language | Missing bundled prompt assets make the language unsupported at construction time | Language support is asset-backed, not enum-only. |
 | EC-3 | Upstream multimodal model service | Extraction success depends on external model availability and response shape | Upstream outages or malformed responses surface as `APIError` | The module does not define fallback behavior. |
 
@@ -137,6 +137,7 @@ Documented public support is limited to these interfaces.
 | COMP-1 | Import path | Callers import from `nl_processing.extract_text_from_image.service` | Consumer code breaks at import time | This is the supported public import path. |
 | COMP-2 | Result contract | Successful extraction returns a `str`; failures raise typed exceptions | Callers may mis-handle results or error paths | The module must not switch to mixed success/error payloads without a contract change. |
 | COMP-3 | Async API shape | Public extraction methods remain async | Existing callers would need code changes | Any sync alternative would be additive, not replacement. |
+| COMP-4 | Missing-path failure type | Missing image paths raise native `FileNotFoundError` | Callers relying on a module-specific missing-file exception would break | The contract no longer defines `ImageTextFileNotFoundError`. |
 
 ## 4. Acceptance and Validation
 
@@ -148,7 +149,7 @@ Documented public support is limited to these interfaces.
 - AC-4: Blank or whitespace-only extraction results raise `TargetLanguageNotFoundInInputError`.
 - AC-5: Upstream invocation or parsing failures raise `APIError`.
 - AC-6: Unsupported languages raise `UnsupportedLanguageError` during `ImageTextExtractor` construction.
-- AC-7: Missing image files raise `ImageTextFileNotFoundError`.
+- AC-7: Missing image files raise native `FileNotFoundError`.
 
 ### High-Level Validation Coverage
 
@@ -160,7 +161,7 @@ Documented public support is limited to these interfaces.
 | VAL-4 | FR-5, FM-2 | Blank extraction is surfaced as a typed failure | Empty or whitespace-only extraction raises `TargetLanguageNotFoundInInputError`. |
 | VAL-5 | FR-6, FM-3, NFR-2 | Upstream and parsing failures are not hidden or downgraded | Failures surface as `APIError` rather than fallback results. |
 | VAL-6 | FR-7, FM-4 | Unsupported languages fail during construction with a typed module exception | Constructing the extractor with an unsupported language raises `UnsupportedLanguageError` before extraction starts. |
-| VAL-7 | FR-8, FM-5 | Missing runtime files are surfaced as typed module failures | Missing image paths raise `ImageTextFileNotFoundError`. |
+| VAL-7 | FR-8, FM-5 | Missing image path inputs are surfaced without exception wrapping | Missing image paths raise native `FileNotFoundError`. |
 | VAL-8 | NFR-1 | Extraction stays within the package latency budget | Existing extraction validation includes per-call assertions that successful extraction completes under 20 seconds. |
 
 ### Risks
@@ -168,7 +169,8 @@ Documented public support is limited to these interfaces.
 | ID | Risk | Impact | Mitigation or Next Step |
 | --- | --- | --- | --- |
 | RISK-1 | Runtime language support may be assumed from enum presence alone | Callers may expect unsupported languages to work | Keep supported-language expectations explicit, asset-backed, and validated at construction time. |
-| RISK-2 | Upstream model behavior may change without a local contract change | Extraction quality or failure patterns may shift unexpectedly | Validate public outcomes regularly against representative inputs. |
+| RISK-2 | Callers may still rely on the removed module-specific missing-file exception | Missing-path handling code may break on upgrade | Keep the native `FileNotFoundError` contract explicit in compatibility notes and validation coverage. |
+| RISK-3 | Shared prompt-generation helpers in `core` may evolve incompatibly | Prompt-authoring behavior could drift across packages | Treat `generate_test_image_data_url(...)`, `build_image_human_message(...)`, and `build_tool_call_ai_message(...)` as stable shared contracts. |
 
 ### Open Questions
 

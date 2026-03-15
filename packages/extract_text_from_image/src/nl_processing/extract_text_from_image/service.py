@@ -18,8 +18,6 @@ from nl_processing.core.prompts import build_llm_kwargs, load_prompt
 import numpy
 from pydantic import ValidationError
 
-from nl_processing.extract_text_from_image.exceptions import ImageTextFileNotFoundError
-
 # Resolve prompts directory relative to this file
 _PROMPTS_DIR = pathlib.Path(__file__).parent / "prompts"
 
@@ -94,16 +92,12 @@ class ImageTextExtractor:
 
         Raises:
             UnsupportedImageFormatError: `path` has an unsupported image extension.
-            ImageTextFileNotFoundError: `path` does not exist.
+            FileNotFoundError: `path` does not exist.
             APIError: Upstream invocation or response parsing fails.
             TargetLanguageNotFoundInInputError: Extraction returns blank or whitespace-only text.
         """
         validate_image_format(path)
-        try:
-            base64_string, media_type = encode_image_path(path)
-        except FileNotFoundError as exc:
-            msg = f"Image file not found: {path}"
-            raise ImageTextFileNotFoundError(msg) from exc
+        base64_string, media_type = encode_image_path(path)
         return await self._aextract(base64_string, media_type)
 
     async def extract_from_cv2(self, image: "numpy.ndarray") -> str:

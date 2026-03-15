@@ -16,11 +16,14 @@ Re-run this script whenever example text or image parameters change.
 from pathlib import Path
 import tempfile
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from nl_processing.core.image_encoding import encode_path_to_base64
-
-from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
+from nl_processing.core.image_encoding import (
+    build_image_human_message,
+    encode_path_to_base64,
+    generate_test_image,
+)
+from nl_processing.core.prompts import build_tool_call_ai_message
 
 SYSTEM_INSTRUCTION = (
     "Je bent een tekst-extractie assistent. "
@@ -120,77 +123,43 @@ EXAMPLE_8_EXPECTED = ""
 OUTPUT_PATH = Path(__file__).parent / "nl.json"
 
 
-def _generate_image_b64(text: str, *, width: int = 800, height: int = 200) -> str:
-    """Generate a synthetic image and return its base64 data URL."""
+def _synthetic_human_message(text: str) -> object:
+    """Generate a synthetic image with rendered text and return a HumanMessage."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        img_path = str(Path(tmpdir) / "image.png")
-        generate_test_image(text, img_path, width=width, height=height, font_scale=1.2)
-        b64, media_type = encode_path_to_base64(img_path)
-    return f"data:{media_type};base64,{b64}"
+        img_path = str(Path(tmpdir) / "synthetic.png")
+        generate_test_image(text, img_path)
+        base64_string, media_type = encode_path_to_base64(img_path)
+    return build_image_human_message(base64_string, media_type)
 
 
-def _encode_existing_image_b64(path: Path) -> str:
-    """Encode an existing image file and return its base64 data URL."""
-    b64, media_type = encode_path_to_base64(str(path))
-    return f"data:{media_type};base64,{b64}"
+def _existing_image_human_message(path: Path) -> object:
+    """Encode an existing image file and return a HumanMessage."""
+    base64_string, media_type = encode_path_to_base64(str(path))
+    return build_image_human_message(base64_string, media_type)
 
 
-def _make_example_human(image_data_url: str) -> HumanMessage:
-    """Create a HumanMessage with an image content block."""
-    return HumanMessage(
-        content=[
-            {"type": "image_url", "image_url": {"url": image_data_url}},
-        ]
-    )
-
-
-def _make_example_ai(expected_text: str, call_id: str) -> AIMessage:
-    """Create an AIMessage with a tool_call for ExtractedText."""
-    return AIMessage(
-        content="",
-        tool_calls=[{"name": "ExtractedText", "args": {"text": expected_text}, "id": call_id}],
-    )
+def _example(human_msg: object, expected: str, call_id: str) -> list:
+    """Build one few-shot triplet: HumanMessage, AIMessage (tool call), ToolMessage."""
+    return [
+        human_msg,
+        build_tool_call_ai_message("ExtractedText", {"text": expected}, call_id),
+        ToolMessage(content=expected, tool_call_id=call_id),
+    ]
 
 
 def build_prompt() -> ChatPromptTemplate:
     """Build the Dutch extraction prompt with 8 few-shot examples."""
-    img1 = _generate_image_b64(EXAMPLE_1_TEXT)
-    img2 = _generate_image_b64(EXAMPLE_2_TEXT)
-    img3 = _encode_existing_image_b64(EXAMPLE_3_IMAGE)
-    img4 = _encode_existing_image_b64(EXAMPLE_4_IMAGE)
-    img5 = _encode_existing_image_b64(EXAMPLE_5_IMAGE)
-    img6 = _generate_image_b64(EXAMPLE_6_TEXT)
-    img7 = _generate_image_b64(EXAMPLE_7_TEXT)
-    img8 = _generate_image_b64(EXAMPLE_8_TEXT)
-
-    return ChatPromptTemplate.from_messages([
-        SystemMessage(content=SYSTEM_INSTRUCTION),
-        _make_example_human(img1),
-        _make_example_ai(EXAMPLE_1_EXPECTED, "call_example_1"),
-        ToolMessage(content=EXAMPLE_1_EXPECTED, tool_call_id="call_example_1"),
-        _make_example_human(img2),
-        _make_example_ai(EXAMPLE_2_EXPECTED, "call_example_2"),
-        ToolMessage(content=EXAMPLE_2_EXPECTED, tool_call_id="call_example_2"),
-        _make_example_human(img3),
-        _make_example_ai(EXAMPLE_3_EXPECTED, "call_example_3"),
-        ToolMessage(content=EXAMPLE_3_EXPECTED, tool_call_id="call_example_3"),
-        _make_example_human(img4),
-        _make_example_ai(EXAMPLE_4_EXPECTED, "call_example_4"),
-        ToolMessage(content=EXAMPLE_4_EXPECTED, tool_call_id="call_example_4"),
-        _make_example_human(img5),
-        _make_example_ai(EXAMPLE_5_EXPECTED, "call_example_5"),
-        ToolMessage(content=EXAMPLE_5_EXPECTED, tool_call_id="call_example_5"),
-        _make_example_human(img6),
-        _make_example_ai(EXAMPLE_6_EXPECTED, "call_example_6"),
-        ToolMessage(content=EXAMPLE_6_EXPECTED, tool_call_id="call_example_6"),
-        _make_example_human(img7),
-        _make_example_ai(EXAMPLE_7_EXPECTED, "call_example_7"),
-        ToolMessage(content=EXAMPLE_7_EXPECTED, tool_call_id="call_example_7"),
-        _make_example_human(img8),
-        _make_example_ai(EXAMPLE_8_EXPECTED, "call_example_8"),
-        ToolMessage(content=EXAMPLE_8_EXPECTED, tool_call_id="call_example_8"),
-        MessagesPlaceholder(variable_name="images"),
-    ])
+    messages = [SystemMessage(content=SYSTEM_INSTRUCTION)]
+    messages += _example(_synthetic_human_message(EXAMPLE_1_TEXT), EXAMPLE_1_EXPECTED, "call_example_1")
+    messages += _example(_synthetic_human_message(EXAMPLE_2_TEXT), EXAMPLE_2_EXPECTED, "call_example_2")
+    messages += _example(_existing_image_human_message(EXAMPLE_3_IMAGE), EXAMPLE_3_EXPECTED, "call_example_3")
+    messages += _example(_existing_image_human_message(EXAMPLE_4_IMAGE), EXAMPLE_4_EXPECTED, "call_example_4")
+    messages += _example(_existing_image_human_message(EXAMPLE_5_IMAGE), EXAMPLE_5_EXPECTED, "call_example_5")
+    messages += _example(_synthetic_human_message(EXAMPLE_6_TEXT), EXAMPLE_6_EXPECTED, "call_example_6")
+    messages += _example(_synthetic_human_message(EXAMPLE_7_TEXT), EXAMPLE_7_EXPECTED, "call_example_7")
+    messages += _example(_synthetic_human_message(EXAMPLE_8_TEXT), EXAMPLE_8_EXPECTED, "call_example_8")
+    messages.append(MessagesPlaceholder(variable_name="images"))
+    return ChatPromptTemplate.from_messages(messages)
 
 
 if __name__ == "__main__":

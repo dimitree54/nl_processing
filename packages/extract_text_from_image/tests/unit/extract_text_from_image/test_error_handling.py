@@ -6,11 +6,10 @@ from nl_processing.core.exceptions import (
     TargetLanguageNotFoundInInputError,
     UnsupportedImageFormatError,
 )
+from nl_processing.core.image_encoding import generate_test_image
 import numpy as np
 import pytest
 
-from nl_processing.extract_text_from_image.exceptions import ImageTextFileNotFoundError
-from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
 from tests.unit.extract_text_from_image.conftest import (
     _AsyncChainMock,
@@ -69,13 +68,13 @@ async def test_target_language_not_found_whitespace_text(
 
 
 @pytest.mark.asyncio
-async def test_missing_image_path_raises_typed_file_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that missing image paths raise ImageTextFileNotFoundError."""
+async def test_missing_image_path_raises_file_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that missing image paths raise FileNotFoundError."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     extractor = ImageTextExtractor()
 
-    with pytest.raises(ImageTextFileNotFoundError, match="Image file not found"):
+    with pytest.raises(FileNotFoundError):
         await extractor.extract_from_path("missing.png")
 
 

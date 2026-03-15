@@ -7,11 +7,13 @@ import pytest
 
 from nl_processing.core.exceptions import UnsupportedImageFormatError
 from nl_processing.core.image_encoding import (
-    SUPPORTED_EXTENSIONS,
+    _SUPPORTED_EXTENSIONS,
     build_image_human_message,
     encode_cv2_to_base64,
     encode_image_path,
     encode_path_to_base64,
+    generate_test_image,
+    generate_test_image_data_url,
     validate_image_format,
 )
 
@@ -26,7 +28,7 @@ def _create_tiny_png(path: Path) -> Path:
 
 def test_validate_image_format_accepts_supported() -> None:
     """Test validate_image_format accepts all supported extensions."""
-    for ext in SUPPORTED_EXTENSIONS:
+    for ext in _SUPPORTED_EXTENSIONS:
         validate_image_format(f"image{ext}")
 
 
@@ -145,5 +147,40 @@ def test_encode_cv2_to_base64_handles_imencode_failure(monkeypatch: pytest.Monke
 
 
 def test_supported_extensions_contains_expected_formats() -> None:
-    """Test SUPPORTED_EXTENSIONS contains exactly the expected formats."""
-    assert SUPPORTED_EXTENSIONS == {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+    """Test _SUPPORTED_EXTENSIONS contains exactly the expected formats."""
+    assert _SUPPORTED_EXTENSIONS == {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
+
+def test_generate_test_image_writes_image_file(tmp_path: Path) -> None:
+    """Test generate_test_image writes an image file successfully."""
+    output_path = str(tmp_path / "test_output.png")
+
+    result_path = generate_test_image("Hello\nWorld", output_path)
+
+    assert result_path == output_path
+    assert Path(output_path).exists()
+    assert Path(output_path).stat().st_size > 0
+
+
+def test_generate_test_image_data_url_returns_png_data_url() -> None:
+    """Test generate_test_image_data_url returns a data:image/png;base64,... URL."""
+    result = generate_test_image_data_url("Test text")
+
+    assert result.startswith("data:image/png;base64,")
+    # Extract and verify the base64 part is valid
+    base64_part = result.split("data:image/png;base64,")[1]
+    decoded = base64.b64decode(base64_part)
+    assert len(decoded) > 0
+
+
+def test_generate_test_image_data_url_decodes_to_non_empty_png_bytes() -> None:
+    """Test generate_test_image_data_url produces decodable PNG bytes."""
+    result = generate_test_image_data_url("Hello World", width=200, height=100)
+
+    # Extract base64 part and decode
+    base64_part = result.split("data:image/png;base64,")[1]
+    decoded = base64.b64decode(base64_part)
+
+    # Check PNG signature
+    assert decoded[:4] == b"\x89PNG"
+    assert len(decoded) > 100  # Should be a reasonable size

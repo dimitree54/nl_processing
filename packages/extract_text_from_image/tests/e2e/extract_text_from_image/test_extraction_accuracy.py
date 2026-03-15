@@ -4,10 +4,10 @@ from typing import Coroutine
 
 import cv2
 from nl_processing.core.exceptions import TargetLanguageNotFoundInInputError
+from nl_processing.core.image_encoding import generate_test_image
 from nl_processing.core.models import Language
 import pytest
 
-from nl_processing.extract_text_from_image.prompts._synthetic_image import generate_test_image
 from nl_processing.extract_text_from_image.service import ImageTextExtractor
 from tests.helpers.text_comparison import evaluate_extraction
 

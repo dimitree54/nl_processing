@@ -10,6 +10,13 @@ All code should always be 100% in sync with docs. We write code based on the doc
 
 You can change docs when explicitly requested by user.
 
+## Module scoped sessions
+
+The workflow consists of independent modules modifications. If not clear with which module you are working now - ask user. If you need to modify files in other module - ask user, do not modify silently. You can work freely only in module explicitly requested by user. You can touch other modules only if excplicitly allowed by user. 
+
+For example:
+You are working with a module X which depends on module Y. You realize that X does not work because some problem in Y. You might think: it is good idea to fix Y. NO! it is bad idea - it violates modules scoped session! Stop and report to user.
+
 # Core development principles:
 - Fail fast on unexpected situations
   - Zero fallbacks tolerance - fail fast, no defaults, no fallbacks.

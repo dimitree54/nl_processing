@@ -1,5 +1,6 @@
 import base64
 import pathlib
+import tempfile
 
 import cv2
 from langchain_core.messages import HumanMessage
@@ -7,7 +8,7 @@ import numpy
 
 from nl_processing.core.exceptions import UnsupportedImageFormatError
 
-SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+_SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 
 def _get_image_format(path: str) -> str:
@@ -19,11 +20,11 @@ def validate_image_format(path: str) -> None:
     """Validate that the image format is supported by OpenAI Vision API.
 
     Raises:
-        UnsupportedImageFormatError: If the file extension is not in SUPPORTED_EXTENSIONS.
+        UnsupportedImageFormatError: If the file extension is not in _SUPPORTED_EXTENSIONS.
     """
     suffix = _get_image_format(path)
-    if suffix not in SUPPORTED_EXTENSIONS:
-        msg = f"Unsupported image format '{suffix}'. Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+    if suffix not in _SUPPORTED_EXTENSIONS:
+        msg = f"Unsupported image format '{suffix}'. Supported formats: {', '.join(sorted(_SUPPORTED_EXTENSIONS))}"
         raise UnsupportedImageFormatError(msg)
 
 
@@ -62,6 +63,75 @@ def build_image_human_message(base64_string: str, media_type: str) -> HumanMessa
     """Build a HumanMessage for one base64-encoded image payload."""
     image_url = f"data:{media_type};base64,{base64_string}"
     return HumanMessage(content=[{"type": "image_url", "image_url": {"url": image_url}}])
+
+
+def generate_test_image(
+    text: str,
+    output_path: str,
+    *,
+    width: int = 800,
+    height: int = 200,
+    font_scale: float = 1.0,
+    thickness: int = 2,
+) -> str:
+    """Generate a synthetic image with rendered text.
+
+    Args:
+        text: Text to render. Newlines will create separate lines.
+        output_path: Path where to write the image file.
+        width: Image width in pixels.
+        height: Image height in pixels.
+        font_scale: Font scaling factor.
+        thickness: Line thickness for text.
+
+    Returns:
+        The written output path as a string.
+
+    Raises:
+        ValueError: If the image cannot be written.
+    """
+    image = numpy.zeros((height, width, 3), dtype=numpy.uint8)
+    image.fill(255)  # White background
+
+    y_offset = 40
+    line_height = int(40 * font_scale)
+    for line in text.split("\n"):
+        cv2.putText(image, line, (20, y_offset), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thickness)
+        y_offset += line_height
+
+    if not cv2.imwrite(output_path, image):
+        raise ValueError(f"Failed to write image to {output_path}")
+    return str(pathlib.Path(output_path))
+
+
+def generate_test_image_data_url(
+    text: str,
+    *,
+    width: int = 800,
+    height: int = 200,
+    font_scale: float = 1.2,
+    thickness: int = 2,
+) -> str:
+    """Generate a synthetic image and return its base64 data URL.
+
+    Args:
+        text: Text to render. Newlines will create separate lines.
+        width: Image width in pixels.
+        height: Image height in pixels.
+        font_scale: Font scaling factor.
+        thickness: Line thickness for text.
+
+    Returns:
+        A complete data URL in format data:image/png;base64,<payload>
+
+    Raises:
+        ValueError: If the image cannot be generated or encoded.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        img_path = str(pathlib.Path(tmpdir) / "synthetic.png")
+        generate_test_image(text, img_path, width=width, height=height, font_scale=font_scale, thickness=thickness)
+        base64_string, media_type = encode_path_to_base64(img_path)
+    return f"data:{media_type};base64,{base64_string}"
 
 
 def _suffix_to_media_type(suffix: str) -> str:

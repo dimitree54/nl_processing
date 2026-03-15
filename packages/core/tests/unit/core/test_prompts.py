@@ -2,10 +2,11 @@ import json
 from pathlib import Path
 
 from langchain_core.load import dumpd
+from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 import pytest
 
-from nl_processing.core.prompts import build_llm_kwargs, load_prompt
+from nl_processing.core.prompts import build_llm_kwargs, build_tool_call_ai_message, load_prompt
 
 
 def test_build_llm_kwargs_includes_only_non_none_values() -> None:
@@ -155,3 +156,26 @@ def test_load_prompt_complex_template(tmp_path: Path) -> None:
     assert isinstance(loaded, ChatPromptTemplate)
     expected_vars = {"role", "data_type", "content", "action"}
     assert set(loaded.input_variables) == expected_vars
+
+
+def test_build_tool_call_ai_message_defaults_content_to_empty_string() -> None:
+    """Test build_tool_call_ai_message defaults content to empty string."""
+    message = build_tool_call_ai_message("TestTool", {"arg1": "value1"}, "call_123")
+
+    assert isinstance(message, AIMessage)
+    assert message.content == ""
+
+
+def test_build_tool_call_ai_message_emits_single_tool_call() -> None:
+    """Test build_tool_call_ai_message creates exactly one tool call with provided data."""
+    tool_args = {"text": "extracted text", "confidence": 0.95}
+    message = build_tool_call_ai_message("ExtractedText", tool_args, "call_example_1", content="Custom content")
+
+    assert isinstance(message, AIMessage)
+    assert message.content == "Custom content"
+    assert len(message.tool_calls) == 1
+
+    tool_call = message.tool_calls[0]
+    assert tool_call["name"] == "ExtractedText"
+    assert tool_call["args"] == tool_args
+    assert tool_call["id"] == "call_example_1"

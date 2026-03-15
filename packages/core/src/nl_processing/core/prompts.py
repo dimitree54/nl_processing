@@ -3,6 +3,7 @@ import pathlib
 from typing import NotRequired, TypedDict
 
 from langchain_core.load import load
+from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 
 
@@ -56,3 +57,16 @@ def load_prompt(prompt_path: str) -> ChatPromptTemplate:
         raise TypeError(f"Expected ChatPromptTemplate, got {type(prompt).__name__} from {prompt_path}")
 
     return prompt
+
+
+def build_tool_call_ai_message(
+    tool_name: str,
+    tool_args: dict[str, object],
+    call_id: str,
+    *,
+    content: str = "",
+) -> AIMessage:
+    return AIMessage(
+        content=content,
+        tool_calls=[{"name": tool_name, "args": tool_args, "id": call_id}],
+    )
