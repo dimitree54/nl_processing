@@ -3,7 +3,6 @@ import pathlib
 from langchain_core.messages import HumanMessage
 from nl_processing.core.exceptions import APIError
 from nl_processing.core.models import Language, PartOfSpeech, Word
-from nl_processing.core.prompts import build_translation_chain
 from pydantic import BaseModel
 
 _PROMPTS_DIR = pathlib.Path(__file__).parent / "prompts"

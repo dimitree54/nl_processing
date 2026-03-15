@@ -8,7 +8,6 @@ from nl_processing.core.image_encoding import (
     validate_image_format,
 )
 from nl_processing.core.models import Language
-from nl_processing.core.prompts import build_translation_chain
 import numpy
 from pydantic import BaseModel
 
