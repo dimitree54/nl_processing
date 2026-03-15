@@ -9,36 +9,42 @@ related_docs:
 
 # Module Spec: translate_word
 
+> This spec describes the module's desired target-state behavior and public contract.
+> It defines WHAT the module must do, not HOW it is implemented.
+> Document all public interfaces that other modules or end users are expected to use.
+> Do not document implementation details such as files, internal classes, helper functions, algorithms, tests, or QA procedures unless the user explicitly requires them.
+> Internal-only surfaces do not need full spec coverage, but when they could be mistaken for public API they should be marked as internal or non-contract.
+
 ## 1. Module Snapshot
 
 ### Summary
 
-`translate_word` translates batches of normalized Dutch words or short phrases into Russian and returns them as shared `Word` objects. It is designed to sit directly after `extract_words_from_text`, preserve input order, and process the whole batch in one LLM call. The current implementation supports only the `nl -> ru` pair and uses a pair-specific prompt asset plus the shared translation-chain builder from `core`.
+`translate_word` translates batches of normalized Dutch words or short phrases into Russian and returns the translated results as `Word` objects. It preserves one output per input in the same order and behaves as a batch-oriented translation step in the lexical pipeline. The module's contract is limited to supported language-pair translation, typed output, and explicit failure signaling.
 
 ### System Context
 
-The module lives in the middle of the lexical pipeline between word extraction and downstream persistence. It depends on `core` for `Language`, `Word`, `PartOfSpeech`, `APIError`, and chain construction, and does not own any durable state or storage.
+The module sits after word extraction and before downstream consumers that store, display, or further process translated lexical items. Callers provide normalized `Word` inputs and receive translated `Word` outputs for the configured language pair. The module depends on shared types and shared translation infrastructure from `core`, but those internals are not part of this module's supported public API.
 
 ### In Scope
 
-- Public async `WordTranslator(source_language, target_language, model)` interface.
-- Batch translation of `list[Word]` into `list[Word]`.
-- One-to-one order-preserving output contract.
-- Pair-specific prompt asset and one-call batch translation behavior.
+- Public async translator interface for batch word translation.
+- Translation of `list[Word]` to `list[Word]` for supported language pairs.
+- Order-preserving one-to-one output behavior.
+- Explicit rejection of unsupported language pairs and translation failures.
 
 ### Out of Scope
 
-- Language pairs other than `nl -> ru`.
-- Chunking or batching across multiple LLM calls.
-- Deduplication, caching, or persistence.
-- Extra output fields such as synonyms, examples, or alternative translations.
+- Support for language pairs outside the declared module contract.
+- Persistence, caching, retries, or orchestration outside a single translation request.
+- Enrichment such as synonyms, examples, usage notes, or alternate translations.
+- Ownership of upstream word extraction or downstream storage behavior.
 
 ### Assumptions
 
 | ID | Assumption | Status | Notes |
 | --- | --- | --- | --- |
-| A-1 | The module continues using `Word` as both input and output rather than reintroducing a separate translation result type. | Needs Review | Matches current code and pipeline composition. |
-| A-2 | One-to-one order-preserving mapping remains the core output contract for callers. | Needs Review | Tested today, but only partly enforced by prompt/schema behavior. |
+| A-1 | The module contract uses `Word` as both the input and output data type. | Approved | This is treated as part of the public contract. |
+| A-2 | One-to-one, order-preserving mapping is a required caller-facing guarantee. | Approved | Downstream consumers rely on positional correspondence. |
 
 ## 2. Requirements
 
@@ -46,183 +52,136 @@ The module lives in the middle of the lexical pipeline between word extraction a
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must expose `WordTranslator(source_language, target_language, model, reasoning_effort, temperature)` and `await translate(words: list[Word]) -> list[Word]`. | Must | Current defaults are `model="gpt-5-mini"`, `reasoning_effort="medium"`, `temperature=None`. |
-| FR-2 | The translator must return one output `Word` per input word in the same order. | Must | Public contract and existing tests. |
-| FR-3 | The output `Word.language` must always be set programmatically to the target language. | Must | The LLM does not set this field directly. |
-| FR-4 | Empty input must return `[]` without an API call. | Must | Explicit short-circuit in code. |
-| FR-5 | Unsupported language pairs must be rejected during initialization. | Must | `_SUPPORTED_PAIRS` currently only allows `nl -> ru`. |
-| FR-6 | Upstream invoke or parsing failures must be mapped to `APIError`. | Must | Typed failure contract. |
+| FR-1 | The module must expose `WordTranslator(source_language, target_language, model, reasoning_effort, temperature)` and `await translate(words: list[Word]) -> list[Word]` as its supported public interface. | Must | Constructor options are part of the caller-facing contract. |
+| FR-2 | The module must return exactly one output `Word` for each input `Word`, in the same order as received. | Must | Positional correspondence is part of the module contract. |
+| FR-3 | Each output `Word` must represent the configured target language. | Must | Callers must not infer or repair target language themselves. |
+| FR-4 | When `translate()` receives an empty input list, it must return an empty list. | Must | Empty input is a valid no-op request. |
+| FR-5 | The module must reject unsupported source/target language pairs before translation is attempted. | Must | Unsupported pair handling must fail fast. |
+| FR-6 | If translation cannot be completed because of upstream model invocation or response-parsing failure, the module must raise `APIError`. | Must | Callers depend on a stable typed failure contract. |
 
 ### Rules and Invariants
 
 - BR-1: The public output type is always `list[Word]`.
-- BR-2: The module currently supports only the `nl -> ru` pair.
-- BR-3: Translation is performed in one LLM call for the full batch.
-- BR-4: The module does not persist or cache translation results.
+- BR-2: The module supports only explicitly declared language pairs.
+- BR-3: The module does not persist or cache translation results.
+- BR-4: The module does not mutate the caller's input list in place.
 
 ### Non-Functional Requirements
 
 | ID | Category | Requirement | Target or Constraint | Notes |
 | --- | --- | --- | --- | --- |
-| NFR-1 | Performance | Batch translation should stay within the current real-API QA budget. | Current integration gate <20s for 10 words | Older docs targeted <1s; the offline `gpt-5-mini` profile now uses a looser gate. |
-| NFR-2 | Structure | Output shape must stay machine-usable and order-preserving. | Typed tool schema + tests | Key integration property. |
-| NFR-3 | Packaging | Pair-specific prompt assets must ship with the package. | `prompts/nl_ru.json` available at runtime | Required for init-time prompt load. |
+| NFR-1 | Structure | Output must remain machine-usable as typed `Word` objects with stable one-to-one ordering. | Required for downstream pipeline use | This is the key integration constraint. |
+| NFR-2 | Reliability | Failure conditions must be surfaced explicitly rather than hidden or silently degraded. | Unsupported pairs fail fast; translation failures raise `APIError` | No fallback behavior is permitted. |
+| NFR-3 | Packaging | Required translation prompt assets must be available wherever the module is used. | Assets needed for supported pair operation must ship with the module | Missing required assets are contract-breaking. |
 
 ### Failure Modes and Edge Cases
 
-| ID | Scenario | Expected Behavior | Handling or Recovery |
+| ID | Scenario | Expected Behavior | Notes |
 | --- | --- | --- | --- |
-| FM-1 | Unsupported pair is requested. | Raise `ValueError` at init. | Add support in code, prompts, and tests together. |
-| FM-2 | Input list is empty. | Return `[]` immediately. | Valid no-op path. |
-| FM-3 | Prompt, API, or parsing failure occurs. | Raise `APIError`. | Caller can retry or surface the problem. |
-| FM-4 | The LLM returns the wrong number of items or low-quality translations. | Contract risk detected through tests/review. | Keep quality and mapping tests in place; consider explicit post-parse validation if needed. |
+| FM-1 | Unsupported language pair is requested. | Reject the request during translator initialization. | Caller must change configuration or request a supported pair. |
+| FM-2 | The input list is empty. | Return `[]`. | No translated items are produced. |
+| FM-3 | Translation invocation or response parsing fails. | Raise `APIError`. | Failure must remain explicit to callers. |
+| FM-4 | The translation response cannot satisfy one-to-one mapping expectations. | Treat the request as failed rather than returning a partial or ambiguous result. | The module contract does not allow silent contract degradation. |
 
-## 3. Module Design
+## 3. Public Contract
 
 ### Responsibilities and Boundaries
 
-**Owns:**
+**Responsible For:**
 
-- Batch word translation prompt assets and schema.
-- Mapping from internal tool output into shared `Word` results.
-- Order-preserving, batch-oriented public translation API.
+- Accepting supported batch translation requests from callers.
+- Returning translated `Word` results in caller input order.
+- Enforcing supported-pair constraints and typed failure behavior.
 
-**Does Not Own:**
+**Not Responsible For:**
 
-- Word extraction and normalization.
-- Persistence, caching, or retry orchestration.
-- Shared model or enum definitions.
+- Extracting or normalizing words before translation.
+- Storing, caching, retrying, or deduplicating translation results.
+- Defining shared domain models owned by other modules.
 
-### Interfaces and Dependencies
+### Public Interfaces
 
-| ID | Type | Direction | Counterparty | Contract or Data | Notes |
+| ID | Interface Type | Direction | Counterparty | Contract Summary | Expected Behavior |
 | --- | --- | --- | --- | --- | --- |
-| IF-1 | Python API | Inbound | Callers | `await translate(words: list[Word]) -> list[Word]` | Main public interface. |
-| IF-2 | Shared helper | Inbound | `core` | `Language`, `Word`, `PartOfSpeech`, `APIError`, `build_translation_chain(...)` | Shared dependency surface. |
-| IF-3 | Asset/API | Outbound | Prompt assets + OpenAI | `prompts/nl_ru.json`, `_TranslationBatch` tool schema, LangChain/OpenAI | Batch translation infrastructure. |
+| IF-1 | Python API | Inbound | Python callers | `WordTranslator(source_language, target_language, model, reasoning_effort, temperature)` | Creates a translator instance for a supported source/target pair and rejects unsupported pairs. |
+| IF-2 | Python API | Inbound | Python callers | `await translate(words: list[Word]) -> list[Word]` | Translates each input item into one target-language `Word` and preserves input order. |
 
-### Data and State Ownership
+Document all public contract surfaces here, including public classes, methods, functions, commands, endpoints, events, or other supported entry points.
 
-| Entity or State | Ownership | Description | Lifecycle or Retention | Notes |
+### Internal and Non-Contract Notes
+
+- Prompt assets, schema definitions, chain-construction helpers, and model wiring are internal implementation details; callers must not depend on them directly.
+- Shared types imported from `core` are external dependencies used by this module, not public extension points owned by this module.
+
+### External Dependencies and Constraints
+
+| ID | Dependency or Constraint | Why It Matters | Behavioral Assumption or Limit | Notes |
 | --- | --- | --- | --- | --- |
-| Service instance state | Owned | Source language, target language, and pre-built chain. | Runtime only | No persistence. |
-| Pair prompt asset | Owned | Prompt examples and instructions for `nl -> ru` word translation. | Versioned with the package | Main quality lever. |
-| Output mapping logic | Owned | Conversion from internal tool entries to public `Word` results. | Runtime only | Sets `language` in code. |
+| EC-1 | Shared `Word`, `Language`, and `APIError` types from `core` | They define the caller-visible input, output, and failure shapes. | Compatibility with those shared contracts is required. | Changes to those types may require coordinated updates. |
+| EC-2 | Translation-provider behavior | The module depends on an external model-backed translation step. | The module must surface provider failures explicitly instead of masking them. | No fallback provider behavior is assumed. |
+| EC-3 | Supported language-pair configuration | The contract is valid only for explicitly supported pairs. | Unsupported pairs are outside the module contract. | Adding a new pair is a separate spec and implementation change. |
 
-### Processing Flow
+### Cross-Module Change References
 
-1. The constructor validates the pair and builds the translation chain through `core.build_translation_chain(...)`.
-2. `translate()` returns `[]` immediately if the input batch is empty.
-3. Non-empty input words are joined by newline and sent as one `HumanMessage`.
-4. The tool payload is parsed into `_TranslationBatch`, then mapped to target-language `Word` objects in the same sequence.
+| Affected Module | Why It Must Change | External Spec or Doc Reference | Ownership Status |
+| --- | --- | --- | --- |
+| N/A | No external module change is required by this target-state contract. | N/A | N/A |
 
-### Decisions
+### Compatibility Notes
 
-| ID | Decision | Status | Rationale | Consequence |
+| ID | Area | Expectation | Impact if Broken | Notes |
 | --- | --- | --- | --- | --- |
-| DEC-1 | Use the shared `Word` model for both input and output. | Decided | Creates a seamless pipeline with `extract_words_from_text`. | Old docs referring to separate translation result objects are obsolete. |
-| DEC-2 | Translate the full batch in one LLM call. | Decided | Minimizes cost and latency versus per-word calls. | Very large batches may require future chunking work. |
-| DEC-3 | Keep target `language` assignment in code, not in the LLM payload. | Decided | Prevents schema ambiguity and keeps the public contract deterministic. | Output mapping remains package-owned logic. |
-| DEC-4 | Keep one-to-one mapping as a contract, even though the LLM enforces it only indirectly today. | Decided | Downstream callers depend on positional correspondence. | Tests must continue guarding this behavior. |
+| COMP-1 | Translator API | Public async constructor usage and `translate()` contract remain stable for supported callers. | Callers may need code changes or fail at runtime. | Breaking changes require explicit coordination. |
+| COMP-2 | Output ordering | Input/output positional correspondence remains stable. | Downstream consumers may mis-associate translations with source words. | This is a hard compatibility requirement. |
+| COMP-3 | Failure typing | Unsupported pairs and translation failures remain explicit and typed. | Callers may be unable to handle failures consistently. | Silent degradation is not compatible behavior. |
 
-### Consistency Rules
-
-- CR-1: Pair support requires `_SUPPORTED_PAIRS`, prompt assets, and tests to change together.
-- CR-2: Public examples and docs must remain async and use `Word`, not legacy translation wrapper types.
-
-### Requirement Traceability
-
-| Requirement | Covered By | Verified By |
-| --- | --- | --- |
-| FR-2 | IF-1, DEC-2, DEC-4 | QA-1 |
-| FR-3 | IF-2, DEC-3 | QA-2 |
-| FR-5 | IF-3, DEC-1, CR-1 | QA-3 |
-
-## 4. Delivery and Validation
+## 4. Acceptance and Validation
 
 ### Acceptance Criteria
 
-- AC-1: `translate([])` returns `[]`, and supported non-empty batches return `Word` objects in input order.
-- AC-2: Unsupported pairs fail during initialization, and invoke/parsing failures surface as `APIError`.
-- AC-3: Prompt assets remain packaged and the module continues passing unit, integration, and e2e translation tests.
+- AC-1: A caller can create a translator only for a supported language pair.
+- AC-2: `translate([])` returns `[]`.
+- AC-3: For a non-empty valid batch, the module returns one target-language `Word` per input item in the same order.
+- AC-4: Unsupported pairs are rejected before translation begins.
+- AC-5: Translation invocation or parsing failure is surfaced as `APIError`.
 
-### Testing Strategy
+### High-Level Validation Coverage
 
-**Framework and Constraints:**
-
-- Reuse package-local `pytest` suites and live-API integration/e2e tests.
-- Keep the one-to-one mapping guarantee explicitly covered in tests.
-
-**Unit:**
-
-- Constructor wiring, empty-input short-circuit, output mapping, and `APIError` wrapping.
-
-**Integration:**
-
-- Exact-match quality cases, one-to-one mapping checks, and the current latency budget for 10-word batches.
-
-**Contract:**
-
-- Prompt asset presence and unsupported-pair init behavior.
-
-**E2E or UI Workflow:**
-
-- Pipeline-like input batches and broader quality scenarios such as product-box vocabulary.
-
-**Operational or Non-Functional:**
-
-- Manual review when prompt examples or default model selection change materially.
-
-### Quality Automation Plan
-
-#### Automated Coverage Matrix
-
-| ID | Target | Verification Level | Check or Test to Add | When It Runs | Notes |
-| --- | --- | --- | --- | --- | --- |
-| QA-1 | FR-2 | Integration | One-to-one mapping and exact-match translation tests | PR CI / nightly | Protects positional correspondence. |
-| QA-2 | FR-3 | Unit | Output-model mapping tests | PR CI | Confirms target language and type fields are set in code. |
-| QA-3 | FR-5 | Unit | Unsupported-pair init tests | PR CI | Fail-fast guardrail. |
-
-#### Static Checks and Gates
-
-| ID | Check | Purpose | Trigger | Fails On |
-| --- | --- | --- | --- | --- |
-| SC-1 | Package-local `make check` flow | Preserve package quality and packaging. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
-| SC-2 | Package tests | Preserve mapping, quality, and packaging behavior. | PR CI | Unit/integration/e2e failures. |
-
-#### Manual Verification Needed
-
-| Target | Why It Is Not Reliably Automated | Manual Verification Approach | Evidence |
+| ID | Target | What Must Be True | Observable Evidence or Result |
 | --- | --- | --- | --- |
-| Translation adequacy for ambiguous words | Exact-match tests use simple words and do not cover all semantic ambiguity. | Review representative outputs when prompt examples or models change. | Reviewer notes and example batches. |
+| VAL-1 | FR-2 | The number and order of returned items matches the input batch. | Callers observe one output `Word` per input `Word` in identical sequence order. |
+| VAL-2 | FR-3 | Returned items represent the configured target language. | Each returned `Word` is identified as belonging to the target language. |
+| VAL-3 | FR-4 | Empty input behaves as a no-op. | `translate([])` returns `[]`. |
+| VAL-4 | FR-5 | Unsupported pairs fail before translation work begins. | Translator creation fails explicitly for an unsupported pair. |
+| VAL-5 | FR-6 | Translation failures are surfaced through the documented failure contract. | Callers receive `APIError` rather than partial output or silent fallback behavior. |
 
 ### Risks
 
 | ID | Risk | Impact | Mitigation or Next Step |
 | --- | --- | --- | --- |
-| RISK-1 | The one-to-one mapping contract is not explicitly revalidated after parsing in production code. | A malformed LLM response could slip through until tests catch it. | Consider explicit length validation if this becomes an observed failure mode. |
-| RISK-2 | Historical docs drifted away from the real contract (`Word` output, async API, current model/perf gate). | Consumers may copy outdated usage or targets. | Treat this spec and current tests as canonical. |
+| RISK-1 | External translation quality may vary for ambiguous lexical items. | Callers may receive semantically weak but structurally valid translations. | Refine pair-specific translation guidance when target quality requirements become more specific. |
+| RISK-2 | Future expansion to additional language pairs may pressure the current contract. | Ad hoc extension could create inconsistent behavior across pairs. | Treat each new pair as an explicit contract update. |
 
 ### Open Questions
 
 | ID | Question | Status | Owner or Next Step | Notes |
 | --- | --- | --- | --- | --- |
-| OQ-1 | Should the module add explicit post-parse validation that `len(output) == len(input)`? | Open | Project owner to decide after observing real failures | Today this is enforced indirectly via prompt/schema/tests. |
+| OQ-1 | Should the contract explicitly require hard validation when response cardinality does not match input cardinality? | Open | Module owner to decide in a future spec revision | The current target-state contract requires failure rather than ambiguous output. |
 
 ### Assumption Review Outcomes
 
 | ID | Source | User Response | Outcome | Promoted To |
 | --- | --- | --- | --- | --- |
-| RV-1 | A-1 | Not yet reviewed | Kept as active assumption | A-1 |
-| RV-2 | A-2 | Not yet reviewed | Kept as active assumption | A-2 |
+| RV-1 | A-1 | Approved | Promoted into explicit requirement | FR-1 |
+| RV-2 | A-2 | Approved | Promoted into explicit requirement | FR-2 |
 
 ### Open Question Resolution
 
 | ID | Source | Resolution Status | Outcome | Promoted To or Next Step |
 | --- | --- | --- | --- | --- |
-| RV-3 | OQ-1 | Unresolved | Remains open pending future hardening of the parsing contract | Revisit if malformed batch outputs are observed |
+| RV-3 | OQ-1 | Unresolved | Keep open for future contract hardening review | Next spec revision if stricter cardinality guarantees are required |
 
 ### Deferred Work
 
-- D-1: Add explicit output-length validation if indirect prompt/schema enforcement proves insufficient.
-- D-2: Revisit chunking only if batch sizes grow beyond the current single-call assumption.
+- D-1: Define the contract for additional language pairs if and when they become in scope.
+- D-2: Decide whether response-cardinality validation should be mandated as an explicit contract requirement.

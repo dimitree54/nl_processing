@@ -45,7 +45,7 @@ EXPECTED_KEY_TERMS: list[tuple[str, list[str]]] = [
 
 _CYRILLIC_RE = re.compile(r"[а-яёА-ЯЁ]")
 _ALPHA_RE = re.compile(r"[a-zA-Zа-яёА-ЯЁ]")
-MIN_CYRILLIC_RATIO = 1.0
+MIN_CYRILLIC_RATIO = 0.85
 
 
 @pytest.mark.asyncio

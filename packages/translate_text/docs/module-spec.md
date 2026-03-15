@@ -9,35 +9,40 @@ related_docs:
 
 # Module Spec: translate_text
 
+> This spec describes the module's desired target-state behavior and public contract.
+> It defines WHAT the module must do, not HOW it is implemented.
+> Document all public interfaces that other modules or end users are expected to use.
+> Do not document implementation details such as files, internal classes, helper functions, algorithms, tests, or QA procedures unless the user explicitly requires them.
+> Internal-only surfaces do not need full spec coverage, but when they could be mistaken for public API they should be marked as internal or non-contract.
+
 ## 1. Module Snapshot
 
 ### Summary
 
-`translate_text` is the developer-facing text translation module for `nl_processing`. It translates Dutch markdown text into Russian, preserves markdown structure, and returns a plain string rather than a wrapper object. The current implementation supports only the `nl -> ru` pair and relies on a pair-specific prompt asset plus shared chain-building utilities from `core`.
+`translate_text` is a developer-facing translation module within `nl_processing`. It translates Dutch text into Russian, preserves markdown structure in the returned result, and exposes a small async Python API for higher-level workflows that need translated text without raw model-response handling. The module's contract is intentionally narrow and supports only the documented `nl -> ru` workflow.
 
 ### System Context
 
-The module is used by developers or higher-level workflows that need clean translated text without handling raw LLM output. It depends on `core` for `Language`, `APIError`, and translation-chain setup, and does not own any database, cache, or long-lived state.
+The module sits inside the `nl_processing` package set as the text-translation boundary for callers that already know the source and target languages. It consumes shared language and exception types from `core`, depends on an upstream LLM service for non-empty translation requests, and returns plain translated text to downstream callers. It does not own persistence, caching, or workflow orchestration.
 
 ### In Scope
 
-- Public async `TextTranslator(source_language, target_language, model)` interface.
-- Dutch-to-Russian translation with markdown preservation.
-- Fail-fast pair validation and typed upstream error wrapping.
-- Pair-specific prompt JSON assets and tests.
+- Public async `TextTranslator` construction and translation calls.
+- Dutch-to-Russian text translation.
+- Markdown-preserving translated output.
+- Empty-result handling for blank and non-Dutch input.
+- Typed failure behavior for non-empty translation errors.
 
 ### Out of Scope
 
 - Language pairs other than `nl -> ru`.
-- Glossaries, terminology management, or code-block-specific translation policy.
-- Chunking, streaming, caching, or semantic-quality scoring infrastructure.
+- Batch translation, chunking, streaming, caching, or persistence.
+- Glossary management or terminology enforcement.
+- Dedicated code-block translation policy.
 
 ### Assumptions
 
-| ID | Assumption | Status | Notes |
-| --- | --- | --- | --- |
-| A-1 | `nl_ru.json` remains the only supported translation prompt until new pairs are implemented in code and tests. | Needs Review | `_SUPPORTED_PAIRS` currently contains only `("nl", "ru")`. |
-| A-2 | Returning an empty string for non-source-language input remains an acceptable product contract. | Needs Review | This behavior is tested but depends partly on prompt behavior. |
+N/A. This spec does not rely on unresolved working assumptions.
 
 ## 2. Requirements
 
@@ -45,183 +50,131 @@ The module is used by developers or higher-level workflows that need clean trans
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must expose `TextTranslator(source_language, target_language, model, service_tier)` and `await translate(text: str) -> str`. | Must | Current defaults are `model="gpt-4.1-mini"` and `service_tier="priority"`. |
-| FR-2 | The output must preserve markdown structure such as headings, emphasis, lists, and paragraph breaks. | Must | Preserved through prompt behavior, not markdown parsing code. |
-| FR-3 | The public result must contain only the translated text and no conversational prefixes or explanations. | Must | Enforced by typed tool-calling output. |
-| FR-4 | Unsupported language pairs must be rejected during initialization. | Must | Fail-fast behavior. |
-| FR-5 | Blank input must return an empty string without invoking the model. | Must | Explicit short-circuit in code. |
-| FR-6 | Upstream invoke or parsing failures must be mapped to `APIError`. | Must | Common failure contract for callers. |
+| FR-1 | The module must expose `nl_processing.translate_text.service.TextTranslator(source_language, target_language, model, service_tier)` as its supported public class interface. | Must | Constructor inputs are part of the public contract. |
+| FR-2 | `TextTranslator` must support only `Language.NL` as the source language and `Language.RU` as the target language. | Must | Unsupported pairs are outside the supported contract. |
+| FR-3 | `await TextTranslator.translate(text: str) -> str` must return Russian translation output as a plain string. | Must | The public result type is not wrapped in a module-specific response object. |
+| FR-4 | The returned text must preserve markdown structure such as headings, emphasis, list markers, and paragraph breaks present in the input. | Must | Markdown structure is part of the output contract. |
+| FR-5 | The returned text must contain only translation content and no conversational prefixes, explanations, or wrapper text. | Must | Callers receive translation-ready output. |
+| FR-6 | Blank or whitespace-only input must return `""`. | Must | Empty input is a supported no-op case. |
+| FR-7 | Input that contains no Dutch text must return `""`. | Must | Empty output is the supported no-translation signal for this case. |
+| FR-8 | Non-empty translation failures must raise `APIError`. | Must | The module exposes a stable typed failure contract for callers. |
 
 ### Rules and Invariants
 
-- BR-1: The public result is always a plain `str`, not a Pydantic wrapper.
-- BR-2: The current implementation supports only the `nl -> ru` pair.
-- BR-3: Pair validation happens when the service is created, not when translation starts.
-- BR-4: The module does not persist translation state or maintain caches.
+- BR-1: Public translation output is always a plain `str`.
+- BR-2: Unsupported language pairs are rejected when the translator is created.
+- BR-3: The module does not own persistent translation state, caches, or stored translation history.
 
 ### Non-Functional Requirements
 
 | ID | Category | Requirement | Target or Constraint | Notes |
 | --- | --- | --- | --- | --- |
-| NFR-1 | Performance | Text translation should remain interactive for typical short content. | <5s for ~100-word integration test case | Current live-API test gate. |
-| NFR-2 | Initialization | Service construction must stay lightweight. | No API calls during init | The constructor only builds the chain. |
-| NFR-3 | Quality | Prompt quality must remain reviewable and repeatable. | Pair-specific prompt JSON + human review of examples | Prompt is the main product asset. |
+| NFR-1 | Performance | Typical short-form translations should remain interactive for developer-facing usage. | Approximately 5 seconds or less for representative short content of about 100 words. | Keeps higher-level workflows responsive. |
+| NFR-2 | Reliability | Failure signaling must remain stable for callers. | Non-empty translation failures are surfaced as `APIError`, with the original failure preserved as the exception cause. | Supports consistent caller error handling. |
+| NFR-3 | Statelessness | The module must remain stateless across calls apart from reusable translator configuration. | No durable storage or translation-history ownership inside this module. | Protects module boundaries and caller expectations. |
 
 ### Failure Modes and Edge Cases
 
-| ID | Scenario | Expected Behavior | Handling or Recovery |
+| ID | Scenario | Expected Behavior | Notes |
 | --- | --- | --- | --- |
-| FM-1 | Unsupported pair is requested. | Raise `ValueError` at init. | Add pair support in code, prompts, and tests together. |
-| FM-2 | Input is blank or whitespace-only. | Return `""` without invoking the chain. | Valid empty-output path. |
-| FM-3 | Prompt, API, tool-call, or parsing error occurs. | Raise `APIError`. | Caller can retry or surface the issue. |
-| FM-4 | Input contains no Dutch text. | Return `""` under the current prompt contract. | Behavior depends on prompt quality and tests. |
+| FM-1 | An unsupported language pair is requested. | Raise `ValueError` during translator creation. | Caller must select a documented supported pair. |
+| FM-2 | Input is blank or whitespace-only. | Return `""`. | This is a supported no-op translation request. |
+| FM-3 | Input contains no Dutch text. | Return `""`. | Empty output is the supported no-translation signal. |
+| FM-4 | The upstream service is unavailable or returns unusable output for a non-empty request. | Raise `APIError`. | The original failure remains available as the exception cause. |
+| FM-5 | Input contains markdown-heavy content. | Return translated text that preserves supported markdown structure. | Structural markdown remains part of the public output contract. |
 
-## 3. Module Design
+## 3. Public Contract
 
 ### Responsibilities and Boundaries
 
-**Owns:**
+**Responsible For:**
 
-- Pair-specific text translation prompts.
-- Mapping from typed tool output to a plain translated string.
-- Developer-facing translation API with clean output semantics.
+- Translating Dutch text into Russian through an async Python interface.
+- Returning clean translation output as plain text.
+- Preserving markdown structure in supported translated output.
+- Normalizing non-empty translation failures to `APIError`.
 
-**Does Not Own:**
+**Not Responsible For:**
 
-- Shared DTOs or prompt-chain helper logic.
-- Batch/chunk orchestration, persistence, or caching.
-- Specialized policies for code blocks or glossary management.
+- Supporting additional language pairs.
+- Batch orchestration, chunking, streaming, caching, or persistence.
+- Glossary enforcement or terminology governance.
+- Specialized handling rules for fenced code blocks.
 
-### Interfaces and Dependencies
+### Public Interfaces
 
-| ID | Type | Direction | Counterparty | Contract or Data | Notes |
+| ID | Interface Type | Direction | Counterparty | Contract Summary | Expected Behavior |
 | --- | --- | --- | --- | --- | --- |
-| IF-1 | Python API | Inbound | Callers | `await translate(text: str) -> str` | Single public operation. |
-| IF-2 | Shared helper | Inbound | `core` | `build_translation_chain(...)`, `Language`, `APIError` | Shared translation infrastructure. |
-| IF-3 | Asset/API | Outbound | Prompt assets + OpenAI | `prompts/nl_ru.json`, `_TranslatedText` tool schema, LangChain/OpenAI | Pair-specific asset contract. |
+| IF-1 | Python class | Inbound | Developer callers | `nl_processing.translate_text.service.TextTranslator(source_language: Language, target_language: Language, model: str = "gpt-4.1-mini", service_tier: str | None = "priority")` | Creates a reusable translator instance for the supported pair and raises `ValueError` for unsupported pairs. |
+| IF-2 | Async method | Inbound | Developer callers | `await TextTranslator.translate(text: str) -> str` | Returns translated Russian text as a plain string, returns `""` for blank or non-Dutch input, and raises `APIError` for non-empty translation failures. |
 
-### Data and State Ownership
+### Internal and Non-Contract Notes
 
-| Entity or State | Ownership | Description | Lifecycle or Retention | Notes |
+- Module-private chain builders, prompt configuration, internal schemas, and private constants are internal only and are not part of the supported module contract.
+- Any surface not documented in `Public Interfaces` should be treated as non-contract for external callers.
+
+### External Dependencies and Constraints
+
+| ID | Dependency or Constraint | Why It Matters | Behavioral Assumption or Limit | Notes |
 | --- | --- | --- | --- | --- |
-| Service instance state | Owned | Source language, target language, and pre-built chain. | Runtime only | No persistence. |
-| Pair prompt asset | Owned | `nl_ru.json` translation prompt with examples. | Versioned with the package | Main module asset. |
-| Typed tool schema | Owned | `_TranslatedText` internal schema for clean output. | Runtime only | Public API still returns `str`. |
+| EC-1 | `nl_processing.core.models.Language` | The constructor accepts shared language values rather than module-local language types. | Callers must provide supported `Language` enum values. | This module's documented pair is limited to Dutch source and Russian target. |
+| EC-2 | Upstream LLM service access | Non-empty translation requests depend on an external model response. | If the upstream service is unavailable or unusable, the module raises `APIError`. | Valid credentials and connectivity are required in caller environments. |
+| EC-3 | Caller-selected `model` and `service_tier` values | Translation quality and latency can vary with the chosen upstream configuration. | The selected upstream option must still support the module's translated-text contract. | This spec fixes the output contract, not identical quality across all upstream options. |
 
-### Processing Flow
+### Cross-Module Change References
 
-1. The constructor validates the pair and builds a translation chain through `core.build_translation_chain(...)`.
-2. `translate()` returns `""` immediately for blank input.
-3. Non-empty text is wrapped in a `HumanMessage` and sent through the async chain.
-4. The first tool call is parsed into `_TranslatedText`, and its `text` field is returned or wrapped in `APIError` on failure.
+N/A. This spec does not require contract changes in other module specs.
 
-### Decisions
+### Compatibility Notes
 
-| ID | Decision | Status | Rationale | Consequence |
+| ID | Area | Expectation | Impact if Broken | Notes |
 | --- | --- | --- | --- | --- |
-| DEC-1 | Treat the prompt and few-shot examples as the main product asset. | Decided | Translation quality is dominated by prompt design, not complex code. | Prompt assets need disciplined review and testing. |
-| DEC-2 | Preserve markdown through prompt behavior rather than parser/post-processing logic. | Decided | Avoids fragile markdown reconstruction code. | Prompt quality must explicitly cover markdown cases. |
-| DEC-3 | Return a plain string instead of a wrapper model. | Decided | The public output is one translated text value. | Tool-calling stays internal only. |
-| DEC-4 | Reject unsupported pairs at initialization. | Decided | Fail fast and keep runtime behavior predictable. | New language pairs require code, prompts, and tests together. |
+| COMP-1 | Python API shape | The supported API remains async and returns plain `str` results. | Callers would need code changes if the return type or async contract changed. | Applies to `TextTranslator` construction and `translate()`. |
+| COMP-2 | Pair validation timing | Unsupported pairs continue to fail during translator creation. | Callers relying on fail-fast setup would break if validation moved later. | Pair expansion is additive only when explicitly documented. |
+| COMP-3 | Empty-result semantics | Blank and non-Dutch input continue to use `""` as the no-translation result. | Callers that interpret empty output as "no translation produced" would see behavioral change. | This behavior is part of the supported contract. |
 
-### Consistency Rules
-
-- CR-1: Prompt files are named by pair (`<source>_<target>.json`) and must stay aligned with `_SUPPORTED_PAIRS`.
-- CR-2: Public usage examples and docs must remain async to match the real service contract.
-
-### Requirement Traceability
-
-| Requirement | Covered By | Verified By |
-| --- | --- | --- |
-| FR-2 | IF-1, IF-3, DEC-2 | QA-1 |
-| FR-3 | IF-3, DEC-3 | QA-2 |
-| FR-4 | IF-2, DEC-4, CR-1 | QA-3 |
-
-## 4. Delivery and Validation
+## 4. Acceptance and Validation
 
 ### Acceptance Criteria
 
-- AC-1: `TextTranslator` supports only the `nl -> ru` pair and rejects unsupported combinations at construction time.
-- AC-2: Translation output is chatter-free plain text with preserved markdown structure for supported inputs.
-- AC-3: Blank input returns `""`, and upstream failures remain typed as `APIError`.
+- AC-1: A caller can create `TextTranslator` only for `Language.NL -> Language.RU`; unsupported pairs fail immediately with `ValueError`.
+- AC-2: Dutch markdown input returns Russian text as a plain string with headings, list markers, emphasis, and paragraph breaks preserved where present.
+- AC-3: The returned text contains only translation content and no conversational prefixes, explanations, or wrapper text.
+- AC-4: Blank or non-Dutch input returns `""`.
+- AC-5: Non-empty translation failures surface as `APIError`.
 
-### Testing Strategy
+### High-Level Validation Coverage
 
-**Framework and Constraints:**
-
-- Reuse the package-local `pytest` suites and live-API integration/e2e tests.
-- Keep prompt quality validation anchored in both automated checks and manual review of example quality.
-
-**Unit:**
-
-- Pair validation, blank-input short-circuit, custom model wiring, and `APIError` wrapping.
-
-**Integration:**
-
-- Live API tests for chatter-free output, Cyrillic-only output on simple cases, markdown preservation, empty-result behavior, and latency.
-
-**Contract:**
-
-- Prompt asset presence and pair-validation behavior.
-
-**E2E or UI Workflow:**
-
-- Full markdown translation scenarios, unsupported-pair init failure, and product-box quality checks.
-
-**Operational or Non-Functional:**
-
-- Manual review of prompt examples for naturalness and closeness to the source text.
-
-### Quality Automation Plan
-
-#### Automated Coverage Matrix
-
-| ID | Target | Verification Level | Check or Test to Add | When It Runs | Notes |
-| --- | --- | --- | --- | --- | --- |
-| QA-1 | FR-2 | Integration | Markdown-preservation integration test | PR CI / nightly | Validates the core UX contract. |
-| QA-2 | FR-3 | Integration | Output-cleanliness test for chatter-free translations | PR CI / nightly | Protects public output shape. |
-| QA-3 | FR-4 | Unit | Unsupported-pair init test | PR CI | Fail-fast guardrail. |
-
-#### Static Checks and Gates
-
-| ID | Check | Purpose | Trigger | Fails On |
-| --- | --- | --- | --- | --- |
-| SC-1 | Package-local `make check` flow | Preserve package quality and packaging. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
-| SC-2 | Package tests | Preserve translation behavior and prompt contracts. | PR CI | Unit/integration/e2e failures. |
-
-#### Manual Verification Needed
-
-| Target | Why It Is Not Reliably Automated | Manual Verification Approach | Evidence |
+| ID | Target | What Must Be True | Observable Evidence or Result |
 | --- | --- | --- | --- |
-| Translation style naturalness | Automated checks do not fully judge fluency or tone. | Review sample translations whenever the prompt examples or model default change. | Reviewer notes and example outputs. |
+| VAL-1 | FR-1, FR-2, IF-1 | The constructor exposes the documented parameters and enforces the supported pair boundary. | Supported constructor calls succeed; unsupported pairs fail before translation starts. |
+| VAL-2 | FR-3, FR-4, FR-5, IF-2 | Translation output remains plain-text, markdown-preserving, and free of conversational chatter. | Returned strings preserve expected markdown markers and contain only translated content. |
+| VAL-3 | FR-6, FR-7, FM-2, FM-3 | No-translation scenarios produce the documented empty-string result. | Caller receives `""` for blank or non-Dutch input. |
+| VAL-4 | FR-8, FM-4, EC-2 | Upstream failures are normalized to the module's public error contract. | Caller receives `APIError`, with the originating failure retained as the cause. |
+| VAL-5 | NFR-1 | Typical short translations remain interactive. | Representative short-form translations complete within the stated latency target. |
 
 ### Risks
 
 | ID | Risk | Impact | Mitigation or Next Step |
 | --- | --- | --- | --- |
-| RISK-1 | The spec may overstate empty-output guarantees for non-Dutch input that are partly prompt-driven. | Behavior could drift with prompt/model changes. | Keep the non-Dutch empty-output test in place and review prompt changes carefully. |
-| RISK-2 | Docs and code can drift on default model or async usage. | Consumers may copy incorrect usage or expectations. | Treat `service.py` and tests as the source of truth during docs updates. |
+| RISK-1 | Translation quality and latency vary by caller-selected model and upstream service behavior. | Callers may see different fluency or responsiveness while still using the same API contract. | Validate the representative models used in production-facing workflows. |
+| RISK-2 | The empty-string contract for non-Dutch input depends on continued upstream translation behavior. | Callers relying on `""` as a no-translation signal may see regressions if upstream behavior drifts. | Treat this behavior as a required contract and revalidate it when prompts or default model choices change. |
 
 ### Open Questions
 
 | ID | Question | Status | Owner or Next Step | Notes |
 | --- | --- | --- | --- | --- |
-| OQ-1 | Should markdown code blocks eventually receive a dedicated “preserve as-is” policy? | Open | Product owner to decide if code-block content enters the workflow | Currently out of scope. |
+| OQ-1 | Should fenced code blocks remain unchanged rather than being translated when they appear inside markdown input? | Open | Product owner follow-up if code-bearing markdown enters scope. | The current module contract requires markdown structure preservation but does not define a code-block-specific policy. |
 
 ### Assumption Review Outcomes
 
-| ID | Source | User Response | Outcome | Promoted To |
-| --- | --- | --- | --- | --- |
-| RV-1 | A-1 | Not yet reviewed | Kept as active assumption | A-1 |
-| RV-2 | A-2 | Not yet reviewed | Kept as active assumption | A-2 |
+N/A. This spec does not include unresolved assumptions that require review outcomes.
 
 ### Open Question Resolution
 
-| ID | Source | Resolution Status | Outcome | Promoted To or Next Step |
-| --- | --- | --- | --- | --- |
-| RV-3 | OQ-1 | Unresolved | Remains open pending a product decision on code blocks | Revisit if code-block translation becomes a requirement |
+N/A. No open questions were resolved in this revision.
 
 ### Deferred Work
 
-- D-1: Add more language pairs only together with code updates, prompt assets, and tests.
-- D-2: Decide whether code blocks need a specialized translation policy.
+- D-1: Add new language pairs only through explicit contract expansion with corresponding acceptance and validation updates.
+- D-2: Define a dedicated code-block policy only if code-bearing markdown becomes an in-scope workflow.

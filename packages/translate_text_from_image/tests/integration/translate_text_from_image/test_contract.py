@@ -64,3 +64,11 @@ def test_service_uses_core_image_helpers() -> None:
     for func_name in expected_functions:
         function_used = func_name in service_source
         assert function_used, f"Service should use {func_name} from core.image_encoding"
+
+
+def test_prompt_generator_uses_core_synthetic_image_helper() -> None:
+    """Confirms prompt generation reuses core synthetic image helpers."""
+    prompt_generator_source = inspect.getsource(build_prompt.__globals__["_render_synthetic_data_url"])
+
+    assert "generate_test_image_data_url" in prompt_generator_source
+    assert "render_text_image" not in prompt_generator_source

@@ -1,7 +1,7 @@
 import pathlib
 
 import cv2
-from nl_processing.core.exceptions import APIError, TargetLanguageNotFoundError, UnsupportedImageFormatError
+from nl_processing.core.exceptions import APIError, TargetLanguageNotFoundInInputError, UnsupportedImageFormatError
 from nl_processing.core.models import Language
 import numpy
 import pytest
@@ -34,7 +34,7 @@ async def test_bmp_format_rejected_before_chain_call(monkeypatch: pytest.MonkeyP
 async def test_empty_translation_triggers_language_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    """Test empty text from chain raises TargetLanguageNotFoundError."""
+    """Test empty text from chain raises TargetLanguageNotFoundInInputError."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-api-key")
 
     # Create valid PNG image
@@ -46,7 +46,9 @@ async def test_empty_translation_triggers_language_error(
     # Mock chain returns empty string
     translator._chain = _AsyncChainMock(make_tool_response(""))
 
-    with pytest.raises(TargetLanguageNotFoundError, match="No text in the source language was found in the image"):
+    with pytest.raises(
+        TargetLanguageNotFoundInInputError, match="No text in the source language was found in the image"
+    ):
         await translator.translate_from_path(str(png_file))
 
 
@@ -54,7 +56,7 @@ async def test_empty_translation_triggers_language_error(
 async def test_whitespace_only_translation_triggers_language_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    """Test whitespace-only text from chain raises TargetLanguageNotFoundError."""
+    """Test whitespace-only text from chain raises TargetLanguageNotFoundInInputError."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-api-key")
 
     # Create valid PNG image
@@ -66,7 +68,9 @@ async def test_whitespace_only_translation_triggers_language_error(
     # Mock chain returns only whitespace
     translator._chain = _AsyncChainMock(make_tool_response("   \n\t   "))
 
-    with pytest.raises(TargetLanguageNotFoundError, match="No text in the source language was found in the image"):
+    with pytest.raises(
+        TargetLanguageNotFoundInInputError, match="No text in the source language was found in the image"
+    ):
         await translator.translate_from_path(str(png_file))
 
 

@@ -12,13 +12,10 @@ The script is the source of truth — nl_ru.json is the generated artifact.
 """
 
 from pathlib import Path
-import tempfile
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from nl_processing.core.image_encoding import encode_path_to_base64
-
-from nl_processing.translate_text_from_image.benchmark import render_text_image
+from nl_processing.core.image_encoding import encode_path_to_base64, generate_test_image_data_url
 
 _EXAMPLES_DIR = Path(__file__).parent / "examples"
 _OUTPUT_PATH = Path(__file__).parent / "nl_ru.json"
@@ -111,11 +108,7 @@ def _encode_image_to_data_url(image_path: str) -> str:
 
 def _render_synthetic_data_url(text: str, *, width: int = 800, height: int = 200) -> str:
     """Generate a synthetic image from text and return as data URL."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        img_path = render_text_image(
-            text, str(Path(tmpdir) / "img.png"), image_width=width, image_height=height, scale=1.2
-        )
-        return _encode_image_to_data_url(img_path)
+    return generate_test_image_data_url(text, width=width, height=height, font_scale=1.2)
 
 
 def _make_few_shot_triplet(

@@ -24,7 +24,7 @@ def test_constructor_uses_priority_tier_by_default(monkeypatch: pytest.MonkeyPat
         captured.update(kwargs)
         return object()
 
-    monkeypatch.setattr("nl_processing.translate_text.service.build_translation_chain", _fake_build_translation_chain)
+    monkeypatch.setattr("nl_processing.translate_text.service._build_translation_chain", _fake_build_translation_chain)
     TextTranslator(source_language=Language.NL, target_language=Language.RU)
 
     assert captured["model"] == "gpt-4.1-mini"

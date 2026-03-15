@@ -1,13 +1,16 @@
 import pathlib
 
 from langchain_core.messages import HumanMessage
-from nl_processing.core.exceptions import APIError, TargetLanguageNotFoundError
+from langchain_core.runnables import Runnable
+from langchain_openai import ChatOpenAI
+from nl_processing.core.exceptions import APIError, TargetLanguageNotFoundInInputError
 from nl_processing.core.image_encoding import (
     encode_cv2_to_base64,
     encode_path_to_base64,
     validate_image_format,
 )
 from nl_processing.core.models import Language
+from nl_processing.core.prompts import build_llm_kwargs, load_prompt
 import numpy
 from pydantic import BaseModel
 
@@ -18,6 +21,35 @@ _SUPPORTED_PAIRS: set[tuple[str, str]] = {("nl", "ru")}
 
 class _TranslatedImageText(BaseModel):
     text: str
+
+
+def _build_translation_chain(
+    *,
+    source_language: Language,
+    target_language: Language,
+    supported_pairs: set[tuple[str, str]],
+    prompts_dir: pathlib.Path,
+    tool_schema: type[BaseModel],
+    model: str,
+    service_tier: str | None = None,
+    reasoning_effort: str | None = None,
+    temperature: float | None = None,
+) -> Runnable:
+    pair = (source_language.value, target_language.value)
+    if pair not in supported_pairs:
+        supported = ", ".join(f"{src}->{target}" for src, target in sorted(supported_pairs))
+        msg = f"Unsupported language pair {pair[0]}->{pair[1]}. Supported: {supported}"
+        raise ValueError(msg)
+
+    prompt = load_prompt(str(prompts_dir / f"{pair[0]}_{pair[1]}.json"))
+    llm_kwargs = build_llm_kwargs(
+        model=model,
+        service_tier=service_tier,
+        reasoning_effort=reasoning_effort,
+        temperature=temperature,
+    )
+    llm = ChatOpenAI(**llm_kwargs).bind_tools([tool_schema], tool_choice=tool_schema.__name__)
+    return prompt | llm
 
 
 class ImageTextTranslator:
@@ -44,17 +76,10 @@ class ImageTextTranslator:
     ) -> None:
         self._source_language = source_language
         self._target_language = target_language
-        self._chain = build_translation_chain(
-            source_language=source_language,
-            target_language=target_language,
-            supported_pairs=_SUPPORTED_PAIRS,
-            prompts_dir=_PROMPTS_DIR,
-            tool_schema=_TranslatedImageText,
-            model=model,
-            reasoning_effort=reasoning_effort,
-            service_tier=service_tier,
-            temperature=temperature,
-        )
+        self._chain = _build_translation_chain(source_language=source_language, target_language=target_language,
+                                               supported_pairs=_SUPPORTED_PAIRS, prompts_dir=_PROMPTS_DIR,
+                                               tool_schema=_TranslatedImageText, model=model, service_tier=service_tier,
+                                               reasoning_effort=reasoning_effort, temperature=temperature)
 
     async def translate_from_path(self, path: str) -> str:
         """Translate text from image at the given file path.
@@ -88,6 +113,6 @@ class ImageTextTranslator:
 
         if not result.text.strip():
             msg = "No text in the source language was found in the image"
-            raise TargetLanguageNotFoundError(msg)
+            raise TargetLanguageNotFoundInInputError(msg)
 
         return result.text

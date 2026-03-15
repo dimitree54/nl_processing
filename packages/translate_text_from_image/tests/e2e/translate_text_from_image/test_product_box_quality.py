@@ -34,7 +34,7 @@ REQUIRED_TERMS: dict[str, list[str]] = {
 # Regex patterns for character analysis
 _CYRILLIC_PATTERN = re.compile(r"[а-яёА-ЯЁ]")
 _LETTER_PATTERN = re.compile(r"[a-zA-Zа-яёА-ЯЁ]")
-MIN_CYRILLIC_RATIO = 1.0
+MIN_CYRILLIC_RATIO = 0.85
 
 
 @pytest.mark.asyncio

@@ -1,19 +1,11 @@
-"""E2E translation tests using real photographs.
-
-Tests the complete image-to-translation pipeline with authentic Dutch text images,
-verifying output quality through Russian key-term detection and content validation.
-"""
+"""E2E translation tests using real photographs."""
 
 import pathlib
 import re
 
-import cv2
-from nl_processing.core.exceptions import TargetLanguageNotFoundError, UnsupportedImageFormatError
 from nl_processing.core.models import Language
-import numpy
 import pytest
 
-from nl_processing.translate_text_from_image.benchmark import render_text_image
 from nl_processing.translate_text_from_image.service import ImageTextTranslator
 
 _FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures"
@@ -57,7 +49,7 @@ async def test_real_photo_dutch_vocabulary_translation() -> None:
     translated_lower = translated_content.lower()
     terms_found = 0
 
-    for russian_term, dutch_original in VOCABULARY_RUSSIAN_TERMS.items():
+    for russian_term, _ in VOCABULARY_RUSSIAN_TERMS.items():
         if russian_term.lower() in translated_lower:
             terms_found += 1
 
@@ -101,52 +93,3 @@ async def test_real_photo_rotated_bilingual_translates_only_dutch() -> None:
         f"English terms should not appear in Dutch-only translation: {english_terms_found}\n"
         f"Full output:\n{translation_output}"
     )
-
-
-@pytest.mark.asyncio
-async def test_synthetic_translation_end_to_end(tmp_path: pathlib.Path) -> None:
-    """Generate synthetic Dutch text image and verify complete translation pipeline."""
-    dutch_content = "Nederland is een prachtig land met rijke geschiedenis"
-    synthetic_image = str(tmp_path / "synthetic_dutch.png")
-
-    # Generate synthetic image
-    render_text_image(dutch_content, synthetic_image, image_width=700, image_height=120, scale=1.2)
-
-    # Translate the synthetic image
-    translator = ImageTextTranslator(source_language=Language.NL, target_language=Language.RU)
-    translation_result = await translator.translate_from_path(synthetic_image)
-
-    # Verify non-empty Cyrillic output
-    assert translation_result.strip(), "Synthetic translation should not be empty"
-
-    cyrillic_regex = re.compile(r"[а-яёА-ЯЁ]")
-    cyrillic_chars = cyrillic_regex.findall(translation_result)
-    assert cyrillic_chars, "Synthetic translation must contain Cyrillic characters"
-
-
-@pytest.mark.asyncio
-async def test_unsupported_format_rejected(tmp_path: pathlib.Path) -> None:
-    """Verify .bmp format raises UnsupportedImageFormatError."""
-    bmp_file = str(tmp_path / "test_image.bmp")
-    pathlib.Path(bmp_file).write_bytes(b"fake bmp file content")
-
-    translator = ImageTextTranslator(source_language=Language.NL, target_language=Language.RU)
-
-    with pytest.raises(UnsupportedImageFormatError):
-        await translator.translate_from_path(bmp_file)
-
-
-@pytest.mark.asyncio
-async def test_blank_image_raises_language_error(tmp_path: pathlib.Path) -> None:
-    """Verify blank white image raises TargetLanguageNotFoundError."""
-    # Create blank white image
-    blank_canvas = numpy.zeros((150, 500, 3), dtype=numpy.uint8)
-    blank_canvas.fill(255)  # Fill with white
-
-    blank_file = str(tmp_path / "blank_white.png")
-    cv2.imwrite(blank_file, blank_canvas)
-
-    translator = ImageTextTranslator(source_language=Language.NL, target_language=Language.RU)
-
-    with pytest.raises(TargetLanguageNotFoundError):
-        await translator.translate_from_path(blank_file)

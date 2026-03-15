@@ -1,9 +1,11 @@
 import pathlib
 
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import Runnable
+from langchain_openai import ChatOpenAI
 from nl_processing.core.exceptions import APIError
 from nl_processing.core.models import Language
-from nl_processing.core.prompts import build_bidirectional_translation_chain
+from nl_processing.core.prompts import build_llm_kwargs, load_prompt
 from pydantic import BaseModel
 
 _PROMPTS_DIR = pathlib.Path(__file__).parent / "prompts"
@@ -17,6 +19,38 @@ class _NlToRuTranslation(BaseModel):
 
 class _RuToNlTranslation(BaseModel):
     text: str
+
+
+def build_bidirectional_translation_chain(
+    *,
+    language_a: Language,
+    language_b: Language,
+    supported_pairs: set[frozenset[str]],
+    prompts_dir: pathlib.Path,
+    prompt_file: str,
+    tool_schemas: list[type[BaseModel]],
+    model: str,
+    service_tier: str | None = None,
+    reasoning_effort: str | None = None,
+    temperature: float | None = None,
+) -> Runnable:
+    pair = frozenset({language_a.value, language_b.value})
+    if pair not in supported_pairs:
+        supported = ", ".join(
+            "<->".join(sorted(item)) for item in sorted(supported_pairs, key=lambda item: tuple(sorted(item)))
+        )
+        msg = f"Unsupported language pair {language_a.value}->{language_b.value}. Supported: {supported}"
+        raise ValueError(msg)
+
+    prompt = load_prompt(str(prompts_dir / prompt_file))
+    llm_kwargs = build_llm_kwargs(
+        model=model,
+        service_tier=service_tier,
+        reasoning_effort=reasoning_effort,
+        temperature=temperature,
+    )
+    llm = ChatOpenAI(**llm_kwargs).bind_tools(tool_schemas)
+    return prompt | llm
 
 
 class BidirectionalTextTranslator:

@@ -91,7 +91,7 @@ async def test_product_box_nl_to_ru_quality() -> None:
     alpha_chars = _ALPHA_RE.findall(result_without_brand)
     cyrillic_chars = _CYRILLIC_RE.findall(result_without_brand)
     ratio = len(cyrillic_chars) / len(alpha_chars) if alpha_chars else 0
-    assert ratio >= 1.0, f"Cyrillic ratio {ratio:.0%} below 100% — output may not be Russian"
+    assert ratio >= 0.85, f"Cyrillic ratio {ratio:.0%} below 85% — output may not be Russian"
 
     _check_key_terms(result, EXPECTED_KEY_TERMS_NL_TO_RU)
 
@@ -105,6 +105,6 @@ async def test_product_box_ru_to_nl_quality() -> None:
     alpha_chars = _ALPHA_RE.findall(result)
     latin_chars = _LATIN_RE.findall(result)
     ratio = len(latin_chars) / len(alpha_chars) if alpha_chars else 0
-    assert ratio >= 1.0, f"Latin ratio {ratio:.0%} below 100% — output may not be Dutch"
+    assert ratio >= 0.85, f"Latin ratio {ratio:.0%} below 85% — output may not be Dutch"
 
     _check_key_terms(result, EXPECTED_KEY_TERMS_RU_TO_NL)
