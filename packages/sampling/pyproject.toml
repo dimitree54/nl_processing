@@ -9,7 +9,6 @@ description = "Sampling package for nl_processing"
 requires-python = ">=3.12"
 dependencies = [
   "nl-processing-core",
-  "nl-processing-database",
 ]
 
 [tool.setuptools.packages.find]

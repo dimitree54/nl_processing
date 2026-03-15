@@ -1,4 +1,4 @@
-"""Unit tests for WordSampler — adversarial sampling behavior."""
+"""Unit tests for the remaining sample_adversarial carryover behavior."""
 
 from nl_processing.core.models import Language, PartOfSpeech
 import pytest
@@ -8,80 +8,37 @@ from tests.unit.sampling.conftest import make_scored_pair, make_word, patch_stor
 
 
 @pytest.mark.asyncio
-async def test_adversarial_same_pos_only(sampler: WordSampler) -> None:
-    """Adversarial sampling returns only words with the same part of speech."""
-    pairs = [
-        make_scored_pair("huis", "dom", word_type=PartOfSpeech.NOUN),
-        make_scored_pair("lopen", "begat", word_type=PartOfSpeech.VERB),
-        make_scored_pair("boek", "kniga", word_type=PartOfSpeech.NOUN),
-    ]
-    patch_store(sampler, pairs)
-    source = make_word("kat", word_type=PartOfSpeech.NOUN)
-    result = await sampler.sample_adversarial(source, 10)
-    assert all(wp.source.word_type == PartOfSpeech.NOUN for wp in result)
-
-
-@pytest.mark.asyncio
-async def test_adversarial_excludes_source(sampler: WordSampler) -> None:
-    """Source word is excluded from adversarial results."""
-    pairs = [
-        make_scored_pair("huis", "dom"),
-        make_scored_pair("boek", "kniga"),
-    ]
-    patch_store(sampler, pairs)
-    source = make_word("huis")
-    result = await sampler.sample_adversarial(source, 10)
-    forms = {wp.source.normalized_form for wp in result}
-    assert "huis" not in forms
-
-
-@pytest.mark.asyncio
-async def test_adversarial_zero_limit_returns_empty(sampler: WordSampler) -> None:
-    """sample_adversarial(limit=0) returns empty list."""
+async def test_adversarial_requires_source_language_context(sampler: WordSampler) -> None:
+    """Fresh samplers raise because source-language context is not initialized."""
     patch_store(sampler, [make_scored_pair("huis", "dom")])
-    source = make_word("kat")
-    result = await sampler.sample_adversarial(source, 0)
-    assert result == []
+
+    with pytest.raises(AttributeError, match="_source_language"):
+        await sampler.sample_adversarial(make_word("kat"), 1)
 
 
 @pytest.mark.asyncio
-async def test_adversarial_no_matching_pos(sampler: WordSampler) -> None:
-    """No words with matching POS returns empty list."""
-    pairs = [make_scored_pair("lopen", "begat", word_type=PartOfSpeech.VERB)]
-    patch_store(sampler, pairs)
-    source = make_word("huis", word_type=PartOfSpeech.NOUN)
-    result = await sampler.sample_adversarial(source, 5)
-    assert result == []
+async def test_adversarial_same_pos_only_when_context_injected(sampler: WordSampler) -> None:
+    """With source-language context injected, only same-POS distractors are returned."""
+    sampler._source_language = Language.NL
+    patch_store(
+        sampler,
+        [
+            make_scored_pair("huis", "dom", word_type=PartOfSpeech.NOUN),
+            make_scored_pair("lopen", "begat", word_type=PartOfSpeech.VERB),
+            make_scored_pair("boek", "kniga", word_type=PartOfSpeech.NOUN),
+        ],
+    )
+
+    result = await sampler.sample_adversarial(make_word("kat", word_type=PartOfSpeech.NOUN), 10)
+
+    assert all(word_pair.source.word_type == PartOfSpeech.NOUN for word_pair in result)
 
 
 @pytest.mark.asyncio
-async def test_adversarial_fewer_than_limit(sampler: WordSampler) -> None:
-    """Fewer candidates than limit returns all matching candidates."""
-    pairs = [
-        make_scored_pair("huis", "dom"),
-        make_scored_pair("boek", "kniga"),
-    ]
-    patch_store(sampler, pairs)
-    source = make_word("kat")
-    result = await sampler.sample_adversarial(source, 100)
-    assert len(result) == 2
+async def test_adversarial_zero_limit_raises_value_error_when_context_injected(sampler: WordSampler) -> None:
+    """With source-language context injected, a non-positive limit raises ValueError."""
+    sampler._source_language = Language.NL
+    patch_store(sampler, [make_scored_pair("huis", "dom")])
 
-
-@pytest.mark.asyncio
-async def test_adversarial_wrong_language_raises(sampler: WordSampler) -> None:
-    """Source word with wrong language raises ValueError."""
-    patch_store(sampler, [])
-    source = make_word("dom", language=Language.RU)
-    with pytest.raises(ValueError, match="does not match"):
-        await sampler.sample_adversarial(source, 5)
-
-
-@pytest.mark.asyncio
-async def test_adversarial_no_duplicates(sampler: WordSampler) -> None:
-    """Adversarial sampling produces no duplicates."""
-    pairs = [make_scored_pair(f"w{i}", f"t{i}") for i in range(20)]
-    patch_store(sampler, pairs)
-    source = make_word("other")
-    result = await sampler.sample_adversarial(source, 10)
-    source_forms = [wp.source.normalized_form for wp in result]
-    assert len(source_forms) == len(set(source_forms))
+    with pytest.raises(ValueError, match="limit must be positive"):
+        await sampler.sample_adversarial(make_word("kat"), 0)

@@ -1,4 +1,4 @@
-"""Shared fixtures for WordSampler unit tests — mock store and test data helpers."""
+"""Shared fixtures for WordSampler unit tests."""
 
 from nl_processing.core.models import Language, PartOfSpeech, ScoredWordPair, Word, WordPair
 import pytest
@@ -21,13 +21,13 @@ def make_scored_pair(
     target_form: str,
     word_type: PartOfSpeech = PartOfSpeech.NOUN,
     scores: dict[str, int] | None = None,
-    source_word_id: int = 1,
 ) -> ScoredWordPair:
     """Create a ScoredWordPair with minimal boilerplate."""
     source = Word(normalized_form=source_form, word_type=word_type, language=Language.NL)
     target = Word(normalized_form=target_form, word_type=word_type, language=Language.RU)
     return ScoredWordPair(
-        pair=WordPair(source=source, target=target), scores=scores or {}, source_word_id=source_word_id
+        pair=WordPair(source=source, target=target),
+        scores=scores or {},
     )
 
 
@@ -41,21 +41,11 @@ def make_word(
 
 
 @pytest.fixture
-def sampler(monkeypatch: pytest.MonkeyPatch) -> WordSampler:
-    """Create a WordSampler with a dummy DATABASE_URL and default settings."""
-    monkeypatch.setenv("DATABASE_URL", "postgresql://dummy:dummy@localhost/dummy")
-    ws = WordSampler(user_id="u1", exercise_types=["flashcard"])
-    return ws
-
-
-@pytest.fixture
-def sampler_injected() -> WordSampler:
-    """Create a WordSampler with an injected mock store (no DATABASE_URL needed)."""
-    mock_store = MockProgressStore([])
+def sampler() -> WordSampler:
+    """Create a WordSampler with an injected mock store."""
     return WordSampler(
-        user_id="u1",
-        exercise_types=["flashcard"],
-        scored_store=mock_store,
+        scored_store=MockProgressStore([]),
+        exercise_type="flashcard",
     )
 
 

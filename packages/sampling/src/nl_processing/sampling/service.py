@@ -2,9 +2,9 @@
 
 import random
 
-from nl_processing.core.models import Language, ScoredWordPair, Word, WordPair
-from nl_processing.core.ports import ScoredPairProvider
-from nl_processing.database.exercise_progress import ExerciseProgressStore
+from nl_processing.core.models import ScoredWordPair, Word, WordPair
+
+from nl_processing.sampling.ports import ScoredPairProvider
 
 
 class WordSampler:
@@ -13,69 +13,34 @@ class WordSampler:
     def __init__(
         self,
         *,
-        user_id: str,
-        source_language: Language = Language.NL,
-        target_language: Language = Language.RU,
-        exercise_types: list[str],
+        scored_store: ScoredPairProvider,
+        exercise_type: str,
         positive_balance_weight: float = 0.01,
-        scored_store: ScoredPairProvider | None = None,
+        negative_balance_weight: float = 100,
     ) -> None:
-        if not exercise_types:
-            msg = "exercise_types must be a non-empty list"
-            raise ValueError(msg)
-        if not (0 < positive_balance_weight <= 1):
-            msg = f"positive_balance_weight must be in (0, 1], got {positive_balance_weight}"
-            raise ValueError(msg)
-        if scored_store is not None:
-            self._progress_store: ScoredPairProvider = scored_store
-        else:
-            self._progress_store = ExerciseProgressStore(
-                user_id=user_id,
-                source_language=source_language,
-                target_language=target_language,
-                exercise_types=exercise_types,
-            )
-        self._exercise_types = exercise_types
+        self._progress_store = scored_store
+        self._exercise_type = exercise_type
+
         self._positive_balance_weight = positive_balance_weight
-        self._source_language = source_language
+        self._negative_balance_weight = negative_balance_weight
 
-    async def sample(self, limit: int) -> list[WordPair]:
-        """Return weighted-sampled word pairs without replacement.
-
-        Weight function (v1):
-        - min_score = min(scores[et] for et in exercise_types)
-        - If min_score > 0: weight = positive_balance_weight
-        - If min_score <= 0: weight = 1.0
-
-        If limit <= 0, return [].
-        If limit >= candidates, return all in random order.
+    async def sample(self) -> WordPair:
         """
-        if limit <= 0:
-            return []
+        Return weighted-sampled word pair
+        """
         scored = await self._progress_store.get_word_pairs_with_scores()
         if not scored:
-            return []
-        weights = [self._compute_weight(sp) for sp in scored]
-        if limit >= len(scored):
-            pairs = [sp.pair for sp in scored]
-            random.shuffle(pairs)
-            return pairs
-        candidates = list(scored)
-        candidate_weights = list(weights)
-        selected: list[WordPair] = []
-        for _i in range(limit):
-            chosen = random.choices(candidates, weights=candidate_weights, k=1)[0]
-            idx = candidates.index(chosen)
-            selected.append(chosen.pair)
-            candidates.pop(idx)
-            candidate_weights.pop(idx)
-        return selected
+            raise RuntimeError("No word pairs found in progress store")
+        candidate_weights = [self._compute_weight(sp) for sp in scored]
+
+        chosen = random.choices(scored, weights=candidate_weights, k=1)[0]
+        return chosen.pair
 
     async def sample_adversarial(self, source_word: Word, limit: int) -> list[WordPair]:
         """Return uniform-random distractor pairs with same part of speech.
 
         Raises ValueError if source_word.language != source_language.
-        Returns [] if limit <= 0.
+        Raises ValueError if limit <= 0.
         """
         if source_word.language != self._source_language:
             msg = (
@@ -84,7 +49,7 @@ class WordSampler:
             )
             raise ValueError(msg)
         if limit <= 0:
-            return []
+            raise ValueError(f"limit must be positive, got {limit}")
         scored = await self._progress_store.get_word_pairs_with_scores()
         candidates = [
             sp.pair
@@ -101,9 +66,59 @@ class WordSampler:
 
     def _compute_weight(self, scored_pair: ScoredWordPair) -> float:
         """Compute sampling weight for a scored word pair."""
-        if not scored_pair.scores:
-            return 1.0
-        min_score = min(scored_pair.scores[et] for et in self._exercise_types)
-        if min_score > 0:
+        score = scored_pair.scores.get(self._exercise_type, 0)
+        if score > 0:
             return self._positive_balance_weight
+        if score < 0:
+            return self._negative_balance_weight
+        return 1.0
+
+
+class TieredMultiExerciseSampler:
+    def __init__(
+        self,
+        *,
+        scored_store: ScoredPairProvider,
+        exercise_types: list[str],
+        tiered_exercise_type: str,
+        finished_exercise_weight: float = 0.01,
+    ) -> None:
+        self._progress_store = scored_store
+        self._finished_exercise_weight = finished_exercise_weight
+        self._exercise_types = exercise_types
+        self._tiered_exercise_type = tiered_exercise_type
+
+    async def sample(self) -> (str, WordPair):
+        """
+        :return: Exercise type and word pair
+        """
+        scored = await self._progress_store.get_word_pairs_with_scores()
+        if not scored:
+            raise RuntimeError("No word pairs found in progress store")
+        candidate_weights = [self._compute_weight(sp) for sp in scored]
+
+        chosen = random.choices(scored, weights=candidate_weights, k=1)[0]
+        return chosen.pair
+
+    def _choose_exercise_for_word(self, scored_pair: ScoredWordPair) -> str:
+        is_repeat_mode = scored_pair.scores.get(self._tiered_exercise_type, 0) < 0
+        if is_repeat_mode:
+            # return the exercise name of the last positive score or first element if all scores negative
+            for exercise_type in reversed(self._exercise_types):
+                if scored_pair.scores.get(exercise_type, 0) > 0:
+                    return exercise_type
+            return self._exercise_types[0]
+
+        # return the exercise name of the last non-positive score or last if all positive
+        for exercise_type in reversed(self._exercise_types):
+            if scored_pair.scores.get(exercise_type, 0) <= 0:
+                return exercise_type
+        return self._exercise_types[-1]
+
+    def _compute_weight(self, scored_pair: ScoredWordPair) -> float:
+        """Compute sampling weight for a scored word pair."""
+        relevant_scores = [scored_pair.scores.get(exercise_type, 0) for exercise_type in self._exercise_types]
+        min_score = min(relevant_scores)
+        if min_score >= 0:
+            return self._finished_exercise_weight
         return 1.0

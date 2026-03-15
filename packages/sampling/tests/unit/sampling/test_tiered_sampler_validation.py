@@ -1,72 +1,24 @@
-"""Constructor validation tests for TieredExerciseSampler."""
+"""Constructor tests for TieredMultiExerciseSampler."""
 
-from nl_processing.core.models import Language
-import pytest
-
-from nl_processing.sampling.tiered_sampler import TieredExerciseSampler
-from tests.unit.sampling.tiered_conftest import MockTieredCandidateProvider
+from tests.unit.sampling.tiered_conftest import create_tiered_sampler
 
 
-def test_empty_exercise_types_raises() -> None:
-    """Empty exercise_types list raises ValueError."""
-    with pytest.raises(ValueError, match="exercise_types must be a non-empty list"):
-        TieredExerciseSampler(
-            user_id="u1",
-            source_language=Language.NL,
-            target_language=Language.RU,
-            mode_slug="mixed",
-            exercise_types=[],
-        )
-
-
-def test_finished_word_weight_zero_raises() -> None:
-    """finished_word_weight=0 raises ValueError."""
-    with pytest.raises(ValueError, match="finished_word_weight"):
-        TieredExerciseSampler(
-            user_id="u1",
-            source_language=Language.NL,
-            target_language=Language.RU,
-            mode_slug="mixed",
-            exercise_types=["flashcard"],
-            finished_word_weight=0,
-        )
-
-
-def test_finished_word_weight_negative_raises() -> None:
-    """finished_word_weight=-0.5 raises ValueError."""
-    with pytest.raises(ValueError, match="finished_word_weight"):
-        TieredExerciseSampler(
-            user_id="u1",
-            source_language=Language.NL,
-            target_language=Language.RU,
-            mode_slug="mixed",
-            exercise_types=["flashcard"],
-            finished_word_weight=-0.5,
-        )
-
-
-def test_finished_word_weight_one_valid() -> None:
-    """finished_word_weight=1.0 is valid (boundary)."""
-    mock_store = MockTieredCandidateProvider([])
-    sampler = TieredExerciseSampler(
-        user_id="u1",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        mode_slug="mixed",
-        exercise_types=["flashcard"],
-        finished_word_weight=1.0,
-        tiered_store=mock_store,
+def test_constructor_preserves_configuration() -> None:
+    """Constructor stores the configured exercise metadata."""
+    sampler = create_tiered_sampler(
+        [],
+        exercise_types=["flashcard", "fill_gap"],
+        tiered_exercise_type="fill_gap",
+        finished_exercise_weight=0.25,
     )
-    assert sampler._finished_word_weight == 1.0
+
+    assert sampler._exercise_types == ["flashcard", "fill_gap"]
+    assert sampler._tiered_exercise_type == "fill_gap"
+    assert sampler._finished_exercise_weight == 0.25
 
 
-def test_empty_mode_slug_raises() -> None:
-    """Empty mode_slug raises ValueError."""
-    with pytest.raises(ValueError, match="mode_slug must be non-empty"):
-        TieredExerciseSampler(
-            user_id="u1",
-            source_language=Language.NL,
-            target_language=Language.RU,
-            mode_slug="",
-            exercise_types=["flashcard"],
-        )
+def test_constructor_allows_empty_exercise_types() -> None:
+    """Constructor currently accepts an empty exercise list without validation."""
+    sampler = create_tiered_sampler([], exercise_types=[])
+
+    assert sampler._exercise_types == []

@@ -1,41 +1,37 @@
-"""Shared fixtures for TieredExerciseSampler unit tests — mock store and test data helpers."""
+"""Shared helpers for TieredMultiExerciseSampler unit tests."""
 
-from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
-from nl_processing.core.tiered_models import TieredCandidate
-from nl_processing.core.tiered_ports import TieredCandidateProvider
+from nl_processing.core.models import ScoredWordPair
 
-
-class MockTieredCandidateProvider:
-    """In-memory tiered candidate provider returning configurable candidates."""
-
-    def __init__(self, candidates: list[TieredCandidate]) -> None:
-        self._candidates = candidates
-
-    async def get_tiered_candidates(self) -> list[TieredCandidate]:
-        return self._candidates
+from nl_processing.sampling.ports import ScoredPairProvider
+from nl_processing.sampling.service import TieredMultiExerciseSampler
+from tests.unit.sampling.conftest import MockProgressStore, make_scored_pair
 
 
 def make_tiered_candidate(
     source_form: str,
     target_form: str,
     scores: dict[str, int] | None = None,
-    in_repeat_mode: bool = False,
-    source_word_id: int = 1,
-    word_type: PartOfSpeech = PartOfSpeech.NOUN,
-) -> TieredCandidate:
-    """Create a TieredCandidate with minimal boilerplate."""
-    source = Word(normalized_form=source_form, word_type=word_type, language=Language.NL)
-    target = Word(normalized_form=target_form, word_type=word_type, language=Language.RU)
-    pair = WordPair(source=source, target=target)
-    return TieredCandidate(
-        pair=pair,
-        source_word_id=source_word_id,
-        scores=scores or {},
-        in_repeat_mode=in_repeat_mode,
+) -> ScoredWordPair:
+    """Create a scored pair for tiered sampler tests."""
+    return make_scored_pair(source_form, target_form, scores=scores)
+
+
+def create_tiered_sampler(
+    scored_pairs: list[ScoredWordPair],
+    *,
+    exercise_types: list[str] | None = None,
+    tiered_exercise_type: str = "flashcard",
+    finished_exercise_weight: float = 0.01,
+) -> TieredMultiExerciseSampler:
+    """Create a TieredMultiExerciseSampler with an injected mock store."""
+    return TieredMultiExerciseSampler(
+        scored_store=MockProgressStore(scored_pairs),
+        exercise_types=exercise_types if exercise_types is not None else ["flashcard"],
+        tiered_exercise_type=tiered_exercise_type,
+        finished_exercise_weight=finished_exercise_weight,
     )
 
 
 def mock_provider_satisfies_protocol() -> bool:
-    """Test that MockTieredCandidateProvider structurally satisfies TieredCandidateProvider."""
-    mock = MockTieredCandidateProvider([])
-    return isinstance(mock, TieredCandidateProvider)
+    """MockProgressStore structurally satisfies ScoredPairProvider."""
+    return isinstance(MockProgressStore([]), ScoredPairProvider)
