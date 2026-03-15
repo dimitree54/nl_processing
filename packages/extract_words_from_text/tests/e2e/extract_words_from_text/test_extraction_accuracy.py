@@ -1,112 +1,68 @@
 import time
 
-from nl_processing.core.models import Word
+from nl_processing.core.models import Language
 import pytest
 
 from nl_processing.extract_words_from_text.service import WordExtractor
+from tests.e2e.extract_words_from_text.assertions import (
+    assert_words_match_contract,
+    format_diff,
+    word_pairs,
+)
+
+FEATURE_MATRIX_TEXT = (
+    "- De **grote** kat loopt door de tuin.\n"
+    "- Jan woont in Nederland.\n"
+    "- Het kleine kind speelt met de *rode* bal.\n"
+    "- Zij gaat er vandoor met haar vriend."
+)
+
+FEATURE_MATRIX_EXPECTED: set[tuple[str, str]] = {
+    ("de kat", "noun"),
+    ("groot", "adjective"),
+    ("lopen", "verb"),
+    ("de tuin", "noun"),
+    ("door", "preposition"),
+    ("Jan", "proper_noun_person"),
+    ("wonen", "verb"),
+    ("in", "preposition"),
+    ("Nederland", "proper_noun_country"),
+    ("het kind", "noun"),
+    ("klein", "adjective"),
+    ("spelen", "verb"),
+    ("met", "preposition"),
+    ("de bal", "noun"),
+    ("rood", "adjective"),
+    ("zij", "pronoun"),
+    ("ervandoor gaan", "verb"),
+    ("haar", "pronoun"),
+    ("de vriend", "noun"),
+}
 
 
-async def _assert_extraction(text: str, expected: set[tuple[str, str]]) -> None:
-    """Extract words from text and assert exact set match against expected."""
+@pytest.mark.asyncio
+async def test_markdown_feature_matrix_quality() -> None:
+    """E2e quality: one extraction call validates the main Dutch text features."""
     extractor = WordExtractor()
-    result = await extractor.extract(text)
-    actual = {(w.normalized_form, w.word_type.value) for w in result}
-    assert actual == expected, f"Mismatch.\nExpected: {expected}\nGot: {actual}"
 
+    start = time.perf_counter()
+    result = await extractor.extract(FEATURE_MATRIX_TEXT)
+    elapsed = time.perf_counter() - start
 
-@pytest.mark.asyncio
-async def test_nouns_and_verbs() -> None:
-    """Test extraction of nouns (de/het), verbs, adjective, preposition."""
-    await _assert_extraction(
-        "De grote kat loopt door de tuin.",
-        {
-            ("de kat", "noun"),
-            ("groot", "adjective"),
-            ("lopen", "verb"),
-            ("de tuin", "noun"),
-            ("door", "preposition"),
-        },
-    )
+    assert elapsed < 180, f"Extraction took {elapsed:.2f}s -- exceeds 180.00s QA gate"
+    assert_words_match_contract(result, language=Language.NL)
+    assert all("#" not in word.normalized_form for word in result)
+    assert all("*" not in word.normalized_form for word in result)
 
-
-@pytest.mark.asyncio
-async def test_proper_nouns_and_prepositions() -> None:
-    """Test extraction of proper nouns (person, country) and prepositions."""
-    await _assert_extraction(
-        "Jan woont in Nederland.",
-        {
-            ("Jan", "proper_noun_person"),
-            ("wonen", "verb"),
-            ("in", "preposition"),
-            ("Nederland", "proper_noun_country"),
-        },
-    )
-
-
-@pytest.mark.asyncio
-async def test_articles_and_adjectives() -> None:
-    """Test extraction with de/het articles and multiple adjectives."""
-    await _assert_extraction(
-        "Het kleine kind speelt met de rode bal.",
-        {
-            ("het kind", "noun"),
-            ("klein", "adjective"),
-            ("spelen", "verb"),
-            ("met", "preposition"),
-            ("de bal", "noun"),
-            ("rood", "adjective"),
-        },
-    )
-
-
-@pytest.mark.asyncio
-async def test_compound_expression() -> None:
-    """Test extraction of compound verbal expression."""
-    await _assert_extraction(
-        "Zij gaat er vandoor met haar vriend.",
-        {
-            ("zij", "pronoun"),
-            ("ervandoor gaan", "verb"),
-            ("met", "preposition"),
-            ("haar", "pronoun"),
-            ("de vriend", "noun"),
-        },
+    actual = word_pairs(result)
+    assert actual == FEATURE_MATRIX_EXPECTED, (
+        f"Feature-matrix extraction mismatch:\n{format_diff(FEATURE_MATRIX_EXPECTED, actual)}"
     )
 
 
 @pytest.mark.asyncio
 async def test_non_dutch_returns_empty() -> None:
-    """Test that non-Dutch text returns an empty list."""
-    text = "The quick brown fox jumps over the lazy dog."
-
+    """E2e quality: non-target-language text returns an empty list."""
     extractor = WordExtractor()
-    result = await extractor.extract(text)
-
+    result = await extractor.extract("The quick brown fox jumps over the lazy dog.")
     assert result == [], f"Expected empty list for English text, got: {result}"
-
-
-@pytest.mark.asyncio
-async def test_performance_100_words() -> None:
-    """Test that extraction of ~100 words completes in <5 seconds."""
-    text = (
-        "Nederland is een prachtig land in West-Europa. "
-        "Het land staat bekend om zijn tulpen, molens en kaas. "
-        "De hoofdstad Amsterdam trekt elk jaar miljoenen toeristen. "
-        "Veel mensen fietsen dagelijks naar hun werk of school. "
-        "De Nederlandse keuken is gevarieerd en smakelijk. "
-        "Stamppot is een traditioneel gerecht dat veel Nederlanders graag eten. "
-        "Het weer in Nederland is wisselvallig, met veel regen en wind. "
-        "Ondanks het koude klimaat zijn de Nederlanders een vrolijk volk. "
-        "Ze houden van gezelligheid en brengen graag tijd door met familie. "
-        "De Nederlandse taal is nauw verwant aan het Duits en het Engels. "
-        "Veel Nederlanders spreken vloeiend meerdere talen."
-    )
-
-    extractor = WordExtractor()
-    start = time.time()
-    result = await extractor.extract(text)
-    elapsed = time.time() - start
-
-    assert elapsed < 180, f"Extraction took {elapsed:.2f}s -- exceeds 180.00s QA gate"
-    assert len(result) > 0, "Expected non-empty result for Dutch text"
-    assert all(isinstance(w, Word) for w in result)

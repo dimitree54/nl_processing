@@ -1,14 +1,14 @@
-"""E2e quality tests: extract words from real texts produced by extract_text_from_image.
+"""E2e quality tests using OCR ground-truth text from extract_text_from_image."""
 
-These texts are the ground-truth outputs of the image extraction e2e tests
-(tests/e2e/extract_text_from_image/test_full_extraction.py).  We feed them
-into extract_words_from_text and verify the result against hand-labelled
-expected words using set-based comparison on (normalized_form, word_type).
-"""
-
+from nl_processing.core.models import Language
 import pytest
 
 from nl_processing.extract_words_from_text.service import WordExtractor
+from tests.e2e.extract_words_from_text.assertions import (
+    assert_words_match_contract,
+    format_diff,
+    word_pairs,
+)
 
 # ---------------------------------------------------------------------------
 # Text 1 — Dutch textbook vocabulary list (16 entries)
@@ -52,10 +52,6 @@ VOCABULARY_LIST_EXPECTED: set[tuple[str, str]] = {
     ("wonen", "verb"),
 }
 
-# ---------------------------------------------------------------------------
-# Text 2 — Rotated Dutch textbook vocabulary (20 entries)
-# Source: test_real_photo_rotated_dutch_english_extraction ground truth
-# ---------------------------------------------------------------------------
 ROTATED_VOCABULARY_TEXT = (
     "klein\n"
     "kloppen\n"
@@ -102,48 +98,22 @@ ROTATED_VOCABULARY_EXPECTED: set[tuple[str, str]] = {
     ("nieuw", "adjective"),
 }
 
-
-def _to_set(words: list) -> set[tuple[str, str]]:
-    return {(w.normalized_form, w.word_type.value) for w in words}
-
-
-def _format_diff(expected: set, actual: set) -> str:
-    missing = expected - actual
-    extra = actual - expected
-    lines = []
-    if missing:
-        lines.append(f"  MISSING ({len(missing)}):")
-        for form, wtype in sorted(missing):
-            lines.append(f"    - ({form!r}, {wtype!r})")
-    if extra:
-        lines.append(f"  EXTRA ({len(extra)}):")
-        for form, wtype in sorted(extra):
-            lines.append(f"    + ({form!r}, {wtype!r})")
-    return "\n".join(lines)
+REAL_OCR_TEXT_CORPUS = f"{VOCABULARY_LIST_TEXT}\n\n{ROTATED_VOCABULARY_TEXT}"
+REAL_OCR_EXPECTED = VOCABULARY_LIST_EXPECTED | ROTATED_VOCABULARY_EXPECTED
 
 
 @pytest.mark.asyncio
-async def test_vocabulary_list_quality() -> None:
-    """E2e quality: textbook vocabulary list with one allowed ambiguous POS tag."""
+async def test_real_ocr_vocabulary_corpus_quality() -> None:
+    """E2e quality: one extraction call validates both OCR-derived vocabulary corpora."""
     extractor = WordExtractor()
-    result = await extractor.extract(VOCABULARY_LIST_TEXT)
-    actual = _to_set(result)
-    expected_fixed = {entry for entry in VOCABULARY_LIST_EXPECTED if entry[0] != "vlakbij"}
+    result = await extractor.extract(REAL_OCR_TEXT_CORPUS)
+    assert_words_match_contract(result, language=Language.NL)
+
+    actual = word_pairs(result)
+    expected_fixed = {entry for entry in REAL_OCR_EXPECTED if entry[0] != "vlakbij"}
     actual_fixed = {entry for entry in actual if entry[0] != "vlakbij"}
 
     assert actual_fixed == expected_fixed, (
-        f"Vocabulary list extraction mismatch:\n{_format_diff(expected_fixed, actual_fixed)}"
+        f"Real OCR corpus extraction mismatch:\n{format_diff(expected_fixed, actual_fixed)}"
     )
     assert any(form == "vlakbij" and word_type in {"adverb", "preposition"} for form, word_type in actual)
-
-
-@pytest.mark.asyncio
-async def test_rotated_vocabulary_quality() -> None:
-    """E2e quality: rotated textbook vocabulary (20 words) — exact set match."""
-    extractor = WordExtractor()
-    result = await extractor.extract(ROTATED_VOCABULARY_TEXT)
-    actual = _to_set(result)
-
-    assert actual == ROTATED_VOCABULARY_EXPECTED, (
-        f"Rotated vocabulary extraction mismatch:\n{_format_diff(ROTATED_VOCABULARY_EXPECTED, actual)}"
-    )

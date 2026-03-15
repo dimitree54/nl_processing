@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from nl_processing.core.exceptions import UnsupportedLanguageError
 from nl_processing.core.models import Language, PartOfSpeech, Word
 import pytest
 
@@ -42,11 +43,26 @@ def test_constructor_custom_params(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_constructor_missing_prompt_file(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that unsupported language raises FileNotFoundError."""
+    """Test that unsupported language raises UnsupportedLanguageError."""
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(UnsupportedLanguageError, match="Language 'ru' is not supported"):
         WordExtractor(language=Language.RU)
+
+
+def test_constructor_wraps_prompt_loading_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that prompt loading failures raise UnsupportedLanguageError."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    def _raise_file_not_found(_path: str) -> None:
+        raise FileNotFoundError("missing prompt")
+
+    monkeypatch.setattr("nl_processing.extract_words_from_text.service.load_prompt", _raise_file_not_found)
+
+    with pytest.raises(UnsupportedLanguageError, match="Language 'nl' is not supported") as exc_info:
+        WordExtractor(language=Language.NL)
+
+    assert isinstance(exc_info.value.__cause__, FileNotFoundError)
 
 
 @pytest.mark.asyncio

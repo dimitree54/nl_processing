@@ -9,37 +9,39 @@ related_docs:
 
 # Module Spec: extract_words_from_text
 
+> This spec describes the module's desired target-state behavior and public contract.
+> It defines WHAT the module must do, not HOW it is implemented.
+> Document all public interfaces that other modules or end users are expected to use.
+> Do not document implementation details such as files, internal classes, helper functions, algorithms, tests, or QA procedures unless the user explicitly requires them.
+> Internal-only surfaces do not need full spec coverage, but when they could be mistaken for public API they should be marked as internal or non-contract.
+
 ## 1. Module Snapshot
 
 ### Summary
 
-`extract_words_from_text` extracts and normalizes lexical items from markdown text and returns a flat `list[Word]`. It uses prompt-driven LLM extraction instead of language-specific NLP code, which keeps the module small while allowing Dutch-specific normalization such as articles on nouns and infinitive verbs. The current shipped prompt set is Dutch-only.
+`extract_words_from_text` converts caller-provided text into a flat list of normalized lexical items for one declared target language. It accepts plain text and markdown-formatted text and returns `Word` values that downstream modules can translate, filter, or persist. The module owns extraction and normalization only; it does not own language detection, translation, persistence, or OCR.
 
 ### System Context
 
-The module consumes plain text or markdown and produces normalized `core.models.Word` objects that downstream packages can filter, translate, or persist. It depends on `core` for models, prompt loading, and `APIError`, but owns the prompt instructions that define what normalization means.
+This module sits between text ingestion and downstream vocabulary workflows. Callers choose the target `Language`, provide source text, and receive normalized `Word` objects or a visible failure outcome. The module depends on shared types and exceptions from `nl_processing.core`, and its supported caller contract is intentionally narrow: import `WordExtractor` from `nl_processing.extract_words_from_text.service`, instantiate it, call `extract`, and consume the returned `Word` values.
 
 ### In Scope
 
-- Public async `WordExtractor(language, model)` service.
-- Markdown-transparent lexical extraction into `Word` objects.
-- Prompt-defined normalization and flat `PartOfSpeech` tagging.
-- Compound and multi-word expressions as single extracted units.
-- Packaging of runtime prompt assets with the module.
+- The public `WordExtractor` class and its documented constructor options.
+- `extract(text)` behavior for plain text and markdown input.
+- Normalized `Word` outputs with shared `Language` and `PartOfSpeech` semantics.
+- Externally visible empty-result and failure behavior.
 
 ### Out of Scope
 
-- Image/OCR input or standalone language detection.
-- Deterministic ordering or deduplication guarantees.
-- Hardcoded per-language normalization logic in Python.
-- Explicit support for languages without shipped prompt assets.
+- OCR or image-to-text input.
+- Automatic language detection or target-language selection.
+- Translation, persistence, ranking, or downstream deduplication.
+- Any guarantee of deterministic ordering or uniqueness in returned results.
 
 ### Assumptions
 
-| ID | Assumption | Status | Notes |
-| --- | --- | --- | --- |
-| A-1 | The Dutch prompt remains the only shipped extraction prompt until more language assets and tests are added. | Needs Review | The current package ships `prompts/nl.json`. |
-| A-2 | Prompt instructions remain the source of truth for normalization rules. | Needs Review | There is no language-specific post-processing in code. |
+N/A. The contract below does not rely on temporary working assumptions beyond the stated requirements and constraints.
 
 ## 2. Requirements
 
@@ -47,182 +49,141 @@ The module consumes plain text or markdown and produces normalized `core.models.
 
 | ID | Requirement | Priority | Notes |
 | --- | --- | --- | --- |
-| FR-1 | The module must expose `WordExtractor(language, model, reasoning_effort, temperature)` and `await extract(text: str) -> list[Word]`. | Must | Current defaults are `model="gpt-5-mini"`, `reasoning_effort="medium"`, `temperature=None`. |
-| FR-2 | The extractor must ignore markdown syntax and return only lexical content in the target language. | Must | Markdown formatting is transparent to callers. |
-| FR-3 | Each returned item must be a `Word` with `normalized_form`, `word_type`, and `language` populated. | Must | `language` is set programmatically by the service. |
-| FR-4 | Compound expressions and multi-word phrases may be returned as single normalized entries. | Must | Prompt-driven behavior. |
-| FR-5 | When no target-language words are found, the module should return `[]` rather than raising a domain-specific exception. | Must | Matches current contract and tests. |
-| FR-6 | Upstream invoke or parsing failures must surface as `APIError`. | Must | Keeps failure handling typed for callers. |
+| FR-1 | The module must support caller import `from nl_processing.extract_words_from_text.service import WordExtractor`, where `WordExtractor(*, language: Language = Language.NL, model: str = "gpt-5-mini", reasoning_effort: str | None = "medium", temperature: float | None = None)` is the supported class interface. | Must | Constructor options and the documented import path are part of the supported caller interface. |
+| FR-2 | The module must expose `await WordExtractor.extract(text: str) -> list[Word]`. | Must | `extract` is the supported execution entry point. |
+| FR-3 | The module must accept plain text and markdown-formatted text as valid input. | Must | Markdown markup is input syntax, not extraction content. |
+| FR-4 | Successful extraction must return only `Word` values whose `normalized_form`, `word_type`, and `language` are populated. | Must | `word_type` must be valid for `PartOfSpeech`. |
+| FR-5 | Each successful result must use the extractor instance's configured `language`. | Must | The returned `language` is not inferred from individual words. |
+| FR-6 | The module must support single-word and multi-word lexical units when they represent extractable vocabulary items. | Must | Compound expressions may appear as one result item. |
+| FR-7 | When no lexical items are found for the configured target language, `extract` must return `[]`. | Must | An empty extraction is a valid outcome. |
+| FR-8 | Failures during extraction response acquisition, parsing, or validation must raise `APIError`. | Must | Callers must receive an explicit typed runtime failure. |
+| FR-9 | If initialization cannot load valid extraction instructions for the requested language, construction must fail immediately by raising `UnsupportedLanguageError` and must not fall back to another language or another instruction set. | Must | Fail-fast behavior is part of the contract. |
 
 ### Rules and Invariants
 
-- BR-1: Every result element is a `core.models.Word`.
-- BR-2: `word_type` must be a valid `PartOfSpeech`; invalid tool output fails validation.
-- BR-3: All returned words for one extractor instance share the same `language`.
-- BR-4: Ordering and deduplication are not part of the public contract.
+- BR-1: Every item in a successful result is a `Word`.
+- BR-2: `word_type` must validate against `PartOfSpeech`.
+- BR-3: All items returned from one extractor instance share the same `language`.
+- BR-4: Result ordering is not part of the supported contract.
+- BR-5: Result deduplication is not part of the supported contract.
+- BR-6: The module must fail fast on unsupported language setup or invalid extraction output; it must not silently degrade, synthesize defaults, or return partial success.
 
 ### Non-Functional Requirements
 
 | ID | Category | Requirement | Target or Constraint | Notes |
 | --- | --- | --- | --- | --- |
-| NFR-1 | Performance | Extraction should stay within the current offline QA budget for short texts. | Product target <5s on ~100 words; current integration gate <180s | The offline `gpt-5-mini` profile is much slower than the previous lightweight model. |
-| NFR-2 | Inference profile | Offline extraction should favor higher-quality reasoning over latency. | `model="gpt-5-mini"`, `reasoning_effort="medium"`, `temperature=None` | Current constructor behavior. |
-| NFR-3 | Packaging | Prompt assets must be shipped with the package. | `prompts/nl.json` available at runtime | Covered by a packaging test. |
+| NFR-1 | Compatibility | Module runtime compatibility | Python `>=3.12` | Consumers must use the repository-supported Python baseline. |
+| NFR-2 | Reliability | Unexpected extraction failures must surface explicitly. | No silent fallback, partial success, or substituted language support | Fail-fast behavior is part of the module contract. |
+| NFR-3 | Compatibility | Public outputs must remain based on shared core contracts. | Results use `Word`, `Language`, and `PartOfSpeech` from `nl_processing.core` | Downstream packages consume shared types. |
+| NFR-4 | Availability | Supported language behavior requires module-provided extraction instructions to be available at runtime. | Initialization succeeds only when valid instructions exist for the requested language | Missing or invalid instructions are not hidden. |
 
 ### Failure Modes and Edge Cases
 
-| ID | Scenario | Expected Behavior | Handling or Recovery |
+| ID | Scenario | Expected Behavior | Notes |
 | --- | --- | --- | --- |
-| FM-1 | Text contains no target-language words. | Return `[]`. | Caller can treat this as a valid empty extraction. |
-| FM-2 | Prompt asset is missing or malformed. | Constructor fails during prompt load. | Add or repair the prompt asset before use. |
-| FM-3 | API call, tool-call parsing, or schema validation fails. | Raise `APIError`. | Caller can retry or surface the failure. |
+| FM-1 | Input contains no lexical items in the configured target language. | Return `[]`. | Empty extraction is a valid success case. |
+| FM-2 | The requested language lacks valid module-provided extraction instructions. | Constructor fails immediately with `UnsupportedLanguageError` and no fallback language or fallback instruction set is used. | The error is part of the supported initialization contract. |
+| FM-3 | The extraction backend fails or returns invalid structured output. | `extract` raises `APIError`. | No partial result is returned. |
+| FM-4 | Input includes markdown, mixed formatting, or punctuation. | The module returns lexical content only. | Formatting tokens are not part of the supported result contract. |
+| FM-5 | Source text contains multi-word expressions. | The module may return the expression as a single lexical unit. | Callers must accept phrase-level results. |
 
-## 3. Module Design
+## 3. Public Contract
 
 ### Responsibilities and Boundaries
 
-**Owns:**
+**Responsible For:**
 
-- Prompt-defined lexical extraction and normalization behavior.
-- Mapping of LLM tool output into `Word` objects.
-- Packaging and loading of extraction prompt assets.
+- Transforming caller-provided text into normalized lexical items for one configured target language.
+- Returning shared `Word` DTOs that downstream modules can consume.
+- Distinguishing empty extraction from runtime extraction failure.
 
-**Does Not Own:**
+**Not Responsible For:**
 
-- OCR/image input handling.
-- Translation or persistence workflows.
-- Shared enum/model definitions.
+- Detecting the source language or choosing the target language.
+- Translating, storing, ranking, reordering, or deduplicating extracted items.
+- Exposing or supporting internal extraction schemas or instruction artifacts as public API.
 
-### Interfaces and Dependencies
+### Public Interfaces
 
-| ID | Type | Direction | Counterparty | Contract or Data | Notes |
+| ID | Interface Type | Direction | Counterparty | Contract Summary | Expected Behavior |
 | --- | --- | --- | --- | --- | --- |
-| IF-1 | Python API | Inbound | Callers | `await extract(text: str) -> list[Word]` | Main public interface. |
-| IF-2 | Asset/API | Outbound | Prompt assets + OpenAI | `prompts/<language>.json`, `_WordList` tool schema, LangChain/OpenAI chain | Current shipped asset is Dutch only. |
-| IF-3 | Shared contract | Inbound | `core` | `Language`, `PartOfSpeech`, `Word`, `APIError`, `load_prompt()` | Shared dependency surface. |
+| IF-1 | Python class | Inbound | Application code and sibling packages | `from nl_processing.extract_words_from_text.service import WordExtractor` and then `WordExtractor(*, language: Language = Language.NL, model: str = "gpt-5-mini", reasoning_effort: str | None = "medium", temperature: float | None = None)` | Creates an extractor bound to one target language and inference profile; construction fails fast with `UnsupportedLanguageError` if required language instructions cannot be loaded. |
+| IF-2 | Python async method | Inbound | `WordExtractor` callers | `await extract(text: str) -> list[Word]` | Accepts plain text or markdown and returns normalized lexical items; returns `[]` when no target-language items are found; raises `APIError` on runtime extraction failure. |
+| IF-3 | Data contract | Outbound | Callers consuming results | `list[Word]` | Each item contains `normalized_form`, valid `word_type`, and the extractor instance's configured `language`. |
 
-### Data and State Ownership
+Document all public contract surfaces here, including public classes, methods, functions, commands, endpoints, events, or other supported entry points.
 
-| Entity or State | Ownership | Description | Lifecycle or Retention | Notes |
+### Internal and Non-Contract Notes
+
+- `WordExtractor` is a supported import from `nl_processing.extract_words_from_text.service`; package-level re-export via `nl_processing.extract_words_from_text` is not part of the contract. The package `__init__.py` is intentionally empty — this is the accepted code style in this repository; consumers must always import from the explicit submodule path.
+- Private helper types, temporary response schemas, instruction file structure, and model-integration plumbing are internal only; callers must not import them or depend on them as supported API.
+- The absence of ordering or deduplication guarantees is intentional and is not an internal defect or temporary limitation.
+
+### External Dependencies and Constraints
+
+| ID | Dependency or Constraint | Why It Matters | Behavioral Assumption or Limit | Notes |
 | --- | --- | --- | --- | --- |
-| Service instance state | Owned | Target language and pre-built chain. | Runtime only | No persistent state. |
-| Prompt assets | Owned | Language-specific extraction instructions. | Versioned with the package | Define normalization behavior. |
-| `Word` result mapping | Owned | Conversion from internal tool payload to shared DTOs. | Runtime only | Keeps public output consistent. |
+| EC-1 | `nl_processing.core.models` (`Word`, `Language`, `PartOfSpeech`) | Shared types define the constructor and result contract. | Consumer compatibility depends on the core module's type compatibility guarantees. | This module does not redefine those types. |
+| EC-2 | `nl_processing.core.exceptions.APIError` | Runtime extraction failures are surfaced through this shared exception type. | Callers that need typed runtime handling must catch `APIError`. | Initialization failures are outside the `APIError` contract. |
+| EC-3 | `nl_processing.core.exceptions.UnsupportedLanguageError` | Unsupported-language initialization failure is surfaced through this shared exception type. | Callers that need typed setup-failure handling must catch `UnsupportedLanguageError`. | This applies only to construction-time language setup failures. |
+| EC-4 | Module-provided extraction instructions for the selected language | Initialization and extraction semantics depend on those instructions existing and being valid. | Supported language behavior is guaranteed only for languages with valid module-provided instructions. | No fallback language or fallback instruction set is supported. |
+| EC-5 | Configured model backend selected via constructor options | Extraction quality and availability depend on the configured backend honoring the documented interface. | The module does not guarantee deterministic ordering or identical lexical choices across backend changes. | Public behavior is defined by the output contract, not by backend internals. |
 
-### Processing Flow
+### Cross-Module Change References
 
-1. The constructor picks the prompt JSON for `language`, loads it, and binds `_WordList` as the tool schema on `ChatOpenAI`.
-2. `extract()` wraps the input text in a `HumanMessage` and invokes the async chain.
-3. The first tool call is parsed into `_WordList`.
-4. Each entry is converted into a shared `Word` with the extractor instance's target language.
+| Affected Module | Why It Must Change | External Spec or Doc Reference | Ownership Status |
+| --- | --- | --- | --- |
+| N/A | No external module change is required to satisfy this module contract. | N/A | N/A |
 
-### Decisions
+### Compatibility Notes
 
-| ID | Decision | Status | Rationale | Consequence |
+| ID | Area | Expectation | Impact if Broken | Notes |
 | --- | --- | --- | --- | --- |
-| DEC-1 | Keep normalization logic in the prompt, not in Python post-processing. | Decided | Makes language support a prompt problem, not a custom NLP toolchain problem. | Prompt assets must stay synchronized with expected normalization rules. |
-| DEC-2 | Use a flat shared `PartOfSpeech` taxonomy from `core`. | Decided | Keeps downstream filtering simple and type-safe. | Prompt outputs must match enum values exactly. |
-| DEC-3 | Return `[]` rather than raising when the text lacks target-language words. | Decided | An empty extraction is a valid text-processing outcome. | Callers should not expect a domain error in this case. |
-| DEC-4 | Validate quality with set-based comparisons instead of ordered equality. | Decided | LLM output order is not important to the workflow. | Tests focus on content completeness, not ordering. |
+| COMP-1 | Public API surface | Changes to the documented `nl_processing.extract_words_from_text.service.WordExtractor` import path, `WordExtractor` constructor shape, `extract(text)` signature, or return type must be backward-compatible or explicitly versioned. | Callers may fail to import, instantiate, or await the module correctly. | Additive options are compatible; removals or renames are breaking. |
+| COMP-2 | Result semantics | Consumers must treat ordering and deduplication as unspecified. | Order-dependent or uniqueness-dependent callers may break. | Consumers should compare by content, not position. |
+| COMP-3 | Language support | Adding support for a new language is additive; removing or changing support for an already supported language is breaking. | Existing callers may fail during construction or receive materially different behavior. | Supported behavior depends on valid module-provided instructions. |
 
-### Consistency Rules
-
-- CR-1: Adding a new language requires a prompt asset plus tests; `Language` enum support alone is insufficient.
-- CR-2: Prompt instructions and `PartOfSpeech` enum values must stay aligned.
-
-### Requirement Traceability
-
-| Requirement | Covered By | Verified By |
-| --- | --- | --- |
-| FR-2 | IF-1, IF-2, DEC-1 | QA-1 |
-| FR-3 | IF-3, DEC-2, CR-2 | QA-2 |
-| FR-5 | DEC-3 | QA-3 |
-
-## 4. Delivery and Validation
+## 4. Acceptance and Validation
 
 ### Acceptance Criteria
 
-- AC-1: Markdown input produces a flat `list[Word]` without leaking markdown syntax into the public contract.
-- AC-2: Empty/non-target-language text returns `[]`, while API and parsing failures raise `APIError`.
-- AC-3: Prompt assets remain packaged and the module continues to pass unit, integration, and e2e extraction tests.
+- AC-1: A caller can import `WordExtractor` from `nl_processing.extract_words_from_text.service`, construct it with the documented options, and call `extract` with `str` input.
+- AC-2: Plain text and markdown input produce only normalized `Word` results and do not require callers to strip markdown beforehand.
+- AC-3: A text with no lexical items in the configured target language yields `[]`.
+- AC-4: Runtime extraction acquisition, parsing, or validation failures yield `APIError`.
+- AC-5: Requesting a language without valid module-provided extraction instructions causes construction to fail immediately with `UnsupportedLanguageError` and without fallback behavior.
+- AC-6: Consumers can treat multi-word lexical expressions as valid single result items.
 
-### Testing Strategy
+### High-Level Validation Coverage
 
-**Framework and Constraints:**
-
-- Reuse package-local `pytest` suites under `tests/unit`, `tests/integration`, and `tests/e2e`.
-- Treat live-API quality tests as the real acceptance signal for prompt behavior.
-
-**Unit:**
-
-- Constructor defaults, prompt loading failures, output mapping, and `APIError` wrapping.
-
-**Integration:**
-
-- Curated extraction quality cases, non-Dutch empty-result behavior, and latency budget checks.
-
-**Contract:**
-
-- Packaging test for prompt assets and schema-level `PartOfSpeech` validation.
-
-**E2E or UI Workflow:**
-
-- Pipeline-like text scenarios, including markdown and multi-word expressions.
-
-**Operational or Non-Functional:**
-
-- Static checks keep the module small, typed, and packageable.
-
-### Quality Automation Plan
-
-#### Automated Coverage Matrix
-
-| ID | Target | Verification Level | Check or Test to Add | When It Runs | Notes |
-| --- | --- | --- | --- | --- | --- |
-| QA-1 | FR-2 | Integration | Curated extraction-accuracy tests | PR CI / nightly | Validates markdown-transparent extraction. |
-| QA-2 | FR-3 | Unit | Output mapping and enum-validation tests | PR CI | Protects typed `Word` output. |
-| QA-3 | FR-5 | Integration | Non-target-language empty-result test | PR CI | Confirms the no-exception contract. |
-
-#### Static Checks and Gates
-
-| ID | Check | Purpose | Trigger | Fails On |
-| --- | --- | --- | --- | --- |
-| SC-1 | Package-local `make check` flow | Preserve quality and packaging. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
-| SC-2 | Package tests | Preserve extraction behavior and prompt packaging. | PR CI | Unit/integration/e2e failures. |
-
-#### Manual Verification Needed
-
-| Target | Why It Is Not Reliably Automated | Manual Verification Approach | Evidence |
+| ID | Target | What Must Be True | Observable Evidence or Result |
 | --- | --- | --- | --- |
-| Normalization quality | Some lexical choices and normalization nuances are prompt-dependent. | Review extracted outputs for representative Dutch samples after prompt changes. | Reviewer notes plus sample outputs. |
+| VAL-1 | FR-1, IF-1 | The documented import path, constructor, and options are usable by callers. | A caller can import `WordExtractor` from `nl_processing.extract_words_from_text.service` and instantiate it with default and explicit options. |
+| VAL-2 | FR-2, FR-3, IF-2 | `extract` accepts plain text and markdown-formatted text. | A caller receives a `list[Word]` from both input styles without markdown cleanup as a prerequisite. |
+| VAL-3 | FR-4, FR-5, IF-3 | Successful results are valid `Word` values with populated fields and configured language. | Observed output items each contain `normalized_form`, valid `word_type`, and the extractor language. |
+| VAL-4 | FR-7 | Empty target-language input is treated as a valid empty extraction. | The observable result is `[]` rather than an exception. |
+| VAL-5 | FR-8, EC-2 | Runtime extraction failures surface as typed errors. | The observable failure is `APIError`, not a silent fallback or partial result. |
+| VAL-6 | FR-9, EC-3, EC-4 | Unsupported or invalid language setup fails fast during construction. | Construction does not succeed and raises `UnsupportedLanguageError`; no alternate language or alternate instruction set is used. |
 
 ### Risks
 
 | ID | Risk | Impact | Mitigation or Next Step |
 | --- | --- | --- | --- |
-| RISK-1 | Performance expectations in docs and tests drift apart. | The module may appear to satisfy requirements that are not actually enforced. | Keep this spec aligned to the current automated gate and tighten tests deliberately. |
-| RISK-2 | Unsupported languages currently fail through missing prompt assets rather than a clearer module-level error. | Callers may get implementation-shaped failures when exploring new languages. | Revisit the unsupported-language contract before expanding language support. |
+| RISK-1 | Changes to language instructions or model backend may materially change normalization outcomes while preserving the same method signatures. | Downstream modules may see behavioral drift in extracted vocabulary. | Review consumer expectations whenever language instructions or backend defaults change. |
+| RISK-2 | Callers may incorrectly assume stable ordering or deduplicated output. | Hidden caller coupling can create fragile downstream behavior. | Keep unordered and non-deduplicated semantics explicit in the contract and consumer docs. |
 
 ### Open Questions
 
-| ID | Question | Status | Owner or Next Step | Notes |
-| --- | --- | --- | --- | --- |
-| OQ-1 | Should the module introduce an explicit unsupported-language error instead of relying on prompt-file presence? | Open | Project owner to decide before adding another language | Current behavior is prompt-asset driven. |
+N/A. No unresolved contract questions remain for this revision.
 
 ### Assumption Review Outcomes
 
-| ID | Source | User Response | Outcome | Promoted To |
-| --- | --- | --- | --- | --- |
-| RV-1 | A-1 | Not yet reviewed | Kept as active assumption | A-1 |
-| RV-2 | A-2 | Not yet reviewed | Kept as active assumption | A-2 |
+N/A. No temporary working assumptions were used in this revision.
 
 ### Open Question Resolution
 
-| ID | Source | Resolution Status | Outcome | Promoted To or Next Step |
-| --- | --- | --- | --- | --- |
-| RV-3 | OQ-1 | Unresolved | Remains open pending language-expansion work | Revisit with the next new prompt asset |
+N/A. No open questions were resolved as part of this revision.
 
 ### Deferred Work
 
-- D-1: Add explicit unsupported-language errors if the package starts shipping more than one prompt.
-- D-2: Tighten the automated latency gate if runtime stability improves.
+- D-1: If the module later adds more language-specific setup failure modes, document their exception contracts here explicitly rather than relying on internal prompt-loading details.

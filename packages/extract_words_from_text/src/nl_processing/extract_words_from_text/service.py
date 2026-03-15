@@ -1,14 +1,29 @@
 import pathlib
 
 from langchain_core.messages import HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from nl_processing.core.exceptions import APIError
+from nl_processing.core.exceptions import APIError, UnsupportedLanguageError
 from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.core.prompts import load_prompt
 from pydantic import BaseModel
 
 # Resolve prompts directory relative to this file
 _PROMPTS_DIR = pathlib.Path(__file__).parent / "prompts"
+
+
+def _load_prompt_for_language(language: Language) -> ChatPromptTemplate:
+    prompt_path = _PROMPTS_DIR / f"{language.value}.json"
+    supported_languages = sorted(path.stem for path in _PROMPTS_DIR.glob("*.json"))
+    if not prompt_path.is_file():
+        msg = f"Language '{language.value}' is not supported. Supported languages: {', '.join(supported_languages)}"
+        raise UnsupportedLanguageError(msg)
+
+    try:
+        return load_prompt(str(prompt_path))
+    except FileNotFoundError as exc:
+        msg = f"Language '{language.value}' is not supported. Supported languages: {', '.join(supported_languages)}"
+        raise UnsupportedLanguageError(msg) from exc
 
 
 class _LLMWordEntry(BaseModel):
@@ -41,8 +56,7 @@ class WordExtractor:
         temperature: float | None = None,
     ) -> None:
         self._language = language
-        prompt_path = str(_PROMPTS_DIR / f"{language.value}.json")
-        prompt = load_prompt(prompt_path)
+        prompt = _load_prompt_for_language(language)
 
         llm = ChatOpenAI(model=model, reasoning_effort=reasoning_effort, temperature=temperature).bind_tools(
             [_WordList], tool_choice=_WordList.__name__
