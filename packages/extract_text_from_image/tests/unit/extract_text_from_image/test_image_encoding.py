@@ -3,16 +3,16 @@ import pathlib
 
 import cv2
 from nl_processing.core.exceptions import UnsupportedImageFormatError
-import numpy as np
-import pytest
-
-from nl_processing.extract_text_from_image.benchmark import generate_test_image
-from nl_processing.extract_text_from_image.image_encoding import (
+from nl_processing.core.image_encoding import (
     encode_cv2_to_base64,
     encode_path_to_base64,
     get_image_format,
     validate_image_format,
 )
+import numpy as np
+import pytest
+
+from nl_processing.extract_text_from_image.benchmark import generate_test_image
 
 
 def test_get_image_format() -> None:

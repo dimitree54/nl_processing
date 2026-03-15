@@ -9,6 +9,6 @@ test-unit:
 	uv run pytest -n auto tests/unit
 
 test-e2e:
-	uv run pytest -n auto tests/e2e
+	doppler run -- uv run pytest -n auto tests/e2e
 
 check: lint test-unit test-e2e
