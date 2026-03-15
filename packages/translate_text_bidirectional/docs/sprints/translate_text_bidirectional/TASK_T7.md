@@ -107,9 +107,9 @@ Add to the `src` list:
 ### 4. Run root `make check`
 
 Execute from the monorepo root. This runs:
-- `vulture` across all packages (including new one)
-- `jscpd` duplicate code detection
-- Per-package `make check` for every package in PACKAGES
+- Per-package `make check` for every package in `PACKAGES`
+- Package-local `vulture` dead-code detection inside each package
+- Package-local `jscpd` duplicate-code detection inside each package
 
 ### 5. Fix any issues
 
@@ -119,7 +119,7 @@ Execute from the monorepo root. This runs:
   _RuToNlTranslation  # used by LangChain bind_tools
   ```
 - **jscpd duplicates**: If conftest.py patterns trigger duplicate detection, check if `.jscpd.json` already ignores test fixtures. If not, the test helpers may need minor differentiation or the ignore pattern may need updating.
-- **Ruff/pylint issues**: Fix any lint issues revealed by root-level checks that package-level checks missed.
+- **Ruff/pylint issues**: Fix any lint issues revealed by the failing package check.
 
 ### 6. Verify existing packages
 

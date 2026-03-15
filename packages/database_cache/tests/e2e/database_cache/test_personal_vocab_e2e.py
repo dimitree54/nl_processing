@@ -3,6 +3,7 @@
 from pathlib import Path
 from uuid import uuid4
 
+from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.models import PersonalWord
 import pytest
 
@@ -14,11 +15,10 @@ from tests.e2e.database_cache.conftest import (
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_list_personal_words_returns_complete_records(tmp_path: Path) -> None:
+async def test_list_personal_words_returns_complete_records(db_ready: NeonBackend, tmp_path: Path) -> None:
     """list_personal_words() returns PersonalWord objects with added_at and scores."""
     user_id = f"e2e_cache_{uuid4()}"
-    await seed_words(user_id)
+    await seed_words(user_id, backend=db_ready)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 
@@ -38,11 +38,10 @@ async def test_list_personal_words_returns_complete_records(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_progress_summary_matches_reality(tmp_path: Path) -> None:
+async def test_progress_summary_matches_reality(db_ready: NeonBackend, tmp_path: Path) -> None:
     """get_progress_summary() reports correct totals and negative counts."""
     user_id = f"e2e_cache_{uuid4()}"
-    await seed_words(user_id)
+    await seed_words(user_id, backend=db_ready)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 
@@ -60,11 +59,10 @@ async def test_progress_summary_matches_reality(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_delete_word_removes_from_cache_and_remote(tmp_path: Path) -> None:
+async def test_delete_word_removes_from_cache_and_remote(db_ready: NeonBackend, tmp_path: Path) -> None:
     """delete_word() removes the word from remote and local cache."""
     user_id = f"e2e_cache_{uuid4()}"
-    await seed_words(user_id)
+    await seed_words(user_id, backend=db_ready)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 
@@ -91,11 +89,10 @@ async def test_delete_word_removes_from_cache_and_remote(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_delete_word_clears_pending_events(tmp_path: Path) -> None:
+async def test_delete_word_clears_pending_events(db_ready: NeonBackend, tmp_path: Path) -> None:
     """delete_word() also removes pending score events for the word (BR-6)."""
     user_id = f"e2e_cache_{uuid4()}"
-    await seed_words(user_id)
+    await seed_words(user_id, backend=db_ready)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 

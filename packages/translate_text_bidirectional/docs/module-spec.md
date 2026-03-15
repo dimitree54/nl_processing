@@ -209,7 +209,7 @@ The module sits beside `translate_text` as a sibling text-translation service. I
 
 - Reuse the same package-local `pytest` structure as `translate_text`: `tests/unit`, `tests/integration`, and `tests/e2e`.
 - Reuse the existing package `Makefile` pattern so local validation runs through `make check`.
-- Reuse the current repo package-check flow: `ruff format`, `ruff check --fix`, `pylint` max-module-lines, `pylint` bad-builtin gate, unit tests locally, and integration/e2e tests in Doppler-backed environments.
+- Reuse the current package-local check flow defined by the local `Makefile`, `ruff.toml`, `.jscpd.json`, and `vulture_whitelist.py`: `ruff format`, `ruff check --fix`, `pylint` max-module-lines, `pylint` bad-builtin gate, package-local `vulture`, package-local `jscpd`, unit tests locally, and integration/e2e tests in Doppler-backed environments.
 - Keep the service async and test it through the same async `pytest` style already used in the current translation package.
 - Do not add mixed-input coverage to the accepted v1 test matrix.
 
@@ -249,7 +249,7 @@ The module sits beside `translate_text` as a sibling text-translation service. I
 
 - Preserve the current short-text latency gate used by `translate_text`.
 - Run the full package check flow in PR CI.
-- Run root-level duplicate-code and dead-code gates in the repo-wide CI flow.
+- Run the package-local `make check` flow in PR CI.
 
 ### Quality Automation Plan
 
@@ -271,10 +271,9 @@ The module sits beside `translate_text` as a sibling text-translation service. I
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package `make check` flow | Enforce formatting, lint, file-size, and package test quality gates | Local / PR CI | Any `ruff`, `pylint`, or package test failure |
-| SC-2 | Repo root `make check` flow | Enforce repo-wide dead-code and duplicate-code checks alongside per-package checks | PR CI | `vulture`, `jscpd`, or any package-check failure |
-| SC-3 | Prompt asset load test | Ensure the combined bidirectional prompt asset remains present and deserializable | PR CI | Missing or malformed prompt JSON |
-| SC-4 | Existing one-way translation package tests | Prevent multi-tool helper changes from regressing current translation callers | PR CI | Any regression in existing one-way packages |
+| SC-1 | Package-local `make check` flow | Enforce formatting, lint, file-size, dead-code, duplication, and package test quality gates | Local / PR CI | Any `ruff`, `pylint`, `vulture`, `jscpd`, or package test failure |
+| SC-2 | Prompt asset load test | Ensure the combined bidirectional prompt asset remains present and deserializable | PR CI | Missing or malformed prompt JSON |
+| SC-3 | Existing one-way translation package tests | Prevent multi-tool helper changes from regressing current translation callers | PR CI | Any regression in existing one-way packages |
 
 #### Manual Verification Needed
 

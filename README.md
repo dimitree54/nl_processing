@@ -26,13 +26,15 @@ packages/
   sampling/
 docs/
 pyproject.toml        # aggregate build for the published nl_processing package
-Makefile              # repo-wide lint/test entrypoint
 ```
 
 Each package has its own:
 
+- `Makefile`
 - `pyproject.toml`
 - `ruff.toml`
+- `.jscpd.json`
+- `vulture_whitelist.py`
 - `pytest.ini`
 - `tests/`
 - `docs/`
@@ -57,12 +59,6 @@ Work inside one package when you only touch one module:
 ```bash
 cd packages/translate_word
 uv sync --all-groups
-uv run pytest tests/unit
-```
-
-Run the repo-wide quality gate from the root:
-
-```bash
 make check
 ```
 
@@ -73,7 +69,7 @@ cd packages/core
 uv run pytest tests/unit/core
 
 cd packages/database
-doppler run -- uv run pytest tests/integration/database
+make check
 ```
 
 ## Dependency Rule

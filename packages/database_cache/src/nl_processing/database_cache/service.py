@@ -12,6 +12,7 @@ from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.models import ExerciseProgressSummary, PersonalWord
 
 from nl_processing.database_cache._service_helpers import (
+    _background_task_with_logging,
     background_flush,
     background_refresh,
     compute_local_progress_summary,
@@ -156,12 +157,12 @@ class DatabaseCacheService:
     async def refresh(self) -> None:
         """Trigger a full cache refresh from the remote database."""
         assert self._syncer is not None
-        await self._syncer.refresh()
+        await _background_task_with_logging(self._syncer.refresh(), "refresh")
 
     async def flush(self) -> None:
         """Flush pending score events to the remote database."""
         assert self._syncer is not None
-        await self._syncer.flush()
+        await _background_task_with_logging(self._syncer.flush(), "flush")
 
     async def delete_word(self, source_word_id: int) -> None:
         """Delete a word: remote first, then prune local state (FR-9, DEC-6)."""

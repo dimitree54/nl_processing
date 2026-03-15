@@ -10,7 +10,7 @@
     "**/build/**",
     "**/dist/**",
     "**/*.egg-info/**",
-    "packages/*/tests/**/conftest.py"
+    "**/tests/**/conftest.py"
   ],
   "absolute": true
 }

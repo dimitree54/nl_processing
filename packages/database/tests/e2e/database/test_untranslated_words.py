@@ -5,6 +5,7 @@ from uuid import uuid4
 from nl_processing.core.models import Language, PartOfSpeech, Word
 import pytest
 
+from nl_processing.database.backend.neon import NeonBackend
 from tests.e2e.database.conftest import make_service, wait_for_translations
 
 _WORDS = [
@@ -15,11 +16,10 @@ _WORDS = [
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_untranslated_words_excluded_immediately() -> None:
+async def test_untranslated_words_excluded_immediately(db_ready: NeonBackend) -> None:
     """Immediately after add_words, get_words excludes untranslated words."""
     user_id = f"e2e_user_{uuid4()}"
-    service = make_service(user_id)
+    service = make_service(user_id, backend=db_ready)
 
     await service.add_words(_WORDS)
     pairs = await service.get_words()
@@ -28,14 +28,13 @@ async def test_untranslated_words_excluded_immediately() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_translated_words_included_after_wait() -> None:
+async def test_translated_words_included_after_wait(db_ready: NeonBackend) -> None:
     """After translations complete, get_words returns all word pairs."""
     user_id = f"e2e_user_{uuid4()}"
-    service = make_service(user_id)
+    service = make_service(user_id, backend=db_ready)
 
     await service.add_words(_WORDS)
-    await wait_for_translations(len(_WORDS))
+    await wait_for_translations(len(_WORDS), backend=db_ready)
 
     pairs = await service.get_words()
     assert len(pairs) == len(_WORDS)

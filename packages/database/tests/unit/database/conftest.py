@@ -1,5 +1,7 @@
 """Shared fixtures for database unit tests — MockBackend and service factories."""
 
+import json
+
 from nl_processing.core.models import Language, PartOfSpeech, Word
 import pytest
 
@@ -124,8 +126,6 @@ async def add_word_with_detail(
     payload: dict | None = None,
 ) -> tuple[int, dict]:
     """Add a word to corpus and persist a detailed record. Returns (word_id, payload)."""
-    import json
-
     word_id = await backend.add_word("nl", normalized_form, word_type)
     assert word_id is not None
     actual_payload = payload or {"article": "de", "plural": "honden"}

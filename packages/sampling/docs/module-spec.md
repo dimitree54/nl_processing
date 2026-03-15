@@ -188,7 +188,7 @@ The module sits on the hot path for practice session generation. By default it r
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package static checks via package check | Preserve package quality. | PR CI | Lint or dead-code failures. |
+| SC-1 | Package-local `make check` flow | Preserve package quality. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
 | SC-2 | Package unit tests | Preserve weighting and adversarial behavior. | PR CI | Sampling regressions. |
 
 #### Manual Verification Needed

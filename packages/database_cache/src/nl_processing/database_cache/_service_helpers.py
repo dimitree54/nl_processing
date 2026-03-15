@@ -1,5 +1,6 @@
 """Helper functions extracted from service.py for code organization."""
 
+from collections.abc import Awaitable
 from datetime import UTC, datetime, timedelta
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
@@ -20,12 +21,12 @@ def _parse_dt(meta: dict[str, str | int], key: str) -> datetime | None:
     return datetime.fromisoformat(str(val))
 
 
-def row_to_word_pair(
+def _create_word_pair_from_row(
     row: dict[str, str | int],
     source_language: Language,
     target_language: Language,
 ) -> WordPair:
-    """Convert database row to WordPair object with explicit language parameters."""
+    """Shared helper to convert database row to WordPair object."""
     return WordPair(
         source=Word(
             normalized_form=str(row["source_normalized_form"]),
@@ -38,6 +39,15 @@ def row_to_word_pair(
             language=target_language,
         ),
     )
+
+
+def row_to_word_pair(
+    row: dict[str, str | int],
+    source_language: Language,
+    target_language: Language,
+) -> WordPair:
+    """Convert database row to WordPair object with explicit language parameters."""
+    return _create_word_pair_from_row(row, source_language, target_language)
 
 
 def row_to_personal_word(
@@ -90,20 +100,22 @@ def compute_local_progress_summary(
     return result
 
 
+async def _background_task_with_logging(coro: Awaitable[None], task_name: str) -> None:
+    """Generic background task runner with error logging."""
+    try:
+        await coro
+    except Exception:
+        _log.exception(f"background {task_name} failed")
+
+
 async def background_refresh(syncer: CacheSyncer) -> None:
     """Background refresh task with error handling."""
-    try:
-        await syncer.refresh()
-    except Exception:
-        _log.exception("background refresh failed")
+    await _background_task_with_logging(syncer.refresh(), "refresh")
 
 
 async def background_flush(syncer: CacheSyncer) -> None:
     """Background flush task with error handling."""
-    try:
-        await syncer.flush(skip_if_running=True)
-    except Exception:
-        _log.exception("background flush failed")
+    await _background_task_with_logging(syncer.flush(skip_if_running=True), "flush")
 
 
 def is_stale(meta: dict[str, str | int] | None, cache_ttl: timedelta) -> bool:

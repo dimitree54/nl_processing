@@ -2,9 +2,13 @@
 
 from datetime import UTC, datetime, timedelta
 
-from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
+from nl_processing.core.models import Language
 from nl_processing.core.tiered_models import TieredCandidate
 
+from nl_processing.database_cache._service_helpers import (
+    _background_task_with_logging,
+    _create_word_pair_from_row,
+)
 from nl_processing.database_cache.logging import get_logger
 from nl_processing.database_cache.tiered_sync import TieredCacheSyncer
 
@@ -31,36 +35,19 @@ def is_tiered_stale(meta: dict[str, str | int] | None, cache_ttl: timedelta) -> 
 
 async def background_tiered_refresh(syncer: TieredCacheSyncer) -> None:
     """Background refresh task with error handling."""
-    try:
-        await syncer.refresh()
-    except Exception:
-        _log.exception("background tiered refresh failed")
+    await _background_task_with_logging(syncer.refresh(), "tiered refresh")
 
 
 async def background_tiered_flush(syncer: TieredCacheSyncer) -> None:
     """Background flush task with error handling."""
-    try:
-        await syncer.flush(skip_if_running=True)
-    except Exception:
-        _log.exception("background tiered flush failed")
+    await _background_task_with_logging(syncer.flush(skip_if_running=True), "tiered flush")
 
 
 def row_to_tiered_candidate(
     row: dict[str, str | int], source_language: Language, target_language: Language
 ) -> TieredCandidate:
     """Convert database row to TieredCandidate."""
-    pair = WordPair(
-        source=Word(
-            normalized_form=str(row["source_normalized_form"]),
-            word_type=PartOfSpeech(row["source_word_type"]),
-            language=source_language,
-        ),
-        target=Word(
-            normalized_form=str(row["target_normalized_form"]),
-            word_type=PartOfSpeech(row["target_word_type"]),
-            language=target_language,
-        ),
-    )
+    pair = _create_word_pair_from_row(row, source_language, target_language)
 
     # Extract scores (fields like score_exercise1, score_exercise2, etc.)
     scores = {}

@@ -1,7 +1,32 @@
-ROOT_DIR := $(abspath ../..)
-TOOLS_VENV ?= $(shell if [ -x "$(CURDIR)/.venv/bin/pytest" ] && [ -x "$(CURDIR)/.venv/bin/ruff" ] && [ -x "$(CURDIR)/.venv/bin/pylint" ] && [ -x "$(CURDIR)/.venv/bin/vulture" ]; then printf '%s' "$(CURDIR)/.venv"; else printf '%s' "$(ROOT_DIR)/.venv"; fi)
+PACKAGE_PYTHONPATH := src:../core/src
+PYLINT := env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run pylint
+PYTEST := env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run pytest
+VULTURE := env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run vulture
+JCSPD := npx jscpd --config .jscpd.json --exitCode 1
 
-.PHONY: check
+.PHONY: lint test test-unit test-integration test-e2e check
 
-check:
-	$(MAKE) -C "$(ROOT_DIR)" package-check PKG=extract_text_from_image PACKAGE_PYTHONPATH=src:../core/src TOOLS_VENV="$(TOOLS_VENV)"
+lint:
+	uv run ruff format src tests
+	uv run ruff check --fix src tests
+	$(PYLINT) src tests --disable=all --enable=C0302 --max-module-lines=200
+	$(PYLINT) src tests --load-plugins=pylint.extensions.bad_builtin --disable=all --enable=W0141 --bad-functions=hasattr,getattr,setattr
+	$(VULTURE) src tests vulture_whitelist.py
+	$(JCSPD) src tests
+
+test: test-unit test-integration test-e2e
+
+test-unit:
+	$(PYTEST) -n auto tests/unit
+
+test-integration:
+	@if [ -d tests/integration ]; then \
+		doppler run -- env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run pytest -n auto tests/integration; \
+	fi
+
+test-e2e:
+	@if [ -d tests/e2e ]; then \
+		doppler run -- env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run pytest -n auto tests/e2e; \
+	fi
+
+check: lint test

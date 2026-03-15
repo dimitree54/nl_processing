@@ -160,4 +160,4 @@ After this task, the root `Makefile`, `pyproject.toml`, and `ruff.toml` are upda
 ## Notes / risks
 
 - **This task is a validation gate, not an implementation task.** If any prior task left issues, this task will surface them. The dev should fix issues in the relevant package, not in root configs.
-- **Root `make check`** runs vulture + jscpd across all packages, then runs each package's `make check` in sequence. Running the full root `make check` is the ultimate validation but may take significant time. The dev can run it as a final gate.
+- **Root `make check`** runs each package's `make check` in sequence. Each package check owns its own `vulture`, `jscpd`, lint, and test gates. Running the full root `make check` is the ultimate validation but may take significant time. The dev can run it as a final gate.

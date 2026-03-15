@@ -230,7 +230,7 @@ The module sits between interactive callers and the remote `database` package. `
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package static checks | Preserve package quality and packaging. | PR CI | Lint or dead-code failures. |
+| SC-1 | Package-local `make check` flow | Preserve package quality and packaging. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
 | SC-2 | Package tests | Preserve practice-cache and detailed-word cache behavior. | PR CI | Unit/integration/e2e failures. |
 
 #### Manual Verification Needed

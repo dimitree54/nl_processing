@@ -31,9 +31,7 @@ async def test_schema_invalidation_with_real_deletion(tmp_path: Path) -> None:
     schema_checker = MockSchemaChecker({"nl_ru_noun": [1]})  # Version 1 is incompatible
 
     # Create mock remote with updated record
-    remote_record = make_remote_record(
-        "boek", {"definition": "new_book", "gender": "neuter"}, schema_version=2
-    )
+    remote_record = make_remote_record("boek", {"definition": "new_book", "gender": "neuter"}, schema_version=2)
     mock_remote = MockRemoteDetailedWordStore([remote_record])
 
     service = DetailedWordCacheService(

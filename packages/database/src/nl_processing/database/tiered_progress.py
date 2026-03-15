@@ -11,7 +11,7 @@ from nl_processing.core.tiered_models import (
     TieredSnapshotEntry,
 )
 
-from nl_processing.database._database_config import read_database_url
+from nl_processing.database._database_config import _init_backend_and_tables
 from nl_processing.database._tiered_backend_ops import (
     build_tiered_candidates,
     build_tiered_snapshot_entries,
@@ -47,16 +47,10 @@ class TieredExerciseProgressStore:
         if not mode_slug.strip():
             msg = "mode_slug must be a non-empty string"
             raise ValueError(msg)
-        if not exercise_types:
-            msg = "exercise_types must be a non-empty list"
-            raise ValueError(msg)
 
-        if backend is None:
-            database_url = read_database_url()
-            self._backend: AbstractBackend = NeonBackend(database_url)
-        else:
-            self._backend = backend
-
+        self._backend, self._score_tables, self._applied_events_table = _init_backend_and_tables(
+            exercise_types, source_language, target_language, backend
+        )
         self._user_id = user_id
         self._source_language = source_language
         self._target_language = target_language
@@ -67,20 +61,12 @@ class TieredExerciseProgressStore:
         tgt = target_language.value
         self._src = src
         self._tgt = tgt
-        self._score_tables: dict[str, str] = {et: f"{src}_{tgt}_{et}" for et in exercise_types}
-        self._applied_events_table = f"applied_events_{src}_{tgt}"
 
     async def get_tiered_candidates(self) -> list[TieredCandidate]:
         """Return all translated word pairs for the user with exercise scores and repeat-state."""
-        rows, scores_by_word = await get_rows_with_scores(
-            self._backend, self._user_id, self._source_language, self._score_tables
-        )
+        rows, scores_by_word, repeat_state_by_word = await self._get_rows_and_repeat_states()
         if not rows:
             return []
-
-        # Get repeat-state data
-        repeat_states = await self._get_repeat_states()
-        repeat_state_by_word = {int(rs["source_word_id"]): True for rs in repeat_states}
 
         return build_tiered_candidates(
             rows,
@@ -154,15 +140,9 @@ class TieredExerciseProgressStore:
 
     async def export_tiered_snapshot(self) -> list[TieredSnapshotEntry]:
         """Return all candidates as TieredSnapshotEntry with target_word_id included."""
-        rows, scores_by_word = await get_rows_with_scores(
-            self._backend, self._user_id, self._source_language, self._score_tables
-        )
+        rows, scores_by_word, repeat_state_by_word = await self._get_rows_and_repeat_states()
         if not rows:
             return []
-
-        # Get repeat-state data
-        repeat_states = await self._get_repeat_states()
-        repeat_state_by_word = {int(rs["source_word_id"]): True for rs in repeat_states}
 
         return build_tiered_snapshot_entries(
             rows,
@@ -187,6 +167,17 @@ class TieredExerciseProgressStore:
         return await get_repeat_states_for_user_mode(
             self._backend, self._src, self._tgt, self._user_id, self._mode_slug
         )
+
+    async def _get_rows_and_repeat_states(
+        self,
+    ) -> tuple[list[dict[str, str | int]], dict[int, dict[str, int]], dict[int, bool]]:
+        """Shared helper that fetches both rows with scores and repeat states."""
+        rows, scores_by_word = await get_rows_with_scores(
+            self._backend, self._user_id, self._source_language, self._score_tables
+        )
+        repeat_states = await self._get_repeat_states()
+        repeat_state_by_word = {int(rs["source_word_id"]): True for rs in repeat_states}
+        return rows, scores_by_word, repeat_state_by_word
 
     async def _ensure_tiered_tables_exist(self) -> None:
         """Ensure tiered repeat-state tables exist."""

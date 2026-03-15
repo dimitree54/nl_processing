@@ -188,7 +188,7 @@ The module sits at the beginning of the text-processing workflow and feeds downs
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package static checks via package check | Protect code quality and packaging. | PR CI | Lint, type, or dead-code failures. |
+| SC-1 | Package-local `make check` flow | Protect code quality and packaging. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
 | SC-2 | Package tests | Preserve extraction behavior and fixtures. | PR CI | Unit/integration/e2e failures. |
 
 #### Manual Verification Needed

@@ -5,6 +5,7 @@ from uuid import uuid4
 from nl_processing.core.models import Language, PartOfSpeech, Word
 import pytest
 
+from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.testing import count_user_words
 from tests.e2e.database.conftest import make_service, wait_for_translations
 
@@ -19,34 +20,32 @@ _ALL_WORDS = [*_NOUNS, _VERB]
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_user_word_isolation() -> None:
+async def test_user_word_isolation(db_ready: NeonBackend) -> None:
     """Words added by different users are isolated per user."""
     user_a = f"e2e_user_a_{uuid4()}"
     user_b = f"e2e_user_b_{uuid4()}"
 
-    service_a = make_service(user_a)
-    service_b = make_service(user_b)
+    service_a = make_service(user_a, backend=db_ready)
+    service_b = make_service(user_b, backend=db_ready)
 
     await service_a.add_words(_NOUNS)
     await service_b.add_words([_VERB])
 
-    count_a = await count_user_words(user_a, "nl")
-    count_b = await count_user_words(user_b, "nl")
+    count_a = await count_user_words(user_a, "nl", backend=db_ready)
+    count_b = await count_user_words(user_b, "nl", backend=db_ready)
 
     assert count_a == len(_NOUNS)
     assert count_b == 1
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_get_words_filters_by_noun() -> None:
+async def test_get_words_filters_by_noun(db_ready: NeonBackend) -> None:
     """get_words with word_type=NOUN returns only nouns after translation."""
     user_id = f"e2e_user_{uuid4()}"
-    service = make_service(user_id)
+    service = make_service(user_id, backend=db_ready)
 
     await service.add_words(_ALL_WORDS)
-    await wait_for_translations(len(_ALL_WORDS))
+    await wait_for_translations(len(_ALL_WORDS), backend=db_ready)
 
     noun_pairs = await service.get_words(word_type=PartOfSpeech.NOUN)
     assert len(noun_pairs) == len(_NOUNS)
@@ -55,14 +54,13 @@ async def test_get_words_filters_by_noun() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_get_words_random_returns_unique_pairs() -> None:
+async def test_get_words_random_returns_unique_pairs(db_ready: NeonBackend) -> None:
     """get_words with limit=3, random=True returns exactly 3 unique pairs."""
     user_id = f"e2e_user_{uuid4()}"
-    service = make_service(user_id)
+    service = make_service(user_id, backend=db_ready)
 
     await service.add_words(_ALL_WORDS)
-    await wait_for_translations(len(_ALL_WORDS))
+    await wait_for_translations(len(_ALL_WORDS), backend=db_ready)
 
     pairs = await service.get_words(limit=3, random=True)
     assert len(pairs) == 3
@@ -72,14 +70,13 @@ async def test_get_words_random_returns_unique_pairs() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_get_words_returns_all_translated() -> None:
+async def test_get_words_returns_all_translated(db_ready: NeonBackend) -> None:
     """get_words without filters returns all translated word pairs."""
     user_id = f"e2e_user_{uuid4()}"
-    service = make_service(user_id)
+    service = make_service(user_id, backend=db_ready)
 
     await service.add_words(_ALL_WORDS)
-    await wait_for_translations(len(_ALL_WORDS))
+    await wait_for_translations(len(_ALL_WORDS), backend=db_ready)
 
     pairs = await service.get_words()
     assert len(pairs) == len(_ALL_WORDS)

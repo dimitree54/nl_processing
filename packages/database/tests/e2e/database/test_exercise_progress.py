@@ -5,6 +5,7 @@ from uuid import uuid4
 from nl_processing.core.models import Language, PartOfSpeech, Word
 import pytest
 
+from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from tests.e2e.database.conftest import make_service, wait_for_translations
 
@@ -17,20 +18,25 @@ _WORDS = [
 _EXERCISE_TYPES = ["flashcard"]
 
 
-async def _add_and_translate(user_id: str) -> None:
+async def _add_and_translate(user_id: str, backend: NeonBackend) -> None:
     """Add words and wait for translations to complete."""
-    service = make_service(user_id)
+    service = make_service(user_id, backend=backend)
     await service.add_words(_WORDS)
-    await wait_for_translations(len(_WORDS))
+    await wait_for_translations(len(_WORDS), backend=backend)
 
 
-def _make_store(user_id: str, exercise_types: list[str] | None = None) -> ExerciseProgressStore:
+def _make_store(
+    user_id: str,
+    backend: NeonBackend,
+    exercise_types: list[str] | None = None,
+) -> ExerciseProgressStore:
     """Create an ExerciseProgressStore with standard config."""
     return ExerciseProgressStore(
         user_id=user_id,
         source_language=Language.NL,
         target_language=Language.RU,
         exercise_types=exercise_types or _EXERCISE_TYPES,
+        backend=backend,
     )
 
 
@@ -41,13 +47,12 @@ async def _word_id_map(store: ExerciseProgressStore) -> dict[str, int]:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_increment_and_retrieve_scores() -> None:
+async def test_increment_and_retrieve_scores(db_ready: NeonBackend) -> None:
     """Increment scores for words and verify persistence via get_word_pairs_with_scores."""
     user_id = f"e2e_user_{uuid4()}"
-    await _add_and_translate(user_id)
+    await _add_and_translate(user_id, db_ready)
 
-    store = _make_store(user_id)
+    store = _make_store(user_id, db_ready)
     ids = await _word_id_map(store)
 
     await store.increment(source_word_id=ids["tafel"], exercise_type="flashcard", delta=1)
@@ -62,13 +67,12 @@ async def test_increment_and_retrieve_scores() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_missing_scores_default_to_zero() -> None:
+async def test_missing_scores_default_to_zero(db_ready: NeonBackend) -> None:
     """Words without explicit scores show 0 for configured exercise types."""
     user_id = f"e2e_user_{uuid4()}"
-    await _add_and_translate(user_id)
+    await _add_and_translate(user_id, db_ready)
 
-    store = _make_store(user_id)
+    store = _make_store(user_id, db_ready)
     scored = await store.get_word_pairs_with_scores()
     assert len(scored) == len(_WORDS)
 
@@ -77,17 +81,16 @@ async def test_missing_scores_default_to_zero() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_scores_persist_across_store_instances() -> None:
+async def test_scores_persist_across_store_instances(db_ready: NeonBackend) -> None:
     """Scores written by one store instance are readable by another."""
     user_id = f"e2e_user_{uuid4()}"
-    await _add_and_translate(user_id)
+    await _add_and_translate(user_id, db_ready)
 
-    store_1 = _make_store(user_id)
+    store_1 = _make_store(user_id, db_ready)
     ids = await _word_id_map(store_1)
     await store_1.increment(source_word_id=ids["tafel"], exercise_type="flashcard", delta=1)
 
-    store_2 = _make_store(user_id)
+    store_2 = _make_store(user_id, db_ready)
     scored = await store_2.get_word_pairs_with_scores()
     scores_by_form = {sp.pair.source.normalized_form: sp.scores["flashcard"] for sp in scored}
 
@@ -97,23 +100,20 @@ async def test_scores_persist_across_store_instances() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_get_progress_summary_e2e() -> None:
+async def test_get_progress_summary_e2e(db_ready: NeonBackend) -> None:
     """E2E test for get_progress_summary with actual database."""
     user_id = f"e2e_user_{uuid4()}"
-    await _add_and_translate(user_id)
+    await _add_and_translate(user_id, db_ready)
 
-    store = _make_store(user_id)
+    store = _make_store(user_id, db_ready)
     ids = await _word_id_map(store)
 
-    # Set one word negative, others positive/zero
     await store.increment(source_word_id=ids["tafel"], exercise_type="flashcard", delta=-1)
     await store.increment(source_word_id=ids["stoel"], exercise_type="flashcard", delta=1)
-    # lamp stays at 0 (not negative)
 
     summary = await store.get_progress_summary()
 
     assert summary["flashcard"].total_words == 3
-    assert summary["flashcard"].negative_words == 1  # only tafel is negative
+    assert summary["flashcard"].negative_words == 1
     assert summary["flashcard"].negative_ratio == 1 / 3
     assert summary["flashcard"].negative_percentage == pytest.approx(33.333333333333336)

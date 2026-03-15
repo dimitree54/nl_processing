@@ -32,48 +32,62 @@ WORDS = [
 EXERCISE_TYPES = ["flashcard"]
 
 
-async def wait_for_translations(expected_count: int, table: str = "nl_ru", timeout: float = 15.0) -> None:
+async def wait_for_translations(
+    expected_count: int,
+    table: str = "nl_ru",
+    timeout: float = 15.0,
+    *,
+    backend: NeonBackend | None = None,
+) -> None:
     """Poll until translation_links reach expected count or timeout."""
     elapsed = 0.0
     while elapsed < timeout:
-        count = await count_translation_links(table)
+        count = await count_translation_links(table, backend=backend)
         if count >= expected_count:
             return
         await asyncio.sleep(1.0)
         elapsed += 1.0
-    actual = await count_translation_links(table)
+    actual = await count_translation_links(table, backend=backend)
     msg = f"Translations did not complete within {timeout}s (expected={expected_count}, actual={actual})"
     raise AssertionError(msg)
 
 
 @pytest_asyncio.fixture
-async def db_ready() -> AsyncIterator[None]:
-    """Function-scoped fixture: reset DB before test, drop tables after."""
+async def db_ready() -> AsyncIterator[NeonBackend]:
+    """Function-scoped fixture: reset DB before test, drop tables after.
+
+    Yields the shared backend so tests and helpers reuse the same connection.
+    """
     backend = NeonBackend(os.environ["DATABASE_URL"])
     conn = await backend._connect()  # noqa: SLF001
     await conn.execute("SELECT pg_advisory_lock(12345)")
     try:
-        await reset_database(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
-        yield
-        await drop_all_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
+        await reset_database(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS, backend=backend)
+        yield backend
+        await drop_all_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS, backend=backend)
         await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
     finally:
         await conn.execute("SELECT pg_advisory_unlock(12345)")
 
 
-def make_database_service(user_id: str) -> DatabaseService:
+def make_database_service(
+    user_id: str,
+    *,
+    backend: NeonBackend | None = None,
+) -> DatabaseService:
     """Create a DatabaseService composed with the translate_word package."""
     return DatabaseService(
         user_id=user_id,
+        backend=backend,
         translator=WordTranslator(source_language=Language.NL, target_language=Language.RU),
     )
 
 
-async def seed_words(user_id: str) -> None:
+async def seed_words(user_id: str, *, backend: NeonBackend | None = None) -> None:
     """Add words to Neon and wait for translations."""
-    service = make_database_service(user_id)
+    service = make_database_service(user_id, backend=backend)
     await service.add_words(WORDS)
-    await wait_for_translations(len(WORDS))
+    await wait_for_translations(len(WORDS), backend=backend)
 
 
 def make_cache_service(user_id: str, tmp_path: Path) -> DatabaseCacheService:

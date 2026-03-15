@@ -13,15 +13,7 @@ from tests.unit.sampling.tiered_conftest import MockTieredCandidateProvider, mak
 @pytest.mark.asyncio
 async def test_sample_zero_returns_empty() -> None:
     """sample(0) returns empty list without calling the store."""
-    mock_store = MockTieredCandidateProvider([make_tiered_candidate("huis", "dom")])
-    sampler = TieredExerciseSampler(
-        user_id="u1",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        mode_slug="mixed",
-        exercise_types=["flashcard"],
-        tiered_store=mock_store,
-    )
+    sampler = _create_test_sampler([make_tiered_candidate("huis", "dom")])
     result = await sampler.sample(0)
     assert result == []
 
@@ -29,8 +21,15 @@ async def test_sample_zero_returns_empty() -> None:
 @pytest.mark.asyncio
 async def test_sample_negative_returns_empty() -> None:
     """sample(-1) returns empty list."""
-    mock_store = MockTieredCandidateProvider([make_tiered_candidate("huis", "dom")])
-    sampler = TieredExerciseSampler(
+    sampler = _create_test_sampler([make_tiered_candidate("huis", "dom")])
+    result = await sampler.sample(-1)
+    assert result == []
+
+
+def _create_test_sampler(candidates: list) -> TieredExerciseSampler:
+    """Helper to create a test sampler with given candidates."""
+    mock_store = MockTieredCandidateProvider(candidates)
+    return TieredExerciseSampler(
         user_id="u1",
         source_language=Language.NL,
         target_language=Language.RU,
@@ -38,23 +37,13 @@ async def test_sample_negative_returns_empty() -> None:
         exercise_types=["flashcard"],
         tiered_store=mock_store,
     )
-    result = await sampler.sample(-1)
-    assert result == []
 
 
 @pytest.mark.asyncio
 async def test_sample_returns_requested_count_when_enough_candidates() -> None:
     """When enough candidates exist, sample(limit) returns exactly limit items."""
     candidates = [make_tiered_candidate(f"w{i}", f"t{i}") for i in range(10)]
-    mock_store = MockTieredCandidateProvider(candidates)
-    sampler = TieredExerciseSampler(
-        user_id="u1",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        mode_slug="mixed",
-        exercise_types=["flashcard"],
-        tiered_store=mock_store,
-    )
+    sampler = _create_test_sampler(candidates)
     result = await sampler.sample(5)
     assert len(result) == 5
 
@@ -63,15 +52,7 @@ async def test_sample_returns_requested_count_when_enough_candidates() -> None:
 async def test_sample_all_when_limit_exceeds_candidates() -> None:
     """When limit > candidates, all candidates are returned."""
     candidates = [make_tiered_candidate(f"w{i}", f"t{i}") for i in range(3)]
-    mock_store = MockTieredCandidateProvider(candidates)
-    sampler = TieredExerciseSampler(
-        user_id="u1",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        mode_slug="mixed",
-        exercise_types=["flashcard"],
-        tiered_store=mock_store,
-    )
+    sampler = _create_test_sampler(candidates)
     result = await sampler.sample(100)
     assert len(result) == 3
     forms = {selection.pair.source.normalized_form for selection in result}
@@ -82,15 +63,7 @@ async def test_sample_all_when_limit_exceeds_candidates() -> None:
 async def test_sample_no_duplicates() -> None:
     """Sampling without replacement produces no duplicates."""
     candidates = [make_tiered_candidate(f"w{i}", f"t{i}") for i in range(20)]
-    mock_store = MockTieredCandidateProvider(candidates)
-    sampler = TieredExerciseSampler(
-        user_id="u1",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        mode_slug="mixed",
-        exercise_types=["flashcard"],
-        tiered_store=mock_store,
-    )
+    sampler = _create_test_sampler(candidates)
     result = await sampler.sample(10)
     source_forms = [selection.pair.source.normalized_form for selection in result]
     assert len(source_forms) == len(set(source_forms))
@@ -99,15 +72,7 @@ async def test_sample_no_duplicates() -> None:
 @pytest.mark.asyncio
 async def test_sample_empty_candidates() -> None:
     """No candidates in store returns empty list."""
-    mock_store = MockTieredCandidateProvider([])
-    sampler = TieredExerciseSampler(
-        user_id="u1",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        mode_slug="mixed",
-        exercise_types=["flashcard"],
-        tiered_store=mock_store,
-    )
+    sampler = _create_test_sampler([])
     result = await sampler.sample(5)
     assert result == []
 
@@ -119,15 +84,7 @@ async def test_sample_returns_tiered_exercise_selections() -> None:
         make_tiered_candidate("huis", "dom", word_type=PartOfSpeech.NOUN),
         make_tiered_candidate("lopen", "begat", word_type=PartOfSpeech.VERB),
     ]
-    mock_store = MockTieredCandidateProvider(candidates)
-    sampler = TieredExerciseSampler(
-        user_id="u1",
-        source_language=Language.NL,
-        target_language=Language.RU,
-        mode_slug="mixed",
-        exercise_types=["flashcard"],
-        tiered_store=mock_store,
-    )
+    sampler = _create_test_sampler(candidates)
     result = await sampler.sample(2)
 
     assert len(result) == 2

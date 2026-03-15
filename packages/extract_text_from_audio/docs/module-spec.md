@@ -219,7 +219,7 @@ The module sits at the beginning of the audio workflow and feeds downstream text
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package static checks via `make check` | Preserve lint and packaging quality. | PR CI | Lint, pylint, or vulture failures. |
+| SC-1 | Package static checks via `make check` | Preserve lint and packaging quality. | PR CI | Formatting, lint, dead-code, or duplication failures. |
 | SC-2 | Package tests | Preserve extraction behavior across all tiers. | PR CI / nightly | Any regression in unit, integration, or e2e suites. |
 
 #### Manual Verification Needed

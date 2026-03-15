@@ -14,15 +14,16 @@ All environment variables are managed via **Doppler CLI**.
 
 ## Usage
 
-All commands requiring env vars must run with `doppler run --`:
+Direct commands requiring env vars must run with `doppler run --`. Package `make check` targets already wrap their integration and e2e commands with Doppler where needed:
 
 ```bash
-doppler run -- make check
-
 cd packages/database
+make check
+
 doppler run -- uv run pytest tests/integration/database
 
 cd packages/translate_word
+doppler run -- uv run pytest tests/integration/translate_word
 doppler run -- uv run pytest tests/e2e/translate_word
 ```
 

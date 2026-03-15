@@ -232,7 +232,7 @@ The module sits beside `translate_word` and consumes already-normalized `Word` o
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package static checks | Preserve structure, lint, and dead-code quality. | PR CI | Lint or dead-code failures. |
+| SC-1 | Package-local `make check` flow | Preserve structure, lint, dead-code, and duplication quality. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
 | SC-2 | Prompt asset generation check | Ensure generated prompt JSON matches scripts. | PR CI | Generated asset drift. |
 | SC-3 | Package tests | Preserve extractor contract behavior. | PR CI | Unit/integration/e2e failures. |
 

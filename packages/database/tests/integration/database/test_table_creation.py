@@ -93,7 +93,6 @@ async def test_drop_and_reset_full_lifecycle() -> None:
     backend = NeonBackend(os.environ["DATABASE_URL"])
     conn = await backend._connect()  # noqa: SLF001
 
-    # Advisory lock prevents CRUD workers from reading user_words mid-drop.
     await conn.execute("SELECT pg_advisory_lock(12345)")
     try:
         # 1. Ensure isolated tables exist
@@ -102,13 +101,13 @@ async def test_drop_and_reset_full_lifecycle() -> None:
             assert await _table_exists(backend, name), f"Setup: '{name}' should exist"
 
         # 2. Drop all isolated tables and verify they are gone
-        await drop_all_tables(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS)
+        await drop_all_tables(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS, backend=backend)
         for name in _ISO_EXPECTED:
             exists = await _table_exists(backend, name)
             assert not exists, f"'{name}' should NOT exist after drop_all_tables"
 
         # 3. Reset database: creates clean empty tables
-        await reset_database(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS)
+        await reset_database(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS, backend=backend)
         for name in _ISO_EXPECTED:
             exists = await _table_exists(backend, name)
             assert exists, f"'{name}' should exist after reset_database"
@@ -116,14 +115,13 @@ async def test_drop_and_reset_full_lifecycle() -> None:
         # 4. Insert data, then verify reset clears it
         word = f"lifecycle_{uuid.uuid4().hex[:8]}"
         await backend.add_word("de", word, "noun")
-        assert await count_words("de") >= 1
+        assert await count_words("de", backend=backend) >= 1
 
-        await reset_database(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS)
-        assert await count_words("de") == 0, "words_de should be empty after reset"
+        await reset_database(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS, backend=backend)
+        assert await count_words("de", backend=backend) == 0, "words_de should be empty after reset"
 
         # 5. Clean up isolated tables and restore shared ones (still under lock).
-        # drop_all_tables also drops user_words; create_tables restores it.
-        await drop_all_tables(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS)
+        await drop_all_tables(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS, backend=backend)
         await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
     finally:
         await conn.execute("SELECT pg_advisory_unlock(12345)")

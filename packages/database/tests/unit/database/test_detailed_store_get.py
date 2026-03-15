@@ -1,7 +1,5 @@
 """Unit tests for DetailedWordStore.get_details()."""
 
-import json
-
 from nl_processing.core.models import Language, PartOfSpeech, Word
 import pytest
 

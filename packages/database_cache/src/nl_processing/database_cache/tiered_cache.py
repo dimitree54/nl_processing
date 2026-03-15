@@ -9,6 +9,7 @@ from nl_processing.core.models import Language
 from nl_processing.core.tiered_models import TieredCandidate, TieredProgressSummary
 from nl_processing.core.tiered_ports import RemoteTieredSyncPort
 
+from nl_processing.database_cache._service_helpers import _background_task_with_logging
 from nl_processing.database_cache._tiered_cache_helpers import (
     background_tiered_refresh,
     is_tiered_stale,
@@ -147,12 +148,12 @@ class TieredExerciseCacheService:
     async def refresh(self) -> None:
         """Trigger a full cache refresh from the remote database."""
         assert self._syncer is not None
-        await self._syncer.refresh()
+        await _background_task_with_logging(self._syncer.refresh(), "tiered refresh")
 
     async def flush(self) -> None:
         """Flush pending score events to the remote database."""
         assert self._syncer is not None
-        await self._syncer.flush()
+        await _background_task_with_logging(self._syncer.flush(), "tiered flush")
 
     async def get_status(self) -> CacheStatus:
         """Build current cache status from metadata and pending events."""

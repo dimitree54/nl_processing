@@ -82,9 +82,9 @@ make check
 ```
 
 This runs:
-1. `vulture` across all packages — verifies no dead code (with whitelist).
-2. `jscpd` across all packages — verifies no duplicated 10+ line blocks.
-3. Per-package `make check` for every package in PACKAGES list.
+1. Per-package `make check` for every package in the root `PACKAGES` list.
+2. Each package check runs its own `vulture` dead-code validation (with whitelist support where needed).
+3. Each package check runs its own `jscpd` duplication validation plus the package-local lint and test suites.
 
 ### Step 3: Fix any failures
 

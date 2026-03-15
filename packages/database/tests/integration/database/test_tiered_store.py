@@ -1,5 +1,6 @@
 """Integration tests for TieredExerciseProgressStore against real Neon PostgreSQL."""
 
+import os
 import uuid
 
 from nl_processing.core.models import Language
@@ -17,10 +18,11 @@ def user_id() -> str:
     return f"test_user_{uuid.uuid4()}"
 
 
-@pytest_asyncio.fixture
-async def tiered_store(neon_backend: NeonBackend, user_id: str) -> TieredExerciseProgressStore:
-    """Create tiered store with test isolation."""
-    conn = await neon_backend._connect()  # noqa: SLF001
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def tiered_schema(integration_schema_ready: None) -> None:  # noqa: ARG001
+    """Ensure extra tiered tables exist once per module."""
+    backend = NeonBackend(os.environ["DATABASE_URL"])
+    conn = await backend._connect()  # noqa: SLF001
     try:
         await conn.execute(
             "CREATE TABLE IF NOT EXISTS user_word_exercise_scores_nl_ru_typing "
@@ -28,9 +30,18 @@ async def tiered_store(neon_backend: NeonBackend, user_id: str) -> TieredExercis
             "source_word_id INTEGER NOT NULL, score INTEGER NOT NULL DEFAULT 0, "
             "updated_at TIMESTAMP NOT NULL DEFAULT NOW(), UNIQUE(user_id, source_word_id))"
         )
-    except Exception:
-        pass
-    await create_tiered_tables(conn, [("nl", "ru")])
+        await create_tiered_tables(conn, [("nl", "ru")])
+    finally:
+        await conn.close()
+
+
+@pytest.fixture
+def tiered_store(
+    neon_backend: NeonBackend,
+    tiered_schema: None,  # noqa: ARG001
+    user_id: str,
+) -> TieredExerciseProgressStore:
+    """Create tiered store with test isolation."""
     return TieredExerciseProgressStore(
         user_id=user_id,
         source_language=Language.NL,

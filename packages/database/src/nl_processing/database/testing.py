@@ -6,10 +6,18 @@ from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import DatabaseError
 
 
+def _get_backend(backend: NeonBackend | None) -> NeonBackend:
+    if backend is not None:
+        return backend
+    return NeonBackend(os.environ["DATABASE_URL"])
+
+
 async def drop_all_tables(
     languages: list[str],
     pairs: list[tuple[str, str]],
     exercise_slugs: list[str],
+    *,
+    backend: NeonBackend | None = None,
 ) -> None:
     """Drop all module-managed tables in FK-respecting order. IRREVERSIBLE.
 
@@ -23,8 +31,8 @@ async def drop_all_tables(
     5. ``user_words``
     6. ``words_{lang}`` for each language
     """
-    backend = NeonBackend(os.environ["DATABASE_URL"])
-    conn = await backend._connect()  # noqa: SLF001
+    b = _get_backend(backend)
+    conn = await b._connect()  # noqa: SLF001
     try:
         for src, tgt in pairs:
             for slug in exercise_slugs:
@@ -55,24 +63,30 @@ async def reset_database(
     languages: list[str],
     pairs: list[tuple[str, str]],
     exercise_slugs: list[str],
+    *,
+    backend: NeonBackend | None = None,
 ) -> None:
     """Drop all tables and recreate them empty. IRREVERSIBLE.
 
     This is a **test-only** utility — never import from production code.
     Equivalent to ``drop_all_tables`` followed by ``create_tables``.
     """
-    await drop_all_tables(languages, pairs, exercise_slugs)
-    backend = NeonBackend(os.environ["DATABASE_URL"])
-    await backend.create_tables(languages, pairs, exercise_slugs)
+    b = _get_backend(backend)
+    await drop_all_tables(languages, pairs, exercise_slugs, backend=b)
+    await b.create_tables(languages, pairs, exercise_slugs)
 
 
-async def count_words(table: str) -> int:
+async def count_words(
+    table: str,
+    *,
+    backend: NeonBackend | None = None,
+) -> int:
     """Return the number of rows in ``words_{table}``. For test assertions.
 
     This is a **test-only** utility — never import from production code.
     """
-    backend = NeonBackend(os.environ["DATABASE_URL"])
-    conn = await backend._connect()  # noqa: SLF001
+    b = _get_backend(backend)
+    conn = await b._connect()  # noqa: SLF001
     try:
         row = await conn.fetchrow(
             f"SELECT COUNT(*) AS cnt FROM words_{table}",  # noqa: S608
@@ -82,13 +96,18 @@ async def count_words(table: str) -> int:
     return int(row["cnt"])  # type: ignore[index]
 
 
-async def count_user_words(user_id: str, language: str) -> int:
+async def count_user_words(
+    user_id: str,
+    language: str,
+    *,
+    backend: NeonBackend | None = None,
+) -> int:
     """Return the number of words associated with a user. For test assertions.
 
     This is a **test-only** utility — never import from production code.
     """
-    backend = NeonBackend(os.environ["DATABASE_URL"])
-    conn = await backend._connect()  # noqa: SLF001
+    b = _get_backend(backend)
+    conn = await b._connect()  # noqa: SLF001
     try:
         row = await conn.fetchrow(
             "SELECT COUNT(*) AS cnt FROM user_words WHERE user_id = $1 AND language = $2",
@@ -100,13 +119,17 @@ async def count_user_words(user_id: str, language: str) -> int:
     return int(row["cnt"])  # type: ignore[index]
 
 
-async def count_translation_links(table: str) -> int:
+async def count_translation_links(
+    table: str,
+    *,
+    backend: NeonBackend | None = None,
+) -> int:
     """Return the number of translation links in ``translations_{table}``. For test assertions.
 
     This is a **test-only** utility — never import from production code.
     """
-    backend = NeonBackend(os.environ["DATABASE_URL"])
-    conn = await backend._connect()  # noqa: SLF001
+    b = _get_backend(backend)
+    conn = await b._connect()  # noqa: SLF001
     try:
         row = await conn.fetchrow(
             f"SELECT COUNT(*) AS cnt FROM translations_{table}",  # noqa: S608

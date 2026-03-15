@@ -187,7 +187,7 @@ The module lives in the middle of the lexical pipeline between word extraction a
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package static checks via package check | Preserve package quality and packaging. | PR CI | Lint or dead-code failures. |
+| SC-1 | Package-local `make check` flow | Preserve package quality and packaging. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
 | SC-2 | Package tests | Preserve mapping, quality, and packaging behavior. | PR CI | Unit/integration/e2e failures. |
 
 #### Manual Verification Needed

@@ -57,9 +57,7 @@ async def test_remote_failure_preserves_local_state() -> None:
     await local_store.open()
 
     # Pre-populate cache
-    await local_store.upsert_cached_detail(
-        "existing", "noun", "nl_ru_noun", 1, '{"definition": "existing_word"}'
-    )
+    await local_store.upsert_cached_detail("existing", "noun", "nl_ru_noun", 1, '{"definition": "existing_word"}')
 
     # Create mock remote that raises an error
     mock_remote = MockRemoteDetailedWordStore()

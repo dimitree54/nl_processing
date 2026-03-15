@@ -246,7 +246,7 @@ The module sits beside `extract_text_from_image` and `translate_text` as a devel
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package static checks via `make package-check` | Preserve lint, file-size, type, and unit-test quality. | PR CI | Lint, dead-code, or unit-test failures. |
+| SC-1 | Package-local `make check` flow | Preserve lint, file-size, dead-code, duplication, and unit-test quality. | PR CI | Formatting, lint, dead-code, duplication, or unit-test failures. |
 | SC-2 | Prompt artifact drift test | Ensure generated prompt JSON matches the committed artifact. | PR CI | Generator output differs from checked-in prompt JSON. |
 | SC-3 | Package tests | Preserve behavior across unit, integration, and e2e layers. | PR CI / nightly | Any seeded corpus or contract regression. |
 

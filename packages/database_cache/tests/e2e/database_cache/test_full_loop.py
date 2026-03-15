@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
+from nl_processing.database.backend.neon import NeonBackend
 import pytest
 
 from tests.e2e.database_cache.conftest import (
@@ -14,11 +15,10 @@ from tests.e2e.database_cache.conftest import (
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_full_lifecycle_init_read_write_flush(tmp_path: Path) -> None:
+async def test_full_lifecycle_init_read_write_flush(db_ready: NeonBackend, tmp_path: Path) -> None:
     """Init -> read -> write -> flush: complete cache round-trip against real Neon."""
     user_id = f"e2e_cache_{uuid4()}"
-    await seed_words(user_id)
+    await seed_words(user_id, backend=db_ready)
     cache = make_cache_service(user_id, tmp_path)
 
     # 1. init -- bootstraps refresh from Neon
@@ -59,11 +59,10 @@ async def test_full_lifecycle_init_read_write_flush(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_idempotent_flush(tmp_path: Path) -> None:
+async def test_idempotent_flush(db_ready: NeonBackend, tmp_path: Path) -> None:
     """Flushing twice has no side effects -- second flush is a no-op."""
     user_id = f"e2e_cache_{uuid4()}"
-    await seed_words(user_id)
+    await seed_words(user_id, backend=db_ready)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 
@@ -94,11 +93,10 @@ async def test_idempotent_flush(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("db_ready")
-async def test_refresh_after_flush_restores_remote_state(tmp_path: Path) -> None:
+async def test_refresh_after_flush_restores_remote_state(db_ready: NeonBackend, tmp_path: Path) -> None:
     """After flush + refresh, scores match what was flushed (not doubled)."""
     user_id = f"e2e_cache_{uuid4()}"
-    await seed_words(user_id)
+    await seed_words(user_id, backend=db_ready)
     cache = make_cache_service(user_id, tmp_path)
     await cache.init()
 

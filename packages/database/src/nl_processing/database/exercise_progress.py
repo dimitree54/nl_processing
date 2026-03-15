@@ -8,11 +8,10 @@ from datetime import datetime
 
 from nl_processing.core.models import Language, ScoredWordPair
 
-from nl_processing.database._database_config import read_database_url
+from nl_processing.database._database_config import _init_backend_and_tables
 from nl_processing.database._progress_helpers import compute_progress_summary
 from nl_processing.database._row_helpers import row_to_word_pair
 from nl_processing.database.backend.abstract import AbstractBackend
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.models import EnrichedWordPairSnapshot, ExerciseProgressSummary
 
 
@@ -28,22 +27,13 @@ class ExerciseProgressStore:
         exercise_types: list[str],
         backend: AbstractBackend | None = None,
     ) -> None:
-        if not exercise_types:
-            msg = "exercise_types must be a non-empty list"
-            raise ValueError(msg)
-        if backend is None:
-            database_url = read_database_url()
-            self._backend: AbstractBackend = NeonBackend(database_url)
-        else:
-            self._backend = backend
+        self._backend, self._score_tables, self._applied_events_table = _init_backend_and_tables(
+            exercise_types, source_language, target_language, backend
+        )
         self._user_id = user_id
         self._source_language = source_language
         self._target_language = target_language
-        src = source_language.value
-        tgt = target_language.value
         self._exercise_types = list(exercise_types)
-        self._score_tables: dict[str, str] = {et: f"{src}_{tgt}_{et}" for et in exercise_types}
-        self._applied_events_table = f"applied_events_{src}_{tgt}"
 
     async def increment(
         self,

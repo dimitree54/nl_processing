@@ -189,7 +189,7 @@ related_docs:
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package `ruff`/`pylint`/`vulture` via package check | Keep shared package small and typed. | PR CI | Lint or dead-code failures. |
+| SC-1 | Package-local `make check` flow | Keep shared package small and typed. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
 | SC-2 | Package unit tests | Preserve shared contract behavior. | PR CI | Schema, prompt, or exception regressions. |
 
 #### Manual Verification Needed

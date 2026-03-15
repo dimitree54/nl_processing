@@ -1,6 +1,7 @@
 """Integration tests for DetailedWordStore with real Neon DB."""
 
 import json
+import uuid
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
 import pytest
@@ -13,6 +14,11 @@ from nl_processing.database.service import DatabaseService
 
 class TestDetailedWordStoreIntegration:
     """Integration tests for DetailedWordStore."""
+
+    @staticmethod
+    def _word(base: str) -> Word:
+        suffix = uuid.uuid4().hex[:8]
+        return Word(normalized_form=f"{base}_{suffix}", word_type=PartOfSpeech.NOUN, language=Language.NL)
 
     async def test_create_tables_creates_detailed_table(self, neon_backend: NeonBackend) -> None:
         """Test that create_tables creates word_details table."""
@@ -36,18 +42,18 @@ class TestDetailedWordStoreIntegration:
 
         # Add word to corpus
         service = DatabaseService(user_id="test_user", backend=neon_backend)
-        words = [Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL)]
+        source_word = self._word("hond")
+        words = [source_word]
         await service.add_words(words)
 
         # Create and add a detailed record
-        word = Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL)
         payload = {"article": "de", "plural": "honden", "gender": "masculine"}
 
         # Get the backend for direct persistence
         backend = store._backend
-        source_word = await backend.get_word("nl", "hond")
-        assert source_word is not None
-        source_word_id = int(source_word["id"])
+        source_row = await backend.get_word("nl", source_word.normalized_form)
+        assert source_row is not None
+        source_word_id = int(source_row["id"])
 
         # Persist detail
         await backend.upsert_word_details(
@@ -60,9 +66,9 @@ class TestDetailedWordStoreIntegration:
         )
 
         # Read back via store
-        result = await store.get_details([word])
+        result = await store.get_details([source_word])
         assert len(result) == 1
-        assert result[0].source_word == "hond"
+        assert result[0].source_word == source_word.normalized_form
         assert result[0].word_type == "noun"
         assert result[0].schema_key == "nl_ru_noun_v2"
         assert result[0].schema_version == 2
@@ -76,7 +82,7 @@ class TestDetailedWordStoreIntegration:
             backend=neon_backend,
         )
 
-        unknown_word = Word(normalized_form="unknown", word_type=PartOfSpeech.NOUN, language=Language.NL)
+        unknown_word = self._word("unknown")
 
         with pytest.raises(SourceWordNotFoundError):
             await store.get_details([unknown_word])
@@ -85,15 +91,14 @@ class TestDetailedWordStoreIntegration:
         """Test that batch queries work correctly."""
         # Add words to corpus
         service = DatabaseService(user_id="test_user", backend=neon_backend)
-        words = [
-            Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL),
-            Word(normalized_form="kat", word_type=PartOfSpeech.NOUN, language=Language.NL),
-        ]
+        hond = self._word("hond")
+        kat = self._word("kat")
+        words = [hond, kat]
         await service.add_words(words)
 
         # Get source word IDs
-        hond_word = await neon_backend.get_word("nl", "hond")
-        kat_word = await neon_backend.get_word("nl", "kat")
+        hond_word = await neon_backend.get_word("nl", hond.normalized_form)
+        kat_word = await neon_backend.get_word("nl", kat.normalized_form)
         assert hond_word is not None and kat_word is not None
 
         hond_id = int(hond_word["id"])
@@ -130,10 +135,11 @@ class TestDetailedWordStoreIntegration:
         """Test that upsert updates existing records instead of creating duplicates."""
         # Add word to corpus
         service = DatabaseService(user_id="test_user", backend=neon_backend)
-        words = [Word(normalized_form="hond", word_type=PartOfSpeech.NOUN, language=Language.NL)]
+        source_word = self._word("hond")
+        words = [source_word]
         await service.add_words(words)
 
-        hond_word = await neon_backend.get_word("nl", "hond")
+        hond_word = await neon_backend.get_word("nl", source_word.normalized_form)
         assert hond_word is not None
         hond_id = int(hond_word["id"])
 

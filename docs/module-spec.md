@@ -13,17 +13,17 @@ related_docs:
 
 ### Summary
 
-`nl_processing` is a multi-package Python repository and aggregate distribution for Dutch-language processing workflows. The root module owns the published aggregate package, repository-wide quality gates, and shared documentation conventions, while day-to-day implementation work happens inside package-local module boundaries. The main workflow remains image extraction -> word extraction -> translation -> persistence/cache -> sampling, with cross-package DTOs and behavioral ports centralized in `core`.
+`nl_processing` is a multi-package Python repository and aggregate distribution for Dutch-language processing workflows. The root module owns the published aggregate package and shared documentation conventions, while day-to-day implementation work happens inside package-local module boundaries. The main workflow remains image extraction -> word extraction -> translation -> persistence/cache -> sampling, with cross-package DTOs and behavioral ports centralized in `core`.
 
 ### System Context
 
-The root project sits above the package modules under `packages/` and defines how they are assembled, tested, and documented together. It exposes the published `nl_processing` aggregate package, repo-wide `make check` automation, and shared constraints such as explicit cross-package dependencies and package-local test ownership.
+The root project sits above the package modules under `packages/` and defines how they are assembled and documented together. It exposes the published `nl_processing` aggregate package and shared constraints such as explicit cross-package dependencies, package-local test ownership, and package-local quality configuration.
 
 ### In Scope
 
 - Aggregate packaging of the published `nl_processing` distribution from the repository root.
-- Repository-wide automation, shared docs, and package index/navigation.
-- Shared structural rules for package layout, imports, and quality gates.
+- Shared docs and package index/navigation.
+- Shared structural rules for package layout, imports, and package-local quality gates.
 - Canonical references to package-level module specs and operational docs.
 
 ### Out of Scope
@@ -36,7 +36,7 @@ The root project sits above the package modules under `packages/` and defines ho
 
 | ID | Assumption | Status | Notes |
 | --- | --- | --- | --- |
-| A-1 | Package-local development remains the primary engineering boundary. | Needs Review | Reflected by per-package `pyproject.toml`, `ruff.toml`, `pytest.ini`, `tests/`, and `docs/`. |
+| A-1 | Package-local development remains the primary engineering boundary. | Needs Review | Reflected by per-package `Makefile`, `pyproject.toml`, `ruff.toml`, `.jscpd.json`, `vulture_whitelist.py`, `pytest.ini`, `tests/`, and `docs/`. |
 | A-2 | The published root package continues bundling the current package set from `packages/`. | Needs Review | Root `pyproject.toml` explicitly enumerates package mappings. |
 
 ## 2. Requirements
@@ -48,7 +48,7 @@ The root project sits above the package modules under `packages/` and defines ho
 | FR-1 | The root project must publish an aggregate `nl_processing` package that exposes the package modules through the public `nl_processing.*` import path. | Must | Implemented by root `pyproject.toml` package mappings. |
 | FR-2 | Every independently developed module must live under `packages/<module>` and keep package-local config, tests, and docs. | Must | Shared repo invariant. |
 | FR-3 | Cross-package dependencies must be explicit in the consuming package metadata rather than relying on the root layout. | Must | Prevents hidden coupling. |
-| FR-4 | The repository must expose one repo-wide quality entrypoint that runs shared static checks and package-level tests. | Must | Provided by the root `Makefile`. |
+| FR-4 | Every package must expose one package-local `make check` entrypoint that runs that package's static checks and tests using only package-local quality config files. | Must | Keeps validation self-contained inside the owning module. |
 | FR-5 | Shared documentation must point to one canonical module-spec document per module and one root module-spec for repo-wide rules. | Must | This migration makes `module-spec.md` the canonical format. |
 
 ### Rules and Invariants
@@ -65,7 +65,7 @@ The root project sits above the package modules under `packages/` and defines ho
 | --- | --- | --- | --- | --- |
 | NFR-1 | Compatibility | Root and package projects must target Python 3.12+. | `requires-python >=3.12` | Defined in root and package metadata. |
 | NFR-2 | Maintainability | Package-local development must be practical without editing root-only configs. | Per-package config files required | Keeps package work isolated. |
-| NFR-3 | Quality | Repo-wide automation must cover static analysis plus package-local test gates. | `make check` must remain green | Current root automation runs vulture, jscpd, and per-package checks. |
+| NFR-3 | Quality | Package-local automation must cover static analysis and test gates without relying on root-owned quality config files. | Each affected package `make check` must remain green | CI may invoke package checks individually, but the config ownership stays inside the package. |
 
 ### Failure Modes and Edge Cases
 
@@ -83,7 +83,7 @@ The root project sits above the package modules under `packages/` and defines ho
 
 - Aggregate build metadata and package mappings.
 - Repository-wide docs index and shared operational docs.
-- Shared quality entrypoints (`make check`, package-check orchestration).
+- Shared structural rules for package-local quality ownership.
 
 **Does Not Own:**
 
@@ -96,7 +96,7 @@ The root project sits above the package modules under `packages/` and defines ho
 | ID | Type | Direction | Counterparty | Contract or Data | Notes |
 | --- | --- | --- | --- | --- | --- |
 | IF-1 | Build | Outbound | Python packaging toolchain | Root `pyproject.toml` exports aggregate `nl_processing` package mappings. | Canonical root packaging interface. |
-| IF-2 | Automation | Inbound | Repository contributors / CI | `make check` runs repo-wide checks and package-local test targets. | Primary shared quality entrypoint. |
+| IF-2 | Automation | Inbound | Repository contributors / CI | Contributors run the affected package's local `make check` from that package directory. | Canonical quality interface is package-local. |
 | IF-3 | Documentation | Outbound | Developers | Root docs point to package module specs plus env/release docs. | Canonical navigation layer. |
 
 ### Data and State Ownership
@@ -104,7 +104,6 @@ The root project sits above the package modules under `packages/` and defines ho
 | Entity or State | Ownership | Description | Lifecycle or Retention | Notes |
 | --- | --- | --- | --- | --- |
 | Root `pyproject.toml` | Owned | Aggregate build metadata and package mappings. | Versioned with the repo | Must stay aligned with `packages/`. |
-| Root `Makefile` | Owned | Repo-wide quality automation. | Versioned with the repo | Delegates to package-local checks. |
 | Root docs | Owned | Repo-wide conventions and canonical module-spec index. | Versioned with the repo | Includes env var and release docs. |
 | `uv.lock` / tool metadata | Owned | Shared dependency lock and tooling baseline. | Versioned with the repo | Supports reproducible development. |
 
@@ -112,7 +111,7 @@ The root project sits above the package modules under `packages/` and defines ho
 
 1. A contributor works in one package under `packages/<module>`.
 2. Package-local code, tests, and docs are updated within that package boundary.
-3. The root `Makefile` orchestrates repo-wide static checks and package test runs.
+3. The contributor runs package-local static checks and test runs through that package's own `make check`.
 4. The root aggregate package and docs expose the repository as one publishable toolkit.
 
 ### Decisions
@@ -149,8 +148,8 @@ The root project sits above the package modules under `packages/` and defines ho
 
 **Framework and Constraints:**
 
-- Reuse the existing package-local `pytest` structure and the root `Makefile`.
-- Keep the root check focused on orchestration and shared static analysis, not package-specific test duplication.
+- Reuse the existing package-local `pytest` structure and package-local `Makefile`.
+- Keep each package check self-contained: the package `Makefile`, `ruff.toml`, `.jscpd.json`, and `vulture_whitelist.py` own the quality flow.
 
 **Unit:**
 
@@ -170,7 +169,7 @@ The root project sits above the package modules under `packages/` and defines ho
 
 **Operational or Non-Functional:**
 
-- `make check` remains the canonical repo-wide quality gate.
+- Package-local `make check` remains the canonical quality gate.
 
 ### Quality Automation Plan
 
@@ -179,14 +178,14 @@ The root project sits above the package modules under `packages/` and defines ho
 | ID | Target | Verification Level | Check or Test to Add | When It Runs | Notes |
 | --- | --- | --- | --- | --- | --- |
 | QA-1 | FR-1 | Operational | Root packaging and import path validation via aggregate build/test flow | Release / PR CI | Confirms root package mappings stay valid. |
-| QA-2 | FR-4 | Operational | `make check` | PR CI | Covers repo-wide static checks and package test gates. |
+| QA-2 | FR-4 | Operational | Affected package `make check` | PR CI | Covers the owning package's static and test gates without root-owned quality config. |
 | QA-3 | FR-5 | Manual | README/docs navigation review after docs migrations | PR review | Fastest way to catch broken doc links. |
 
 #### Static Checks and Gates
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | `make check` | Enforce repo-wide quality and package-local checks. | PR CI | Static analysis or package test failures. |
+| SC-1 | Package-local `make check` | Enforce package-local quality checks inside the owning module. | PR CI | Any affected package `make check` failure. |
 | SC-2 | README/doc link review | Keep canonical docs paths accurate after module changes. | PR review | Dead or stale docs paths. |
 
 #### Manual Verification Needed

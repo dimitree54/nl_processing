@@ -187,7 +187,7 @@ The module consumes plain text or markdown and produces normalized `core.models.
 
 | ID | Check | Purpose | Trigger | Fails On |
 | --- | --- | --- | --- | --- |
-| SC-1 | Package static checks via package check | Preserve quality and packaging. | PR CI | Lint or dead-code failures. |
+| SC-1 | Package-local `make check` flow | Preserve quality and packaging. | PR CI | Formatting, lint, dead-code, duplication, or package test failures. |
 | SC-2 | Package tests | Preserve extraction behavior and prompt packaging. | PR CI | Unit/integration/e2e failures. |
 
 #### Manual Verification Needed

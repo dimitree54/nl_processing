@@ -15,9 +15,7 @@ class TestDetailedWordStoreValidationGet:
     """Test DetailedWordStore validation in get_details()."""
 
     @pytest.fixture
-    def store_with_validator(
-        self, detailed_backend: MockBackend
-    ) -> tuple[DetailedWordStore, FakeValidator]:
+    def store_with_validator(self, detailed_backend: MockBackend) -> tuple[DetailedWordStore, FakeValidator]:
         """Create a DetailedWordStore with validator."""
         validator = FakeValidator()
         store = DetailedWordStore(
@@ -48,9 +46,7 @@ class TestDetailedWordStoreValidationGet:
         assert len(validator.calls) == 1
         assert validator.calls[0] == ("nl_ru_noun", 1, payload)
 
-    async def test_get_details_validator_schema_version_error_propagates(
-        self, detailed_backend: MockBackend
-    ) -> None:
+    async def test_get_details_validator_schema_version_error_propagates(self, detailed_backend: MockBackend) -> None:
         """Test get_details with validator raising SchemaVersionError - error propagates."""
         # Create validator that raises error
         error_validator = FakeValidator(SchemaVersionError("Unknown schema"))
