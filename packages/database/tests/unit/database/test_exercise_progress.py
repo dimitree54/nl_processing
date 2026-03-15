@@ -79,7 +79,6 @@ async def test_get_scored_pairs(progress_store: ExerciseProgressStore, mock_back
     assert len(scored) == 1
     assert scored[0].scores["flashcard"] == 2
     assert scored[0].pair.source.normalized_form == "huis"
-    assert scored[0].source_word_id == 1
 
 
 @pytest.mark.asyncio

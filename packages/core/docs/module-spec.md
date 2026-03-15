@@ -61,7 +61,7 @@ The spec must not document current implementation state as justification, intern
 ### In Scope
 
 - `Language` and `PartOfSpeech` enums
-- `ExtractedText`, `Word`, `WordPair`, and `ScoredWordPair` Pydantic models
+- `ExtractedText`, `Word`, `WordPair`, `ScoredWordPair`, and `WordPairSnapshot` Pydantic models
 - `APIError`, `UnsupportedImageFormatError`, `TargetLanguageNotFoundInInputError`, and `UnsupportedLanguageError`
 - `load_prompt`
 - `ChatOpenAIKwargs` and `build_llm_kwargs(...)`
@@ -95,7 +95,8 @@ The spec must not document current implementation state as justification, intern
 | FR-3 | Provide `ExtractedText` model with required field `text: str` | Must | Shared return type for text extraction flows |
 | FR-4 | Provide `Word` model with required fields `normalized_form`, `word_type`, and `language` | Must | `word_type` must validate against `PartOfSpeech`; `language` must validate against `Language` |
 | FR-5 | Provide `WordPair` model with required `source` and `target` `Word` values | Must | Shared translation pair schema |
-| FR-6 | Provide `ScoredWordPair` model with required `pair`, `scores`, `source_word_id`, and `target_word_id` fields | Must | Shared scoring and sampling schema |
+| FR-6 | Provide `ScoredWordPair` model with required `pair` and `scores` fields | Must | Shared scoring schema without persistence identity |
+| FR-6a | Provide `WordPairSnapshot` model extending `ScoredWordPair` with required `source_word_id` and `target_word_id` fields | Must | Shared snapshot and sync schema for consumers that need stable identifiers |
 | FR-7 | Provide `load_prompt(prompt_path)` that loads LangChain-native JSON and returns `ChatPromptTemplate` | Must | Must fail fast on file, JSON, and type errors |
 | FR-8 | Provide public `ChatOpenAIKwargs` plus `build_llm_kwargs(model, service_tier, reasoning_effort, temperature)` that omit `None`-valued optional model settings | Must | Shared OpenAI chat-model configuration helper |
 | FR-9 | Provide `validate_image_format(path)` that accepts only `.png`, `.jpg`, `.jpeg`, `.gif`, and `.webp` | Must | Supported set matches current OpenAI Vision usage |
@@ -195,7 +196,7 @@ The spec must not document current implementation state as justification, intern
 | Entity or State | Ownership | Description | Lifecycle or Retention | Notes |
 | --- | --- | --- | --- | --- |
 | `Language` and `PartOfSpeech` | Owned | Canonical shared enum definitions | Versioned with package releases | Used across consumer packages |
-| `ExtractedText`, `Word`, `WordPair`, `ScoredWordPair` | Owned | Canonical shared Pydantic schemas | Versioned with package releases | Schema changes affect consumers immediately in monorepo use |
+| `ExtractedText`, `Word`, `WordPair`, `ScoredWordPair`, `WordPairSnapshot` | Owned | Canonical shared Pydantic schemas | Versioned with package releases | Schema changes affect consumers immediately in monorepo use |
 | Prompt JSON files | Referenced | LangChain-serialized prompt assets loaded from consumer-owned directories | Lifecycle owned by consumer package | Core supplies load/save helpers only |
 | Runtime process state | Not owned | No cache, singleton, or mutable package state | N/A | Module is effectively stateless apart from local file I/O and encoding work |
 
@@ -313,7 +314,7 @@ The spec must not document current implementation state as justification, intern
 | QA-3 | FR-3 | Unit | `test_extracted_text_instantiation`, `test_extracted_text_serialization`, `test_extracted_text_json_schema`, `test_extracted_text_missing_field` | PR CI / local | Validates `ExtractedText` |
 | QA-4 | FR-4 | Unit | `test_word_instantiation`, `test_word_with_string_word_type`, `test_word_serialization`, `test_word_missing_fields`, `test_word_invalid_word_type`, `test_word_russian_language` | PR CI / local | Validates `Word` behavior |
 | QA-5 | FR-5 | Unit | `test_word_pair_instantiation`, `test_word_pair_serialization` | PR CI / local | Validates `WordPair` contract |
-| QA-6 | FR-6 | Unit | `test_scored_word_pair_instantiation`, `test_scored_word_pair_missing_fields` | PR CI / local | Validates `ScoredWordPair` contract |
+| QA-6 | FR-6, FR-6a | Unit | `test_scored_word_pair_instantiation`, `test_scored_word_pair_missing_fields`, `test_word_pair_snapshot_instantiation`, `test_word_pair_snapshot_missing_fields` | PR CI / local | Validates scored-pair vs snapshot contract split |
 | QA-7 | FR-7, NFR-8 | Unit | `test_load_prompt_valid_file`, `test_load_prompt_missing_file`, `test_load_prompt_malformed_json`, `test_load_prompt_not_dict`, `test_load_prompt_wrong_langchain_type`, `test_load_prompt_round_trip`, `test_load_prompt_returns_stripped_content` | PR CI / local | Covers prompt success and fail-fast paths |
 | QA-8 | FR-8 | Unit | `test_build_llm_kwargs_includes_only_non_none_values`, `test_build_llm_kwargs_preserves_all_explicit_values` | PR CI / local | Covers shared ChatOpenAI kwarg shaping |
 | QA-9 | FR-9 | Unit | `test_validate_image_format_accepts_supported`, `test_validate_image_format_normalizes_suffix_case`, `test_validate_image_format_rejects_unsupported`, `test_validate_image_format_rejects_no_extension`, `test_supported_extensions_contains_expected_formats` | PR CI / local | Covers supported suffix policy |

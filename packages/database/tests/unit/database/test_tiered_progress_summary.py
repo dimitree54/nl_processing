@@ -1,9 +1,9 @@
 """Unit tests for tiered progress summary computation."""
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
-from nl_processing.core.tiered_models import TieredCandidate
 
 from nl_processing.database._tiered_helpers import compute_tiered_progress
+from nl_processing.database.tiered_models import TieredCandidate
 
 
 class TestComputeTieredProgress:

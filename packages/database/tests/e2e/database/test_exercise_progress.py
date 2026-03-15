@@ -41,9 +41,9 @@ def _make_store(
 
 
 async def _word_id_map(store: ExerciseProgressStore) -> dict[str, int]:
-    """Return mapping {normalized_form: source_word_id} from the store."""
-    scored = await store.get_word_pairs_with_scores()
-    return {sp.pair.source.normalized_form: sp.source_word_id for sp in scored}
+    """Return mapping {normalized_form: source_word_id} from remote snapshot export."""
+    snapshot = await store.export_remote_snapshot()
+    return {entry.pair.source.normalized_form: entry.source_word_id for entry in snapshot}
 
 
 @pytest.mark.asyncio

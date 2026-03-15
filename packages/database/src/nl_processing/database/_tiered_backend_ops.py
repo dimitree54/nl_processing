@@ -1,7 +1,6 @@
 """Backend operations helper for tiered exercise progress."""
 
 from nl_processing.core.models import Language
-from nl_processing.core.tiered_models import TieredCandidate, TieredSnapshotEntry
 
 from nl_processing.database._row_helpers import row_to_word_pair
 from nl_processing.database._tiered_helpers import validate_repeat_state_integrity
@@ -15,6 +14,7 @@ from nl_processing.database.backend._tiered_queries import get_repeat_state
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import DatabaseError
+from nl_processing.database.tiered_models import TieredCandidate, TieredSnapshotEntry
 
 
 async def read_scores_after_update(

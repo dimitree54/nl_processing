@@ -53,10 +53,10 @@ The module sits below the LLM-facing extract and translate packages and above do
 | FR-1 | The module must expose `DatabaseService(user_id, source_language, target_language, backend?, translator?)` with async `add_words()`, `get_words()`, `list_personal_words()`, `delete_word()`, `delete_words()`, and `create_tables()` methods. | Must | Main public API surface. |
 | FR-2 | `add_words()` must deduplicate words by normalized form within a language, associate them with the current user, and return `AddWordsResult(new_words, existing_words)`. | Must | Dedup is form-based, not type-based. |
 | FR-3 | `get_words()` must return only translated `WordPair` items for the configured user and language pair, with optional `word_type`, `limit`, and `random` filters. | Must | Untranslated words stay hidden from read results. |
-| FR-4 | `ExerciseProgressStore` must require a non-empty configured `exercise_types` list and expose score-aware reads plus idempotent delta replay. | Must | Default implementation of the shared `core.ports.ScoredPairProvider` and `core.ports.RemoteProgressSyncPort` contracts. |
+| FR-4 | `ExerciseProgressStore` must require a non-empty configured `exercise_types` list and expose score-aware reads plus idempotent delta replay. | Must | `get_word_pairs_with_scores()` returns shared `core.ScoredWordPair` items without persistence IDs; snapshot export covers stable-ID sync needs. |
 | FR-5 | `create_tables()` must create the required corpus, translation, detailed-word, user, score, and applied-events tables idempotently. | Must | Remote schema bootstrap entrypoint. |
 | FR-6 | Missing `DATABASE_URL` must raise `ConfigurationError`, and remote operation failures must surface as `DatabaseError` or backend failures. | Must | Fail-fast configuration contract. |
-| FR-7 | The module must expose a personal-vocabulary read API that returns translated user entries with stable source and target IDs, `user_words.added_at`, and per-exercise scores. | Must | Ergonomic read surface for callers. |
+| FR-7 | The module must expose a personal-vocabulary read API that returns translated user entries with stable source and target IDs, `user_words.added_at`, and per-exercise scores. | Must | Stable IDs belong to snapshot/personal-vocabulary DTOs, not to plain scored pairs. |
 | FR-8 | The module must expose an exercise-progress summary API that reports, for each configured exercise type, total translated personal words plus negative-word count, ratio, and percentage where negative means `score < 0`. | Must | Missing scores count as `0`, not negative. |
 | FR-9 | The module must expose delete APIs for one or many source-word IDs that remove only the requesting user's membership rows and that user's exercise-score rows. | Must | Canonical corpus rows and translation links remain intact. |
 | FR-10 | Cache-facing snapshot export must include `added_at` together with stable IDs and score maps so `database_cache` can rebuild the same personal-vocabulary read model locally. | Must | Prevents remote/cache read-model drift. |
@@ -122,7 +122,7 @@ The module sits below the LLM-facing extract and translate packages and above do
 | --- | --- | --- | --- | --- | --- |
 | IF-1 | Python API | Inbound | Callers | `DatabaseService.add_words()`, `get_words()`, `list_personal_words()`, `delete_word()`, `delete_words()`, `create_tables()` | Main public persistence surface, including personal-vocabulary convenience APIs. |
 | IF-2 | Python API | Inbound | Callers, `database_cache` | `DetailedWordStore.get_details()` and `get_or_extract_details()` | Pair-specific detailed-word persistence surface. |
-| IF-3 | Python API | Inbound | `sampling`, `database_cache` | `ExerciseProgressStore.get_word_pairs_with_scores()`, `get_progress_summary()`, `export_remote_snapshot()`, `apply_score_delta(...)` | Default implementation of the shared score-provider and remote-sync contracts; snapshot export carries the metadata required for cache-side personal-vocabulary reads. |
+| IF-3 | Python API | Inbound | `sampling`, `database_cache` | `ExerciseProgressStore.get_word_pairs_with_scores()`, `get_progress_summary()`, `export_remote_snapshot()`, `apply_score_delta(...)` | Scored reads return shared `core.ScoredWordPair` values; snapshot export carries stable IDs and `added_at` for cache-side personal-vocabulary reads. |
 | IF-4 | External system | Outbound | Neon PostgreSQL via `asyncpg` | SQL tables for words, translations, detailed words, user membership, scores, and applied events | Default backend implementation. |
 | IF-5 | Optional dependency | Inbound | Translator implementation | `translate(words: list[Word]) -> list[Word]` protocol | Injected into `DatabaseService` when auto-translation is wanted. |
 | IF-6 | Optional dependency | Inbound | Detailed extractor implementation | `extract(words: list[Word]) -> list[DetailedWordRecord]` protocol | Injected into `DetailedWordStore` when read-through extraction is wanted. |
@@ -188,7 +188,7 @@ The module sits below the LLM-facing extract and translate packages and above do
 ### Acceptance Criteria
 
 - AC-1: `DatabaseService` persists canonical words, associates them with users, and returns translated `WordPair` results only when translations exist.
-- AC-2: `ExerciseProgressStore` exposes score-aware snapshots with stable remote IDs plus idempotent score replay for configured exercises.
+- AC-2: `ExerciseProgressStore` exposes score-aware reads via `core.ScoredWordPair`, stable-ID snapshot export for cache sync, and idempotent score replay for configured exercises.
 - AC-3: Remote schema bootstrap remains idempotent for the current table set, including the new detailed-word table.
 - AC-4: The module can return the full translated personal vocabulary for a user, including `added_at` and per-exercise scores.
 - AC-5: The module can report per-exercise negative-balance percentages over the user's translated personal vocabulary.

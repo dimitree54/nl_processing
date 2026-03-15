@@ -68,11 +68,14 @@ class ExerciseProgressStore:
         result: list[ScoredWordPair] = []
         for row in rows:
             pair = row_to_word_pair(row, self._source_language, self._target_language)
-            wid = int(row["source_id"])  # type: ignore[arg-type]
-            word_scores = scores_by_word.get(wid, {})
+            source_word_id = int(row["source_id"])  # type: ignore[arg-type]
+            word_scores = scores_by_word.get(source_word_id, {})
             scores = {et: word_scores.get(et, 0) for et in self._exercise_types}
             result.append(
-                ScoredWordPair(pair=pair, scores=scores, source_word_id=wid),
+                ScoredWordPair(
+                    pair=pair,
+                    scores=scores,
+                ),
             )
         return result
 

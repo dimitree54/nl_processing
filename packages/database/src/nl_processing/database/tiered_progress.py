@@ -5,11 +5,6 @@ tiered exercise flows.
 """
 
 from nl_processing.core.models import Language
-from nl_processing.core.tiered_models import (
-    TieredCandidate,
-    TieredProgressSummary,
-    TieredSnapshotEntry,
-)
 
 from nl_processing.database._database_config import _init_backend_and_tables
 from nl_processing.database._tiered_backend_ops import (
@@ -29,6 +24,11 @@ from nl_processing.database.backend._neon_tiered import create_tiered_tables
 from nl_processing.database.backend.abstract import AbstractBackend
 from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.exceptions import DatabaseError
+from nl_processing.database.tiered_models import (
+    TieredCandidate,
+    TieredProgressSummary,
+    TieredSnapshotEntry,
+)
 
 
 class TieredExerciseProgressStore:
