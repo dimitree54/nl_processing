@@ -6,7 +6,7 @@ from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
-from tests.e2e.database.conftest import make_service, wait_for_translations
+from tests.e2e.database.conftest import cleanup_service, make_service
 
 _WORDS = [
     Word(normalized_form="appel", word_type=PartOfSpeech.NOUN, language=Language.NL),
@@ -34,7 +34,8 @@ async def test_translated_words_included_after_wait(db_ready: NeonBackend) -> No
     service = make_service(user_id, backend=db_ready)
 
     await service.add_words(_WORDS)
-    await wait_for_translations(len(_WORDS), backend=db_ready)
+    # Wait for background translations and surface any failures
+    await cleanup_service(service)
 
     pairs = await service.get_words()
     assert len(pairs) == len(_WORDS)

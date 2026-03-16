@@ -7,7 +7,7 @@ from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
 from nl_processing.database.testing import count_translation_links, count_words
-from tests.e2e.database.conftest import make_service, wait_for_translations
+from tests.e2e.database.conftest import cleanup_service, make_service
 
 _DUTCH_WORDS = [
     Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL),
@@ -68,8 +68,9 @@ async def test_translations_appear_after_add(db_ready: NeonBackend) -> None:
     links_before = await count_translation_links("nl_ru", backend=db_ready)
     await service.add_words(_DUTCH_WORDS)
 
-    expected = links_before + len(_DUTCH_WORDS)
-    await wait_for_translations(expected, backend=db_ready)
+    # Wait for background translations and surface any failures
+    await cleanup_service(service)
 
+    expected = links_before + len(_DUTCH_WORDS)
     links_after = await count_translation_links("nl_ru", backend=db_ready)
     assert links_after >= expected

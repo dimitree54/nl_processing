@@ -7,7 +7,6 @@ import pytest
 
 from nl_processing.database.exceptions import ConfigurationError
 from nl_processing.database.exercise_progress import ExerciseProgressStore
-from nl_processing.database.models import EnrichedWordPairSnapshot
 from tests.unit.database.conftest import MockBackend
 
 _HUIS = Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL)
@@ -144,8 +143,7 @@ async def test_export_remote_snapshot(
     await _seed_word_pair(mock_backend)
     snapshot = await progress_store.export_remote_snapshot()
     assert len(snapshot) == 1
-    assert isinstance(snapshot[0], EnrichedWordPairSnapshot)
-    assert isinstance(snapshot[0], WordPairSnapshot)  # backward compatible via inheritance
+    assert isinstance(snapshot[0], WordPairSnapshot)
     assert snapshot[0].scores["flashcard"] == 0
     assert snapshot[0].source_word_id == 1
     assert snapshot[0].target_word_id == 1

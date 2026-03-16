@@ -27,8 +27,21 @@ async def translate_and_store(
     translations_table: str,
     word_id_pairs: list[tuple[Word, int]],
     logger: LoggerProtocol,
+    *,
+    fail_fast: bool = False,
 ) -> None:
-    """Translate new words and store translations (fire-and-forget)."""
+    """Translate new words and store translations.
+
+    Args:
+        backend: Database backend to use
+        translator: Word translator to use
+        target_table: Target language table name
+        translations_table: Translation links table name
+        word_id_pairs: List of (source_word, source_id) pairs to translate
+        logger: Logger for reporting success/failure
+        fail_fast: If True, let exceptions propagate. If False, catch and log them.
+                   Use fail_fast=True during explicit cleanup/drain operations.
+    """
     try:
         source_words = [word for word, _ in word_id_pairs]
         translated = await translator.translate(source_words)
@@ -49,3 +62,5 @@ async def translate_and_store(
             len(source_words),
             exc_info=True,
         )
+        if fail_fast:
+            raise

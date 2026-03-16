@@ -7,7 +7,7 @@ from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
 from nl_processing.database.testing import count_user_words
-from tests.e2e.database.conftest import make_service, wait_for_translations
+from tests.e2e.database.conftest import cleanup_service, make_service
 
 _NOUNS = [
     Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL),
@@ -45,7 +45,8 @@ async def test_get_words_filters_by_noun(db_ready: NeonBackend) -> None:
     service = make_service(user_id, backend=db_ready)
 
     await service.add_words(_ALL_WORDS)
-    await wait_for_translations(len(_ALL_WORDS), backend=db_ready)
+    # Wait for background translations and surface any failures
+    await cleanup_service(service)
 
     noun_pairs = await service.get_words(word_type=PartOfSpeech.NOUN)
     assert len(noun_pairs) == len(_NOUNS)
@@ -60,7 +61,8 @@ async def test_get_words_random_returns_unique_pairs(db_ready: NeonBackend) -> N
     service = make_service(user_id, backend=db_ready)
 
     await service.add_words(_ALL_WORDS)
-    await wait_for_translations(len(_ALL_WORDS), backend=db_ready)
+    # Wait for background translations and surface any failures
+    await cleanup_service(service)
 
     pairs = await service.get_words(limit=3, random=True)
     assert len(pairs) == 3
@@ -76,7 +78,8 @@ async def test_get_words_returns_all_translated(db_ready: NeonBackend) -> None:
     service = make_service(user_id, backend=db_ready)
 
     await service.add_words(_ALL_WORDS)
-    await wait_for_translations(len(_ALL_WORDS), backend=db_ready)
+    # Wait for background translations and surface any failures
+    await cleanup_service(service)
 
     pairs = await service.get_words()
     assert len(pairs) == len(_ALL_WORDS)

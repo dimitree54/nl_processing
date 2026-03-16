@@ -1,6 +1,5 @@
 """Shared fixtures for database e2e tests against real Neon PostgreSQL + OpenAI."""
 
-import asyncio
 from collections.abc import AsyncIterator
 import os
 
@@ -11,7 +10,6 @@ import pytest_asyncio
 
 from nl_processing.database.service import DatabaseService
 from nl_processing.database.testing import (
-    count_translation_links,
     drop_all_tables,
     reset_database,
 )
@@ -21,26 +19,6 @@ _PAIRS = [("nl", "ru")]
 _EXERCISE_SLUGS = ["flashcard"]
 
 
-async def wait_for_translations(
-    expected_count: int,
-    table: str = "nl_ru",
-    timeout: float = 15.0,
-    *,
-    backend: NeonBackend | None = None,
-) -> None:
-    """Poll until translation_links reach expected count or timeout."""
-    elapsed = 0.0
-    while elapsed < timeout:
-        count = await count_translation_links(table, backend=backend)
-        if count >= expected_count:
-            return
-        await asyncio.sleep(1.0)
-        elapsed += 1.0
-    actual = await count_translation_links(table, backend=backend)
-    msg = f"Translations did not complete within {timeout}s (expected={expected_count}, actual={actual})"
-    raise AssertionError(msg)
-
-
 def make_service(user_id: str, *, backend: NeonBackend | None = None) -> DatabaseService:
     """Create a DatabaseService composed with the translate_word package."""
     return DatabaseService(
@@ -48,6 +26,15 @@ def make_service(user_id: str, *, backend: NeonBackend | None = None) -> Databas
         backend=backend,
         translator=WordTranslator(source_language=Language.NL, target_language=Language.RU),
     )
+
+
+async def cleanup_service(service: DatabaseService) -> None:
+    """Drain background translations from a service before test teardown.
+
+    Call this helper before teardown when your test uses a service
+    that may have created background translation tasks.
+    """
+    await service.wait_for_background_translations()
 
 
 @pytest_asyncio.fixture

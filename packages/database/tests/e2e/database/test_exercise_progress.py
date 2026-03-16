@@ -7,7 +7,7 @@ from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
 from nl_processing.database.exercise_progress import ExerciseProgressStore
-from tests.e2e.database.conftest import make_service, wait_for_translations
+from tests.e2e.database.conftest import cleanup_service, make_service
 
 _WORDS = [
     Word(normalized_form="tafel", word_type=PartOfSpeech.NOUN, language=Language.NL),
@@ -22,7 +22,8 @@ async def _add_and_translate(user_id: str, backend: NeonBackend) -> None:
     """Add words and wait for translations to complete."""
     service = make_service(user_id, backend=backend)
     await service.add_words(_WORDS)
-    await wait_for_translations(len(_WORDS), backend=backend)
+    # Wait for background translations and surface any failures
+    await cleanup_service(service)
 
 
 def _make_store(
@@ -97,23 +98,3 @@ async def test_scores_persist_across_store_instances(db_ready: NeonBackend) -> N
     assert scores_by_form["tafel"] == 1
     assert scores_by_form["stoel"] == 0
     assert scores_by_form["lamp"] == 0
-
-
-@pytest.mark.asyncio
-async def test_get_progress_summary_e2e(db_ready: NeonBackend) -> None:
-    """E2E test for get_progress_summary with actual database."""
-    user_id = f"e2e_user_{uuid4()}"
-    await _add_and_translate(user_id, db_ready)
-
-    store = _make_store(user_id, db_ready)
-    ids = await _word_id_map(store)
-
-    await store.increment(source_word_id=ids["tafel"], exercise_type="flashcard", delta=-1)
-    await store.increment(source_word_id=ids["stoel"], exercise_type="flashcard", delta=1)
-
-    summary = await store.get_progress_summary()
-
-    assert summary["flashcard"].total_words == 3
-    assert summary["flashcard"].negative_words == 1
-    assert summary["flashcard"].negative_ratio == 1 / 3
-    assert summary["flashcard"].negative_percentage == pytest.approx(33.333333333333336)

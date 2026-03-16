@@ -6,13 +6,11 @@ sync contracts used by sampling and database_cache.
 
 from datetime import datetime
 
-from nl_processing.core.models import Language, ScoredWordPair
+from nl_processing.core.models import Language, ScoredWordPair, WordPairSnapshot
 from nl_processing.database_core._database_config import _init_backend_and_tables
 from nl_processing.database_core.backend.abstract import AbstractBackend
 
-from nl_processing.database._progress_helpers import compute_progress_summary
 from nl_processing.database._row_helpers import row_to_word_pair
-from nl_processing.database.models import EnrichedWordPairSnapshot, ExerciseProgressSummary
 
 
 class ExerciseProgressStore:
@@ -79,17 +77,12 @@ class ExerciseProgressStore:
             )
         return result
 
-    async def get_progress_summary(self) -> dict[str, ExerciseProgressSummary]:
-        """Return progress summary for all exercise types."""
-        rows, scores_by_word = await self._get_rows_with_scores()
-        return compute_progress_summary(rows, scores_by_word, self._exercise_types)
-
-    async def export_remote_snapshot(self) -> list[EnrichedWordPairSnapshot]:
+    async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
         """Return score-aware pairs with stable remote IDs for cache consumers."""
         rows, scores_by_word = await self._get_rows_with_scores()
         if not rows:
             return []
-        snapshots: list[EnrichedWordPairSnapshot] = []
+        snapshots: list[WordPairSnapshot] = []
         for row in rows:
             pair = row_to_word_pair(row, self._source_language, self._target_language)
             source_word_id = int(row["source_id"])  # type: ignore[arg-type]
@@ -98,7 +91,7 @@ class ExerciseProgressStore:
             word_scores = scores_by_word.get(source_word_id, {})
             scores = {et: word_scores.get(et, 0) for et in self._exercise_types}
             snapshots.append(
-                EnrichedWordPairSnapshot(
+                WordPairSnapshot(
                     pair=pair,
                     scores=scores,
                     source_word_id=source_word_id,

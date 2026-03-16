@@ -4,8 +4,6 @@ Provides add_words(), get_words(), and create_tables() for persisting
 and retrieving Word objects backed by Neon PostgreSQL.
 """
 
-import asyncio
-from datetime import datetime
 from typing import Protocol
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
@@ -14,11 +12,11 @@ from nl_processing.database_core.backend.abstract import AbstractBackend
 from nl_processing.database_core.backend.neon import NeonBackend
 
 from nl_processing.database import _translation
-from nl_processing.database._row_helpers import row_to_word_pair
+from nl_processing.database._background_tasks import BackgroundTaskManager
 from nl_processing.database._service_helpers import get_words_impl
-from nl_processing.database.exceptions import WordNotFoundError
+from nl_processing.database._user_operations import delete_word_impl
 from nl_processing.database.logging import get_logger
-from nl_processing.database.models import AddWordsResult, PersonalWord
+from nl_processing.database.models import AddWordsResult
 
 _logger = get_logger("service")
 
@@ -53,6 +51,8 @@ class DatabaseService:
         self._source_table = src
         self._target_table = tgt
         self._translations_table = f"{src}_{tgt}"
+        # Track background translation tasks owned by this service instance
+        self._task_manager = BackgroundTaskManager()
 
     async def add_words(self, words: list[Word]) -> AddWordsResult:
         """Add words to the corpus and associate them with the current user.
@@ -81,48 +81,9 @@ class DatabaseService:
             await self._backend.add_user_word(self._user_id, word_id, word.language.value)
 
         if new_source_word_pairs and self._translator is not None:
-            asyncio.create_task(self._delayed_translation(new_source_word_pairs))
+            self._task_manager.create_translation_task(self._delayed_translation, new_source_word_pairs)
 
         return AddWordsResult(new_words=new_words, existing_words=existing_words)
-
-    async def list_personal_words(self, exercise_types: list[str] | None = None) -> list[PersonalWord]:
-        """Return personal word entries with scores for the given exercise types."""
-        rows = await self._backend.get_user_words(self._user_id, self._source_language.value)
-        if not rows:
-            return []
-
-        scores_by_word: dict[int, dict[str, int]] = {}
-        if exercise_types:
-            source_word_ids = [int(row["source_id"]) for row in rows]  # type: ignore[arg-type]
-            for exercise_type in exercise_types:
-                table = f"{self._source_language.value}_{self._target_language.value}_{exercise_type}"
-                score_rows = await self._backend.get_user_exercise_scores(table, self._user_id, source_word_ids)
-                for score_row in score_rows:
-                    wid = int(score_row["source_word_id"])
-                    scores_by_word.setdefault(wid, {})[exercise_type] = int(score_row["score"])
-        result = []
-        for row in rows:
-            pair = row_to_word_pair(row, self._source_language, self._target_language)
-            source_word_id = int(row["source_id"])  # type: ignore[arg-type]
-            target_word_id = int(row["target_id"])  # type: ignore[arg-type]
-            added_at_raw = row["added_at"]
-            added_at = added_at_raw if isinstance(added_at_raw, datetime) else datetime.now()
-
-            scores = {}
-            if exercise_types:
-                word_scores = scores_by_word.get(source_word_id, {})
-                scores = {et: word_scores.get(et, 0) for et in exercise_types}
-
-            result.append(
-                PersonalWord(
-                    pair=pair,
-                    source_word_id=source_word_id,
-                    target_word_id=target_word_id,
-                    added_at=added_at,
-                    scores=scores,
-                )
-            )
-        return result
 
     async def get_words(
         self,
@@ -144,22 +105,14 @@ class DatabaseService:
 
     async def delete_word(self, source_word_id: int, exercise_types: list[str] | None = None) -> None:
         """Delete one personal-vocabulary entry (FR-9, BR-7, FM-5)."""
-        exists = await self._backend.check_user_word_exists(
+        await delete_word_impl(
+            self._backend,
             self._user_id,
             source_word_id,
-            self._source_language.value,
+            self._source_language,
+            self._target_language,
+            exercise_types,
         )
-        if not exists:
-            raise WordNotFoundError(f"Source word ID {source_word_id} not in user's vocabulary")
-        # Delete exercise scores first
-        if exercise_types:
-            src = self._source_language.value
-            tgt = self._target_language.value
-            for et in exercise_types:
-                table = f"{src}_{tgt}_{et}"
-                await self._backend.delete_user_exercise_score(table, self._user_id, source_word_id)
-        # Delete user_words membership
-        await self._backend.delete_user_word(self._user_id, source_word_id, self._source_language.value)
 
     async def delete_words(self, source_word_ids: list[int], exercise_types: list[str] | None = None) -> None:
         """Delete many personal-vocabulary entries (FR-9)."""
@@ -182,7 +135,17 @@ class DatabaseService:
             self._translations_table,
             word_id_pairs,
             _logger,
+            fail_fast=True,
         )
+
+    async def wait_for_background_translations(self) -> None:
+        """Wait for all background translation tasks owned by this service instance to complete.
+
+        This method must be called before service teardown to ensure
+        background translation tasks don't outlive schema teardown.
+        Surfaces real task errors to the caller instead of silently swallowing them.
+        """
+        await self._task_manager.wait_for_background_translations()
 
     @classmethod
     async def create_tables(cls, exercise_slugs: list[str] | None = None) -> None:
