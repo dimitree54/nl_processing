@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel
@@ -61,7 +62,8 @@ class ScoredWordPair(BaseModel):
 
 
 class WordPairSnapshot(ScoredWordPair):
-    """Scored pair with stable IDs for cross-module snapshot workflows."""
+    """Scored pair with stable IDs and required timestamp for cross-module snapshot workflows."""
 
     source_word_id: int
     target_word_id: int
+    added_at: datetime

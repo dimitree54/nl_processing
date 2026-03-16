@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from pydantic import ValidationError
 import pytest
 
@@ -59,23 +61,27 @@ def test_scored_word_pair_missing_fields() -> None:
 
 
 def test_word_pair_snapshot_instantiation() -> None:
-    """Test WordPairSnapshot extends scored pairs with stable ids."""
+    """Test WordPairSnapshot extends scored pairs with stable ids and required added_at."""
+
     pair = WordPair(
         source=Word(normalized_form="boek", word_type=PartOfSpeech.NOUN, language=Language.NL),
         target=Word(normalized_form="книга", word_type=PartOfSpeech.NOUN, language=Language.RU),
     )
 
+    now = datetime.now(tz=UTC)
     snapshot = WordPairSnapshot(
         pair=pair,
         scores={"reading": 2},
         source_word_id=11,
         target_word_id=22,
+        added_at=now,
     )
 
     assert snapshot.pair == pair
     assert snapshot.scores == {"reading": 2}
     assert snapshot.source_word_id == 11
     assert snapshot.target_word_id == 22
+    assert snapshot.added_at == now
 
 
 def test_word_pair_snapshot_missing_fields() -> None:

@@ -112,3 +112,11 @@ class DetailedWordCacheService:
             # Skip words that have no result from remote (some POS may be unsupported)
 
         return results
+
+    async def close(self) -> None:
+        """Close the local store connection."""
+        try:
+            await self._local_store.close()
+        except AttributeError:
+            # Local store not initialized
+            pass

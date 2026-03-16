@@ -3,9 +3,8 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
+from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair, WordPairSnapshot
 from nl_processing.database.detailed_models import DetailedWordRecord, JsonValue
-from nl_processing.database.models import EnrichedWordPairSnapshot
 import pytest
 
 _NL = Language.NL
@@ -22,11 +21,11 @@ def make_scored_pair(
     target_form: str,
     source_word_id: int,
     scores: dict[str, int] | None = None,
-) -> EnrichedWordPairSnapshot:
-    """Build a NL→RU enriched snapshot payload for integration-level cache tests."""
+) -> WordPairSnapshot:
+    """Build a NL→RU canonical snapshot payload for integration-level cache tests."""
     src = make_word(source_form, lang=_NL)
     tgt = make_word(target_form, lang=_RU)
-    return EnrichedWordPairSnapshot(
+    return WordPairSnapshot(
         pair=WordPair(source=src, target=tgt),
         scores=scores or {},
         source_word_id=source_word_id,
@@ -58,13 +57,13 @@ class MockProgressStore:
     and a blanket ``apply_error`` fallback.
     """
 
-    def __init__(self, snapshot: list[EnrichedWordPairSnapshot] | None = None) -> None:
-        self.snapshot: list[EnrichedWordPairSnapshot] = snapshot or []
+    def __init__(self, snapshot: list[WordPairSnapshot] | None = None) -> None:
+        self.snapshot: list[WordPairSnapshot] = snapshot or []
         self.applied_deltas: list[dict[str, str | int]] = []
         self.apply_error: Exception | None = None
         self.apply_errors_by_call: list[Exception | None] = []
 
-    async def export_remote_snapshot(self) -> list[EnrichedWordPairSnapshot]:
+    async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
         return list(self.snapshot)
 
     async def apply_score_delta(

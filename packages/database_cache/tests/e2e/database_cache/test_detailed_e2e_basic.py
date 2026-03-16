@@ -69,27 +69,30 @@ async def test_full_flow_with_real_backend(db_ready: NeonBackend, tmp_path: Path
         cache_dir=cache_dir,
     )
 
-    test_word = Word(normalized_form="testword", word_type=PartOfSpeech.NOUN, language=Language.NL)
+    try:
+        test_word = Word(normalized_form="testword", word_type=PartOfSpeech.NOUN, language=Language.NL)
 
-    # Insert source word into nl table
-    await db_ready.add_word("nl", test_word.normalized_form, test_word.word_type.value)
+        # Insert source word into nl table
+        await db_ready.add_word("nl", test_word.normalized_form, test_word.word_type.value)
 
-    # First call: cache miss, should fetch from remote (which extracts via mock)
-    result1 = await service.get_or_fetch_details([test_word])
+        # First call: cache miss, should fetch from remote (which extracts via mock)
+        result1 = await service.get_or_fetch_details([test_word])
 
-    assert len(result1) == 1
-    assert result1[0].source_word == "testword"
-    assert result1[0].word_type == "noun"
-    assert result1[0].schema_key == "nl_ru_noun"
-    assert result1[0].payload["definition"] == "definition of testword"
-    assert result1[0].payload["gender"] == "neuter"
-    assert mock_extractor.extraction_count == 1
+        assert len(result1) == 1
+        assert result1[0].source_word == "testword"
+        assert result1[0].word_type == "noun"
+        assert result1[0].schema_key == "nl_ru_noun"
+        assert result1[0].payload["definition"] == "definition of testword"
+        assert result1[0].payload["gender"] == "neuter"
+        assert mock_extractor.extraction_count == 1
 
-    # Second call: cache hit, should NOT call remote/extractor
-    result2 = await service.get_or_fetch_details([test_word])
+        # Second call: cache hit, should NOT call remote/extractor
+        result2 = await service.get_or_fetch_details([test_word])
 
-    assert len(result2) == 1
-    assert result2[0].source_word == "testword"
-    assert result2[0].word_type == "noun"
-    assert result2[0].payload["definition"] == "definition of testword"
-    assert mock_extractor.extraction_count == 1  # Should not increment
+        assert len(result2) == 1
+        assert result2[0].source_word == "testword"
+        assert result2[0].word_type == "noun"
+        assert result2[0].payload["definition"] == "definition of testword"
+        assert mock_extractor.extraction_count == 1  # Should not increment
+    finally:
+        await service.close()

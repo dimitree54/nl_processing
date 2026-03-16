@@ -1,12 +1,10 @@
 """Shared fixtures for database_cache unit tests."""
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
+from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair, WordPairSnapshot
 from nl_processing.database.detailed_models import DetailedWordRecord, JsonValue
-from nl_processing.database.models import EnrichedWordPairSnapshot
 import pytest_asyncio
 
 from nl_processing.database_cache.local_store import LocalStore
@@ -23,9 +21,9 @@ def make_scored_pair(
     target_form: str,
     source_word_id: int,
     scores: dict[str, int] | None = None,
-) -> EnrichedWordPairSnapshot:
-    """Create an enriched snapshot payload with NL->RU defaults and added_at."""
-    return EnrichedWordPairSnapshot(
+) -> WordPairSnapshot:
+    """Create a canonical snapshot payload with NL->RU defaults and added_at."""
+    return WordPairSnapshot(
         pair=WordPair(
             source=make_word(source_form, lang=Language.NL),
             target=make_word(target_form, lang=Language.RU),
@@ -51,12 +49,12 @@ def make_remote_record(source_word: str, payload: dict[str, JsonValue]) -> Detai
 class MockProgressStore:
     """Fake remote progress sync port for testing."""
 
-    def __init__(self, snapshot: list[EnrichedWordPairSnapshot] | None = None) -> None:
-        self.snapshot: list[EnrichedWordPairSnapshot] = snapshot or []
+    def __init__(self, snapshot: list[WordPairSnapshot] | None = None) -> None:
+        self.snapshot: list[WordPairSnapshot] = snapshot or []
         self.applied_deltas: list[dict[str, str | int]] = []
         self.apply_error: Exception | None = None
 
-    async def export_remote_snapshot(self) -> list[EnrichedWordPairSnapshot]:
+    async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
         return list(self.snapshot)
 
     async def apply_score_delta(
@@ -106,7 +104,6 @@ async def local_store() -> LocalStore:
 @pytest_asyncio.fixture
 async def cache_service(tmp_path: Path) -> DatabaseCacheService:
     """Fully-initialized DatabaseCacheService with mock remote."""
-    local_store = LocalStore(str(tmp_path / "test.db"))
     svc = DatabaseCacheService(
         user_id="test_user",
         source_language=Language.NL,
@@ -121,9 +118,7 @@ async def cache_service(tmp_path: Path) -> DatabaseCacheService:
             ]
         ),
         remote_db=MockRemoteDelete(),
-        local_store=local_store,
     )
     await svc.init()
     yield svc  # type: ignore[misc]
-    await asyncio.sleep(0)
-    await local_store.close()
+    await svc.close()

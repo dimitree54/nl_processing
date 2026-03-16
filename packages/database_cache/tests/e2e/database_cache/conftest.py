@@ -47,7 +47,12 @@ async def wait_for_translations(
             return
         await asyncio.sleep(1.0)
         elapsed += 1.0
+
+    # Final check after timeout - only fail if count is actually insufficient
     actual = await count_translation_links(table, backend=backend)
+    if actual >= expected_count:
+        return
+
     msg = f"Translations did not complete within {timeout}s (expected={expected_count}, actual={actual})"
     raise AssertionError(msg)
 
@@ -58,8 +63,11 @@ async def db_ready() -> AsyncIterator[NeonBackend]:
 
     Yields the shared backend so tests and helpers reuse the same connection.
     """
+    # Use a single global advisory lock for all tests to prevent interference
     backend = NeonBackend(os.environ["DATABASE_URL"])
     conn = await backend._connect()  # noqa: SLF001
+
+    # Single global lock - all tests must run sequentially for e2e
     await conn.execute("SELECT pg_advisory_lock(12345)")
     try:
         await reset_database(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS, backend=backend)

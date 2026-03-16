@@ -1,6 +1,5 @@
 """Unit tests for CacheSyncer — refresh and flush orchestration."""
 
-from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair, WordPairSnapshot
 import pytest
 
 from nl_processing.database_cache.exceptions import CacheSyncError
@@ -105,7 +104,7 @@ async def test_flush_handles_per_event_failure(local_store: LocalStore) -> None:
 
 @pytest.mark.asyncio
 async def test_refresh_persists_added_at(local_store: LocalStore) -> None:
-    """After refresh, added_at values from EnrichedWordPairSnapshot are persisted."""
+    """After refresh, added_at values from canonical WordPairSnapshot are persisted."""
     syncer, _remote = await _build_syncer(local_store)
     await syncer.refresh()
     cur = await local_store._conn.execute("SELECT added_at FROM cached_word_pairs ORDER BY source_word_id")
@@ -113,44 +112,6 @@ async def test_refresh_persists_added_at(local_store: LocalStore) -> None:
     assert len(rows) == 2
     assert rows[0][0] == "2025-01-15T12:00:00+00:00"
     assert rows[1][0] == "2025-01-15T12:00:00+00:00"
-
-
-@pytest.mark.asyncio
-async def test_refresh_handles_missing_added_at(local_store: LocalStore) -> None:
-    """When snapshot doesn't have added_at, None is stored in database."""
-    await local_store.ensure_metadata(["flashcard"])
-
-    # Create a plain WordPairSnapshot without added_at
-    pair = WordPairSnapshot(
-        pair=WordPair(
-            source=Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL),
-            target=Word(normalized_form="dom", word_type=PartOfSpeech.NOUN, language=Language.RU),
-        ),
-        scores={"flashcard": 0},
-        source_word_id=1,
-        target_word_id=1001,
-    )
-
-    class LegacyRemote:
-        async def export_remote_snapshot(self) -> list[WordPairSnapshot]:
-            return [pair]
-
-        async def apply_score_delta(
-            self,
-            event_id: str,
-            source_word_id: int,
-            exercise_type: str,
-            delta: int,
-        ) -> None:
-            pass
-
-    syncer = CacheSyncer(local_store, LegacyRemote())
-    await syncer.refresh()
-
-    cur = await local_store._conn.execute("SELECT added_at FROM cached_word_pairs WHERE source_word_id=1")
-    row = await cur.fetchone()
-    assert row is not None
-    assert row[0] is None  # Should be None for backward compatibility
 
 
 @pytest.mark.asyncio

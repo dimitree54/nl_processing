@@ -3,8 +3,7 @@
 from collections.abc import Awaitable
 from datetime import UTC, datetime, timedelta
 
-from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
-from nl_processing.database.models import ExerciseProgressSummary, PersonalWord
+from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair, WordPairSnapshot
 
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.logging import get_logger
@@ -50,54 +49,24 @@ def row_to_word_pair(
     return _create_word_pair_from_row(row, source_language, target_language)
 
 
-def row_to_personal_word(
+def row_to_word_pair_snapshot(
     row: dict[str, str | int],
     source_language: Language,
     target_language: Language,
     exercise_types: list[str],
-) -> PersonalWord:
-    """Reconstruct a PersonalWord from a cached row dict."""
+) -> WordPairSnapshot:
+    """Reconstruct a canonical WordPairSnapshot from a cached row dict."""
     pair = row_to_word_pair(row, source_language, target_language)
     added_at_raw = row.get("added_at")
     added_at = datetime.fromisoformat(str(added_at_raw)) if added_at_raw is not None else datetime.now(tz=UTC)
     scores = {et: int(row.get(f"score_{et}", 0)) for et in exercise_types}
-    return PersonalWord(
+    return WordPairSnapshot(
         pair=pair,
+        scores=scores,
         source_word_id=int(row["source_word_id"]),
         target_word_id=int(row["target_word_id"]),
         added_at=added_at,
-        scores=scores,
     )
-
-
-def compute_local_progress_summary(
-    rows: list[dict[str, str | int]],
-    exercise_types: list[str],
-) -> dict[str, ExerciseProgressSummary]:
-    """Compute progress summary from cached rows with flattened score fields."""
-    total_words = len(rows)
-    if total_words == 0:
-        return {
-            et: ExerciseProgressSummary(
-                total_words=0,
-                negative_words=0,
-                negative_ratio=0.0,
-                negative_percentage=0.0,
-            )
-            for et in exercise_types
-        }
-    result: dict[str, ExerciseProgressSummary] = {}
-    for et in exercise_types:
-        score_key = f"score_{et}"
-        negative_words = sum(1 for r in rows if int(r.get(score_key, 0)) < 0)
-        negative_ratio = negative_words / total_words
-        result[et] = ExerciseProgressSummary(
-            total_words=total_words,
-            negative_words=negative_words,
-            negative_ratio=negative_ratio,
-            negative_percentage=negative_ratio * 100,
-        )
-    return result
 
 
 async def _background_task_with_logging(coro: Awaitable[None], task_name: str) -> None:

@@ -1,31 +1,25 @@
 """DatabaseCacheService — public API for the local SQLite cache layer."""
 
-import asyncio
 from datetime import timedelta
-import json
 import tempfile
 from uuid import uuid4
 
 from nl_processing.core.models import Language, Word, WordPair, WordPairSnapshot
-from nl_processing.core.progress_ports import RemoteProgressSyncPort
-from nl_processing.database.exercise_progress import ExerciseProgressStore
-from nl_processing.database.models import ExerciseProgressSummary, PersonalWord
 
 from nl_processing.database_cache._service_helpers import (
     _background_task_with_logging,
     background_flush,
-    background_refresh,
-    compute_local_progress_summary,
     get_cache_status,
-    is_stale,
-    row_to_personal_word,
     row_to_word_pair,
+    row_to_word_pair_snapshot,
 )
+from nl_processing.database_cache._service_operations import setup_cache_state, setup_dependencies
+from nl_processing.database_cache._task_manager import BackgroundTaskManager
 from nl_processing.database_cache.exceptions import CacheNotReadyError
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.logging import get_logger
 from nl_processing.database_cache.models import CacheStatus
-from nl_processing.database_cache.ports import RemoteDeletePort
+from nl_processing.database_cache.ports import RemoteDeletePort, RemoteProgressSyncPort
 from nl_processing.database_cache.sync import CacheSyncer
 
 _log = get_logger("service")
@@ -62,36 +56,27 @@ class DatabaseCacheService:
         self._initialized = False
         self._local: LocalStore | None = local_store
         self._syncer: CacheSyncer | None = None
+        self._task_manager = BackgroundTaskManager()
 
     async def init(self) -> CacheStatus:
         """Open local store, bootstrap or refresh as needed, return status."""
-        progress_store = self._remote_progress or ExerciseProgressStore(
-            user_id=self._user_id,
-            source_language=self._source_language,
-            target_language=self._target_language,
-            exercise_types=self._exercise_types,
+        self._local, self._syncer, self._remote_db = await setup_dependencies(
+            self._user_id,
+            self._source_language,
+            self._target_language,
+            self._exercise_types,
+            self._remote_progress,
+            self._remote_db,
+            self._local,
+            self._db_path,
         )
-        if self._remote_db is None:
-            from nl_processing.database.service import DatabaseService  # noqa: PLC0415
-
-            self._remote_db = DatabaseService(
-                user_id=self._user_id,
-                source_language=self._source_language,
-                target_language=self._target_language,
-            )
-        if self._local is None:
-            self._local = LocalStore(self._db_path)
-        await self._local.open()
-        self._syncer = CacheSyncer(self._local, progress_store)
-        await self._local.ensure_metadata(self._exercise_types)
-        meta = await self._local.get_metadata()
-        if meta and json.loads(str(meta["exercise_types"])) != self._exercise_types:
-            await self._local.ensure_metadata(self._exercise_types)
-            await self._syncer.refresh()
-        elif not await self._local.has_snapshot():
-            await self._syncer.refresh()
-        elif is_stale(meta, self._cache_ttl):
-            asyncio.create_task(background_refresh(self._syncer))
+        await setup_cache_state(
+            self._local,
+            self._syncer,
+            self._exercise_types,
+            self._cache_ttl,
+            self._task_manager,
+        )
         self._initialized = True
         return await self.get_status()
 
@@ -109,39 +94,14 @@ class DatabaseCacheService:
         return [row_to_word_pair(r, self._source_language, self._target_language) for r in rows]
 
     async def get_word_pairs_with_scores(self) -> list[WordPairSnapshot]:
-        """Return cached word pairs with exercise scores."""
-        self._ensure_ready()
-        assert self._local is not None
-        rows = await self._local.get_cached_word_pairs_with_scores(self._exercise_types)
-        result: list[WordPairSnapshot] = []
-        for row in rows:
-            pair = row_to_word_pair(row, self._source_language, self._target_language)
-            scores = {et: int(row[f"score_{et}"]) for et in self._exercise_types}
-            result.append(
-                WordPairSnapshot(
-                    pair=pair,
-                    scores=scores,
-                    source_word_id=int(row["source_word_id"]),
-                    target_word_id=int(row["target_word_id"]),
-                )
-            )
-        return result
-
-    async def list_personal_words(self) -> list[PersonalWord]:
-        """Return personal-vocabulary entries from local cache (FR-7)."""
+        """Return cached word pairs with current scores (FR-3)."""
         self._ensure_ready()
         assert self._local is not None
         rows = await self._local.get_cached_word_pairs_with_scores(self._exercise_types)
         return [
-            row_to_personal_word(r, self._source_language, self._target_language, self._exercise_types) for r in rows
+            row_to_word_pair_snapshot(row, self._source_language, self._target_language, self._exercise_types)
+            for row in rows
         ]
-
-    async def get_progress_summary(self) -> dict[str, ExerciseProgressSummary]:
-        """Return per-exercise progress stats from cached data (FR-8, DEC-7)."""
-        self._ensure_ready()
-        assert self._local is not None
-        rows = await self._local.get_cached_word_pairs_with_scores(self._exercise_types)
-        return compute_local_progress_summary(rows, self._exercise_types)
 
     async def record_exercise_result(self, *, source_word: Word, exercise_type: str, delta: int) -> None:
         """Record a score change locally and queue for remote flush."""
@@ -159,7 +119,7 @@ class DatabaseCacheService:
             raise ValueError(msg)
         await self._local.record_score_and_event(wid, exercise_type, delta, str(uuid4()))
         assert self._syncer is not None
-        asyncio.create_task(background_flush(self._syncer))
+        self._task_manager.create_task(background_flush(self._syncer))
 
     async def refresh(self) -> None:
         """Trigger a full cache refresh from the remote database."""
@@ -192,6 +152,19 @@ class DatabaseCacheService:
         """Build current cache status from metadata and pending events."""
         assert self._local is not None
         return await get_cache_status(self._local, self._initialized, self._cache_ttl)
+
+    async def close(self) -> None:
+        """Close the service and clean up all resources."""
+        # Cancel and wait for all background tasks to complete
+        await self._task_manager.close()
+
+        # Close the local store
+        if self._local is not None:
+            await self._local.close()
+        # Reset state
+        self._initialized = False
+        self._local = None
+        self._syncer = None
 
     def _ensure_ready(self) -> None:
         if not self._initialized or self._local is None:

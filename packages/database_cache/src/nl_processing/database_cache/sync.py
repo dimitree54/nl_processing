@@ -3,12 +3,10 @@
 import asyncio
 from datetime import UTC, datetime
 
-from nl_processing.core.progress_ports import RemoteProgressSyncPort
-from nl_processing.database.models import EnrichedWordPairSnapshot
-
 from nl_processing.database_cache.exceptions import CacheSyncError
 from nl_processing.database_cache.local_store import LocalStore
 from nl_processing.database_cache.logging import get_logger
+from nl_processing.database_cache.ports import RemoteProgressSyncPort
 
 _log = get_logger("sync")
 
@@ -31,7 +29,7 @@ class CacheSyncer:
             try:
                 await self._local.update_metadata(last_refresh_started_at=now)
                 scored_pairs = await self._remote.export_remote_snapshot()
-                word_pairs: list[tuple[int, str, str, int, str, str, str | None]] = [
+                word_pairs: list[tuple[int, str, str, int, str, str, str]] = [
                     (
                         sp.source_word_id,
                         sp.pair.source.normalized_form,
@@ -39,7 +37,7 @@ class CacheSyncer:
                         sp.target_word_id,
                         sp.pair.target.normalized_form,
                         sp.pair.target.word_type.value,
-                        sp.added_at.isoformat() if isinstance(sp, EnrichedWordPairSnapshot) else None,
+                        sp.added_at.isoformat(),
                     )
                     for sp in scored_pairs
                 ]
