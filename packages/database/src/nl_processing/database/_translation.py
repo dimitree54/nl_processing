@@ -23,16 +23,16 @@ class BackendProtocol(Protocol):
 async def translate_and_store(
     backend: BackendProtocol,
     translator: WordTranslatorProtocol,
-    source_table: str,
     target_table: str,
     translations_table: str,
-    new_words: list[Word],
+    word_id_pairs: list[tuple[Word, int]],
     logger: LoggerProtocol,
 ) -> None:
     """Translate new words and store translations (fire-and-forget)."""
     try:
-        translated = await translator.translate(new_words)
-        for source_word, target_word in zip(new_words, translated):
+        source_words = [word for word, _ in word_id_pairs]
+        translated = await translator.translate(source_words)
+        for (source_word, source_id), target_word in zip(word_id_pairs, translated):
             target_id = await backend.add_word(
                 target_table,
                 target_word.normalized_form,
@@ -41,13 +41,11 @@ async def translate_and_store(
             if target_id is None:
                 row = await backend.get_word(target_table, target_word.normalized_form)
                 target_id = int(row["id"])  # type: ignore[index]
-            source_row = await backend.get_word(source_table, source_word.normalized_form)
-            source_id = int(source_row["id"])  # type: ignore[index]
             await backend.add_translation_link(translations_table, source_id, target_id)
-        logger.info("Translated and stored %d words", len(new_words))
+        logger.info("Translated and stored %d words", len(source_words))
     except Exception:
         logger.warning(
             "Background translation failed for %d words",
-            len(new_words),
+            len(source_words),
             exc_info=True,
         )

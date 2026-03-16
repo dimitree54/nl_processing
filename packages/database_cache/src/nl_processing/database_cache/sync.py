@@ -3,7 +3,7 @@
 import asyncio
 from datetime import UTC, datetime
 
-from nl_processing.core.protocols import RemoteProgressSyncPort
+from nl_processing.core.progress_ports import RemoteProgressSyncPort
 from nl_processing.database.models import EnrichedWordPairSnapshot
 
 from nl_processing.database_cache.exceptions import CacheSyncError

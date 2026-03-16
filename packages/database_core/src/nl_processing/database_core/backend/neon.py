@@ -4,6 +4,7 @@ from datetime import datetime
 
 import asyncpg
 
+from nl_processing.database_core.backend._neon_connection import ConnectionManager
 from nl_processing.database_core.backend._neon_delete import (
     check_word_exists,
     delete_exercise_score,
@@ -49,21 +50,10 @@ class NeonBackend(AbstractBackend):
     """Concrete asyncpg backend targeting Neon PostgreSQL."""
 
     def __init__(self, database_url: str) -> None:
-        self._database_url = database_url
-        self._connection: asyncpg.Connection | None = None  # type: ignore[type-arg]
+        self._connection_manager = ConnectionManager(database_url)
 
     async def _connect(self) -> asyncpg.Connection:  # type: ignore[type-arg]
-        if self._connection is None:
-            try:
-                self._connection = await asyncpg.connect(dsn=self._database_url)
-                _logger.info("Connected to Neon PostgreSQL")
-            except asyncpg.PostgresError as exc:
-                raise DatabaseError(str(exc)) from exc
-            except OSError as exc:
-                raise DatabaseError(str(exc)) from exc
-        if self._connection is None:
-            raise DatabaseError("Database connection was not initialized")
-        return self._connection
+        return await self._connection_manager.get_connection()
 
     async def create_tables(
         self, languages: list[str], pairs: list[tuple[str, str]], exercise_slugs: list[str]

@@ -1,6 +1,7 @@
 """WordSampler — weighted random sampling over any compatible scored-pair provider."""
 
 import random
+from typing import Tuple
 
 from nl_processing.core.models import ScoredWordPair, Word, WordPair
 from nl_processing.core.protocols import ScoredPairProvider
@@ -87,7 +88,7 @@ class TieredMultiExerciseSampler:
         self._exercise_types = exercise_types
         self._tiered_exercise_type = tiered_exercise_type
 
-    async def sample(self) -> (str, WordPair):
+    async def sample(self) -> Tuple[str, WordPair]:
         """
         :return: Exercise type and word pair
         """
@@ -97,7 +98,8 @@ class TieredMultiExerciseSampler:
         candidate_weights = [self._compute_weight(sp) for sp in scored]
 
         chosen = random.choices(scored, weights=candidate_weights, k=1)[0]
-        return chosen.pair
+        exercise_type = self._choose_exercise_for_word(chosen)
+        return exercise_type, chosen.pair
 
     def _choose_exercise_for_word(self, scored_pair: ScoredWordPair) -> str:
         is_repeat_mode = scored_pair.scores.get(self._tiered_exercise_type, 0) < 0

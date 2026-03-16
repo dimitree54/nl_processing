@@ -1,4 +1,4 @@
-PACKAGE_PYTHONPATH := src:../core/src:../database/src:../translate_word/src:../extract_word_details/src
+PACKAGE_PYTHONPATH := src:../core/src:../database/src:../translate_word/src
 PYLINT := env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run pylint
 PYTEST := env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run pytest
 VULTURE := env PYTHONPATH="$(PACKAGE_PYTHONPATH)" uv run vulture

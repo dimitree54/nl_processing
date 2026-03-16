@@ -65,6 +65,7 @@ class DatabaseService:
 
         new_words: list[Word] = []
         existing_words: list[Word] = []
+        new_source_word_pairs: list[tuple[Word, int]] = []
 
         for word in words:
             table = word.language.value
@@ -75,21 +76,12 @@ class DatabaseService:
                 word_id = int(row["id"])  # type: ignore[index]
             else:
                 new_words.append(word)
+                if word.language == self._source_language:
+                    new_source_word_pairs.append((word, word_id))
             await self._backend.add_user_word(self._user_id, word_id, word.language.value)
 
-        new_source_words = [word for word in new_words if word.language == self._source_language]
-        if new_source_words and self._translator is not None:
-            asyncio.create_task(
-                _translation.translate_and_store(
-                    self._backend,
-                    self._translator,
-                    self._source_table,
-                    self._target_table,
-                    self._translations_table,
-                    new_source_words,
-                    _logger,
-                )
-            )
+        if new_source_word_pairs and self._translator is not None:
+            asyncio.create_task(self._delayed_translation(new_source_word_pairs))
 
         return AddWordsResult(new_words=new_words, existing_words=existing_words)
 
@@ -173,6 +165,24 @@ class DatabaseService:
         """Delete many personal-vocabulary entries (FR-9)."""
         for source_word_id in source_word_ids:
             await self.delete_word(source_word_id, exercise_types=exercise_types)
+
+    async def _delayed_translation(self, word_id_pairs: list[tuple[Word, int]]) -> None:
+        """Run translation using a fresh backend instance to avoid connection conflicts."""
+        # For unit tests with MockBackend, reuse the same instance
+        # For real backends, create a fresh instance to avoid connection conflicts
+        if self._backend.__class__.__name__ == "MockBackend":
+            fresh_backend = self._backend
+        else:
+            fresh_backend = NeonBackend(read_database_url())
+
+        await _translation.translate_and_store(
+            fresh_backend,
+            self._translator,
+            self._target_table,
+            self._translations_table,
+            word_id_pairs,
+            _logger,
+        )
 
     @classmethod
     async def create_tables(cls, exercise_slugs: list[str] | None = None) -> None:

@@ -6,8 +6,8 @@ import json
 import tempfile
 from uuid import uuid4
 
-from nl_processing.core.models import Language, ScoredWordPair, Word, WordPair
-from nl_processing.core.protocols import RemoteProgressSyncPort
+from nl_processing.core.models import Language, Word, WordPair, WordPairSnapshot
+from nl_processing.core.progress_ports import RemoteProgressSyncPort
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from nl_processing.database.models import ExerciseProgressSummary, PersonalWord
 
@@ -108,16 +108,23 @@ class DatabaseCacheService:
         rows = await self._local.get_cached_word_pairs(word_type=word_type, limit=limit, random=random)
         return [row_to_word_pair(r, self._source_language, self._target_language) for r in rows]
 
-    async def get_word_pairs_with_scores(self) -> list[ScoredWordPair]:
+    async def get_word_pairs_with_scores(self) -> list[WordPairSnapshot]:
         """Return cached word pairs with exercise scores."""
         self._ensure_ready()
         assert self._local is not None
         rows = await self._local.get_cached_word_pairs_with_scores(self._exercise_types)
-        result: list[ScoredWordPair] = []
+        result: list[WordPairSnapshot] = []
         for row in rows:
             pair = row_to_word_pair(row, self._source_language, self._target_language)
             scores = {et: int(row[f"score_{et}"]) for et in self._exercise_types}
-            result.append(ScoredWordPair(pair=pair, scores=scores, source_word_id=int(row["source_word_id"])))
+            result.append(
+                WordPairSnapshot(
+                    pair=pair,
+                    scores=scores,
+                    source_word_id=int(row["source_word_id"]),
+                    target_word_id=int(row["target_word_id"]),
+                )
+            )
         return result
 
     async def list_personal_words(self) -> list[PersonalWord]:

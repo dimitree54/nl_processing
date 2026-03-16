@@ -13,7 +13,7 @@ _EXERCISE_SLUGS = ["flashcard"]
 
 async def _close_backend_connection(backend: NeonBackend) -> None:
     """Close an open backend connection."""
-    conn = backend._connection  # noqa: SLF001
+    conn = backend._connection_manager._connection  # noqa: SLF001
     if conn is not None and not conn.is_closed():
         await conn.close()
 

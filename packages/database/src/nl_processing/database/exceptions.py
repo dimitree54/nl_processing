@@ -1,4 +1,7 @@
-from nl_processing.database_core.exceptions import DatabaseError
+from nl_processing.database_core.exceptions import ConfigurationError, DatabaseError
+
+# Re-export for backward compatibility
+__all__ = ["DatabaseError", "ConfigurationError", "WordNotFoundError"]
 
 
 class WordNotFoundError(DatabaseError):
