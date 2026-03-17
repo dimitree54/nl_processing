@@ -77,26 +77,6 @@ async def reset_database(
     await b.create_tables(languages, pairs, exercise_slugs)
 
 
-async def count_words(
-    table: str,
-    *,
-    backend: NeonBackend | None = None,
-) -> int:
-    """Return the number of rows in ``words_{table}``. For test assertions.
-
-    This is a **test-only** utility — never import from production code.
-    """
-    b = _get_backend(backend)
-    conn = await b._connect()  # noqa: SLF001
-    try:
-        row = await conn.fetchrow(
-            f"SELECT COUNT(*) AS cnt FROM words_{table}",  # noqa: S608
-        )
-    except Exception as exc:
-        raise DatabaseError(str(exc)) from exc
-    return int(row["cnt"])  # type: ignore[index]
-
-
 async def count_user_words(
     user_id: str,
     language: str,
@@ -114,26 +94,6 @@ async def count_user_words(
             "SELECT COUNT(*) AS cnt FROM user_words WHERE user_id = $1 AND language = $2",
             user_id,
             language,
-        )
-    except Exception as exc:
-        raise DatabaseError(str(exc)) from exc
-    return int(row["cnt"])  # type: ignore[index]
-
-
-async def count_translation_links(
-    table: str,
-    *,
-    backend: NeonBackend | None = None,
-) -> int:
-    """Return the number of translation links in ``translations_{table}``. For test assertions.
-
-    This is a **test-only** utility — never import from production code.
-    """
-    b = _get_backend(backend)
-    conn = await b._connect()  # noqa: SLF001
-    try:
-        row = await conn.fetchrow(
-            f"SELECT COUNT(*) AS cnt FROM translations_{table}",  # noqa: S608
         )
     except Exception as exc:
         raise DatabaseError(str(exc)) from exc

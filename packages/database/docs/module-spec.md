@@ -186,10 +186,11 @@ The module sits below the LLM-facing extract and translate packages and above do
 | Requirement | Covered By | Verified By |
 | --- | --- | --- |
 | FR-2 | IF-1, DEC-1, DEC-3 | QA-1 |
-| FR-4, FR-7, FR-8, FR-10 | IF-3, DEC-2, DEC-4, DEC-5, DEC-7, DEC-11, CR-1, CR-3, CR-5 | QA-2 |
-| FR-5 | IF-4, DEC-2 | QA-3 |
-| FR-9 | IF-1, IF-4, DEC-6 | QA-4 |
-| FR-11, FR-12, FR-13, FR-14 | IF-2, IF-6, DEC-8, DEC-9, DEC-10, CR-4 | QA-5 |
+| FR-3 | IF-1, DEC-1, BR-4 | QA-2 |
+| FR-4, FR-7, FR-8, FR-10 | IF-3, DEC-2, DEC-4, DEC-5, DEC-7, DEC-11, CR-1, CR-3, CR-5 | QA-3 |
+| FR-5 | IF-4, DEC-2 | QA-4 |
+| FR-9 | IF-1, IF-4, DEC-6 | QA-5 |
+| FR-11, FR-12, FR-13, FR-14 | IF-2, IF-6, DEC-8, DEC-9, DEC-10, CR-4 | QA-6 |
 
 ## 4. Delivery and Validation
 
@@ -205,29 +206,38 @@ The module sits below the LLM-facing extract and translate packages and above do
 - AC-8: Invalid detailed payloads, missing source words, and unsupported schema versions fail fast instead of being coerced or silently created.
 - AC-9: `database_cache` can consume canonical snapshot export plus the typed detailed-word store contract without private SQL knowledge.
 
+### Testing Policy
+
+- TP-1: Unit tests cover mock-backend behavior and pure business rules, including validation, deduplication, orchestration decisions, replay semantics, and injected dependency behavior.
+- TP-2: Integration tests run against real Neon without calling external translation APIs and own database semantics, query/read-model behavior, delete behavior, progress/snapshot behavior, and detailed-store behavior.
+- TP-3: E2E tests use real OpenAI plus real Neon only for minimal orchestration smoke coverage where translation-driven remote behavior itself is the thing being proved.
+- TP-4: Expensive seeded coverage must stay broad but minimal: one seeded E2E scenario should validate multiple related behaviors when the same persisted state proves them.
+
 ### Testing Strategy
 
 **Framework and Constraints:**
 
 - Reuse package-local `pytest` suites, with integration/e2e tests running against a real Neon database under Doppler-managed configuration.
 - Keep remote reset helpers confined to tests.
+- Keep real OpenAI coverage intentionally sparse and reuse one seeded scenario whenever the same translated state can prove multiple related behaviors.
 
 **Unit:**
 
-- Mock-backend coverage for deduplication, warnings, score/read logic, canonical snapshot export, validation, replay semantics, detailed-word store validation, and injected dependency behavior.
+- Mock-backend coverage for `add_words()` deduplication, score/business-rule logic, canonical snapshot export rules, delete validation, detailed-word validation, and injected translator/extractor behavior.
 
 **Integration:**
 
-- Real Neon schema creation, CRUD operations, score table behavior, delete semantics, canonical snapshot export correctness, detailed-word persistence, and get-or-extract behavior.
+- Real Neon schema creation and DB semantics for `get_words()` query-shape behavior, delete workflows, progress reads and snapshot export, `apply_score_delta(...)` replay, and `DetailedWordStore` persistence plus fake-extractor `get_or_extract_details()` behavior.
+- Integration owns all detailed-store coverage; it is intentionally not treated as E2E because extractor behavior is faked while the database remains real.
 
 **Contract:**
 
-- Validate idempotent replay, canonical snapshot export shape, exercise-type validation paths on `ExerciseProgressStore`, and detailed payload schema parsing plus schema-version enforcement through the extractor-owned registry.
+- Validate `ExerciseProgressStore` exercise-type and delta validation, canonical snapshot export shape, idempotent replay, and detailed payload schema parsing plus schema-version enforcement through the extractor-owned registry.
 
 **E2E or UI Workflow:**
 
-- Full flow from adding words to translated reads, canonical snapshot export, deletes, and persisted score updates.
-- Persist source words, request details twice, and verify the second call reuses durable data instead of re-extracting.
+- One true smoke path proves real translation orchestration around `DatabaseService.add_words()` and eventual translated reads from `DatabaseService.get_words()` using real OpenAI plus real Neon.
+- The same seeded E2E state may also confirm closely related translated-read behavior when no extra expensive setup is required, but delete, progress/snapshot, and detailed-store concerns stay outside E2E ownership.
 
 **Operational or Non-Functional:**
 
@@ -240,10 +250,11 @@ The module sits below the LLM-facing extract and translate packages and above do
 | ID | Target | Verification Level | Check or Test to Add | When It Runs | Notes |
 | --- | --- | --- | --- | --- | --- |
 | QA-1 | FR-2 | Unit + E2E | Deduplication and add/read flow tests | PR CI / nightly | Covers the main write/read contract. |
-| QA-2 | FR-4, FR-7, FR-8, FR-10 | Unit + Integration | Progress-store validation and canonical snapshot/replay tests | PR CI / nightly | Protects the supported sync-facing behavior. |
-| QA-3 | FR-5 | Integration | Table-creation idempotency tests | PR CI / nightly | Verifies remote bootstrap behavior, including detailed-word table. |
-| QA-4 | FR-9 | Integration + E2E | Single-item and bulk delete tests over user membership and scores | PR CI / nightly | Confirms deletes do not remove shared corpus rows. |
-| QA-5 | FR-11, FR-12, FR-13, FR-14 | Unit + Integration | Detailed-word persistence and get-or-extract tests | PR CI / nightly | Covers the new storage surface. |
+| QA-2 | FR-3 | Integration | Real-Neon `get_words()` query/read-model tests for translated-only reads, filters, limits, and randomization behavior | PR CI / nightly | Keeps query-shape behavior out of expensive OpenAI coverage. |
+| QA-3 | FR-4, FR-7, FR-8, FR-10 | Unit + Integration | Progress-store validation plus real-Neon scored-read, snapshot-export, and replay tests | PR CI / nightly | Protects the supported sync-facing behavior without E2E-heavy coverage. |
+| QA-4 | FR-5 | Integration | Table-creation idempotency tests | PR CI / nightly | Verifies remote bootstrap behavior, including detailed-word table. |
+| QA-5 | FR-9 | Unit + Integration | Delete validation plus real-Neon single-item and bulk delete tests over user membership and scores | PR CI / nightly | Confirms deletes do not remove shared corpus rows. |
+| QA-6 | FR-11, FR-12, FR-13, FR-14 | Unit + Integration | Detailed-word persistence, validation, and fake-extractor get-or-extract tests | PR CI / nightly | Keeps detailed-store coverage in real-Neon integration, not E2E. |
 
 #### Static Checks and Gates
 

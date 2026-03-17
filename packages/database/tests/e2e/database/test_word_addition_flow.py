@@ -1,4 +1,4 @@
-"""E2e tests for word addition flow: add Dutch words, verify DB state, await translations."""
+"""E2e smoke test for real OpenAI + real Neon translation orchestration."""
 
 from uuid import uuid4
 
@@ -6,71 +6,43 @@ from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
-from nl_processing.database.testing import count_translation_links, count_words
 from tests.e2e.database.conftest import cleanup_service, make_service
 
-_DUTCH_WORDS = [
+# Small set of words for smoke testing real translation orchestration
+_SMOKE_WORDS = [
     Word(normalized_form="huis", word_type=PartOfSpeech.NOUN, language=Language.NL),
     Word(normalized_form="boek", word_type=PartOfSpeech.NOUN, language=Language.NL),
-    Word(normalized_form="fiets", word_type=PartOfSpeech.NOUN, language=Language.NL),
-    Word(normalized_form="school", word_type=PartOfSpeech.NOUN, language=Language.NL),
-    Word(normalized_form="water", word_type=PartOfSpeech.NOUN, language=Language.NL),
 ]
 
 
 @pytest.mark.asyncio
-async def test_add_words_inserts_into_database(db_ready: NeonBackend) -> None:
-    """Adding a batch of Dutch words inserts them into words_nl."""
-    user_id = f"e2e_user_{uuid4()}"
-    service = make_service(user_id, backend=db_ready)
-    await service.add_words(_DUTCH_WORDS)
+async def test_end_to_end_translation_orchestration_smoke(db_ready: NeonBackend) -> None:
+    """Smoke test: add_words with real translator + eventual translated get_words reads.
 
-    nl_count = await count_words("nl", backend=db_ready)
-    assert nl_count >= len(_DUTCH_WORDS)
-
-
-@pytest.mark.asyncio
-async def test_add_words_reports_new_vs_existing(db_ready: NeonBackend) -> None:
-    """First add reports all as new; second add reports all as existing."""
-    user_id = f"e2e_user_{uuid4()}"
+    This is the single E2E test that proves real OpenAI + real Neon translation
+    orchestration from DatabaseService.add_words() to eventual translated reads.
+    """
+    user_id = f"e2e_smoke_user_{uuid4()}"
     service = make_service(user_id, backend=db_ready)
 
-    first_result = await service.add_words(_DUTCH_WORDS)
-    assert len(first_result.new_words) == len(_DUTCH_WORDS)
-    assert len(first_result.existing_words) == 0
+    # Add words with real translator orchestration
+    result = await service.add_words(_SMOKE_WORDS)
+    assert len(result.new_words) == len(_SMOKE_WORDS)
 
-    second_result = await service.add_words(_DUTCH_WORDS)
-    assert len(second_result.new_words) == 0
-    assert len(second_result.existing_words) == len(_DUTCH_WORDS)
-
-
-@pytest.mark.asyncio
-async def test_add_words_no_duplicates_on_repeat(db_ready: NeonBackend) -> None:
-    """Adding same words twice does not create duplicate rows in words_nl."""
-    user_id = f"e2e_user_{uuid4()}"
-    service = make_service(user_id, backend=db_ready)
-
-    await service.add_words(_DUTCH_WORDS)
-    count_after_first = await count_words("nl", backend=db_ready)
-
-    await service.add_words(_DUTCH_WORDS)
-    count_after_second = await count_words("nl", backend=db_ready)
-
-    assert count_after_second == count_after_first
-
-
-@pytest.mark.asyncio
-async def test_translations_appear_after_add(db_ready: NeonBackend) -> None:
-    """Fire-and-forget translation creates translation links within timeout."""
-    user_id = f"e2e_user_{uuid4()}"
-    service = make_service(user_id, backend=db_ready)
-
-    links_before = await count_translation_links("nl_ru", backend=db_ready)
-    await service.add_words(_DUTCH_WORDS)
-
-    # Wait for background translations and surface any failures
+    # Wait for background translations to complete
     await cleanup_service(service)
 
-    expected = links_before + len(_DUTCH_WORDS)
-    links_after = await count_translation_links("nl_ru", backend=db_ready)
-    assert links_after >= expected
+    # Verify translated pairs are eventually readable
+    pairs = await service.get_words()
+    assert len(pairs) == len(_SMOKE_WORDS)
+
+    # Verify we got real translations (not just seeded data)
+    source_forms = {p.source.normalized_form for p in pairs}
+    for word in _SMOKE_WORDS:
+        assert word.normalized_form in source_forms
+
+    # Verify translations have actual target content
+    for pair in pairs:
+        assert pair.source.language == Language.NL
+        assert pair.target.language == Language.RU
+        assert pair.target.normalized_form.strip()  # Non-empty Russian translation

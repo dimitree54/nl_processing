@@ -7,6 +7,8 @@ status: "done"
 
 # Task: Restore `packages/database` baseline green state
 
+**SUPERSEDED NOTE:** This task's test-layer guidance has been superseded by the test-pyramid optimization in `database-test-pyramid-optimization.md`. Active test ownership policy now lives in the module spec and the newer task. This document remains as historical prerequisite context only.
+
 ## Problem Statement
 
 `packages/database` is not currently at a clean baseline, but the next planned duplicate-model/progress-contract cleanup must start from a fully green package state. This prerequisite task exists to restore a 100% green `make check` in `packages/database` first and only then unblock the larger cleanup/refactor.
