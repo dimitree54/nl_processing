@@ -12,13 +12,13 @@ import os
 import uuid
 
 from nl_processing.database.testing import (
-    count_words,
     drop_all_tables,
     reset_database,
 )
 import pytest
 
 from nl_processing.database_core.backend.neon import NeonBackend
+from tests.helpers import count_language_table_words
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]
@@ -115,10 +115,10 @@ async def test_drop_and_reset_full_lifecycle() -> None:
         # 4. Insert data, then verify reset clears it
         word = f"lifecycle_{uuid.uuid4().hex[:8]}"
         await backend.add_word("de", word, "noun")
-        assert await count_words("de", backend=backend) >= 1
+        assert await count_language_table_words("de", backend=backend) >= 1
 
         await reset_database(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS, backend=backend)
-        assert await count_words("de", backend=backend) == 0, "words_de should be empty after reset"
+        assert await count_language_table_words("de", backend=backend) == 0, "words_de should be empty after reset"
 
         # 5. Clean up isolated tables and restore shared ones (still under lock).
         await drop_all_tables(_ISO_LANGUAGES, _ISO_PAIRS, _ISO_EXERCISE_SLUGS, backend=backend)

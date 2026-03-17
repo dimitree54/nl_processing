@@ -10,7 +10,6 @@ from nl_processing.core.models import Language, PartOfSpeech, Word
 from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.service import DatabaseService
 from nl_processing.database.testing import (
-    count_translation_links,
     drop_all_tables,
     reset_database,
 )
@@ -34,22 +33,25 @@ EXERCISE_TYPES = ["flashcard"]
 
 async def wait_for_translations(
     expected_count: int,
-    table: str = "nl_ru",
+    user_id: str,
     timeout: float = 15.0,
     *,
     backend: NeonBackend | None = None,
 ) -> None:
-    """Poll until translation_links reach expected count or timeout."""
+    """Poll until translated word pairs reach expected count for the user."""
     elapsed = 0.0
     while elapsed < timeout:
-        count = await count_translation_links(table, backend=backend)
-        if count >= expected_count:
+        service = make_database_service(user_id, backend=backend)
+        word_pairs = await service.get_words()
+        if len(word_pairs) >= expected_count:
             return
         await asyncio.sleep(1.0)
         elapsed += 1.0
 
     # Final check after timeout - only fail if count is actually insufficient
-    actual = await count_translation_links(table, backend=backend)
+    service = make_database_service(user_id, backend=backend)
+    word_pairs = await service.get_words()
+    actual = len(word_pairs)
     if actual >= expected_count:
         return
 
@@ -95,7 +97,7 @@ async def seed_words(user_id: str, *, backend: NeonBackend | None = None) -> Non
     """Add words to Neon and wait for translations."""
     service = make_database_service(user_id, backend=backend)
     await service.add_words(WORDS)
-    await wait_for_translations(len(WORDS), backend=backend)
+    await wait_for_translations(len(WORDS), user_id, backend=backend)
 
 
 def make_cache_service(user_id: str, tmp_path: Path) -> DatabaseCacheService:
