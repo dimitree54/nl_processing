@@ -78,7 +78,7 @@ make check
 
 Modules are independent packages. Cross-module dependencies must be explicit in the consuming package's `pyproject.toml`.
 
-Shared cross-module storage contracts live in `nl_processing.core.ports`. `database` and `database_cache` are concrete implementations and adapters, not the owners of those shared interfaces.
+Shared cross-module contracts live in `nl_processing.core.models` and `nl_processing.core.protocols`. Package-specific remote sync/delete contracts are owned by the package that needs them, so `database_cache` owns its cache-facing ports while `database` and `database_cache` provide the concrete implementations and adapters around those contracts.
 
 One intentional design change in this layout: `database` no longer imports `translate_word` directly. If you want automatic translation on `add_words()`, compose it explicitly:
 
