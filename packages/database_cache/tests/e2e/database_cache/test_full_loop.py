@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
-from nl_processing.database.backend.neon import NeonBackend
+from nl_processing.database_core.backend.neon import NeonBackend
 import pytest
 
 from tests.e2e.database_cache.conftest import (

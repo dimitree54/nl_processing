@@ -9,10 +9,7 @@ from nl_processing.translate_word.service import WordTranslator
 import pytest_asyncio
 
 from nl_processing.database.service import DatabaseService
-from nl_processing.database.testing import (
-    drop_all_tables,
-    reset_database,
-)
+from tests.e2e.database.db_helpers import drop_all_tables, reset_database
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]

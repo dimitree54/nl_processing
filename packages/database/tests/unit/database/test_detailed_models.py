@@ -1,6 +1,7 @@
 """Tests for detailed word models, ports, and exceptions."""
 
 from nl_processing.core.models import Word
+from nl_processing.database_core.exceptions import DatabaseError
 import pytest
 
 from nl_processing.database.detailed_exceptions import (
@@ -10,7 +11,6 @@ from nl_processing.database.detailed_exceptions import (
 )
 from nl_processing.database.detailed_models import DetailedWordRecord
 from nl_processing.database.detailed_ports import DetailedWordExtractorPort
-from nl_processing.database.exceptions import DatabaseError
 
 
 class TestDetailedWordRecord:

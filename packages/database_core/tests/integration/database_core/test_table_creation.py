@@ -11,14 +11,10 @@ test uses a PostgreSQL advisory lock to serialize with CRUD workers.
 import os
 import uuid
 
-from nl_processing.database.testing import (
-    drop_all_tables,
-    reset_database,
-)
 import pytest
 
 from nl_processing.database_core.backend.neon import NeonBackend
-from tests.helpers import count_language_table_words
+from tests.helpers import count_language_table_words, drop_all_tables, reset_database
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]

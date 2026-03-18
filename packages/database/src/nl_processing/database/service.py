@@ -121,12 +121,7 @@ class DatabaseService:
 
     async def _delayed_translation(self, word_id_pairs: list[tuple[Word, int]]) -> None:
         """Run translation using a fresh backend instance to avoid connection conflicts."""
-        # For unit tests with MockBackend, reuse the same instance
-        # For real backends, create a fresh instance to avoid connection conflicts
-        if self._backend.__class__.__name__ == "MockBackend":
-            fresh_backend = self._backend
-        else:
-            fresh_backend = NeonBackend(read_database_url())
+        fresh_backend = self._build_background_backend()
 
         await _translation.translate_and_store(
             fresh_backend,
@@ -137,6 +132,10 @@ class DatabaseService:
             _logger,
             fail_fast=True,
         )
+
+    def _build_background_backend(self) -> AbstractBackend:
+        """Create a backend instance safe for background translation tasks."""
+        return self._backend.create_background_backend()
 
     async def wait_for_background_translations(self) -> None:
         """Wait for all background translation tasks owned by this service instance to complete.

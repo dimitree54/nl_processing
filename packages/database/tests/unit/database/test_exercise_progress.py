@@ -3,9 +3,9 @@
 from datetime import datetime
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPairSnapshot
+from nl_processing.database_core.exceptions import ConfigurationError
 import pytest
 
-from nl_processing.database.exceptions import ConfigurationError
 from nl_processing.database.exercise_progress import ExerciseProgressStore
 from tests.unit.database.conftest import MockBackend
 

@@ -20,6 +20,7 @@ from tests.integration.database.seed_helpers import (
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]
 _EXERCISE_SLUGS = ["flashcard"]
+_SCHEMA_LOCK_KEY = 12345
 
 
 async def _close_backend_connection(backend: NeonBackend) -> None:
@@ -27,6 +28,18 @@ async def _close_backend_connection(backend: NeonBackend) -> None:
     conn = backend._connection_manager._connection  # noqa: SLF001
     if conn is not None and not conn.is_closed():
         await conn.close()
+
+
+async def _lock_shared_schema(backend: NeonBackend) -> None:
+    """Acquire the shared advisory lock protecting live schema users."""
+    conn = await backend._connect()  # noqa: SLF001
+    await conn.execute("SELECT pg_advisory_lock_shared($1)", _SCHEMA_LOCK_KEY)
+
+
+async def _unlock_shared_schema(backend: NeonBackend) -> None:
+    """Release the shared advisory lock protecting live schema users."""
+    conn = await backend._connect()  # noqa: SLF001
+    await conn.execute("SELECT pg_advisory_unlock_shared($1)", _SCHEMA_LOCK_KEY)
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
@@ -44,8 +57,11 @@ async def neon_backend(integration_schema_ready: None) -> AsyncIterator[NeonBack
     """Function-scoped fixture: give each test its own backend connection."""
     backend = NeonBackend(os.environ["DATABASE_URL"])
     try:
+        await _lock_shared_schema(backend)
+        await backend.create_tables(_LANGUAGES, _PAIRS, _EXERCISE_SLUGS)
         yield backend
     finally:
+        await _unlock_shared_schema(backend)
         await _close_backend_connection(backend)
 
 

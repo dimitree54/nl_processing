@@ -7,16 +7,13 @@ import os
 from pathlib import Path
 
 from nl_processing.core.models import Language, PartOfSpeech, Word
-from nl_processing.database.backend.neon import NeonBackend
 from nl_processing.database.service import DatabaseService
-from nl_processing.database.testing import (
-    drop_all_tables,
-    reset_database,
-)
+from nl_processing.database_core.backend.neon import NeonBackend
 from nl_processing.translate_word.service import WordTranslator
 import pytest_asyncio
 
 from nl_processing.database_cache.service import DatabaseCacheService
+from tests.e2e.database_cache.db_helpers import drop_all_tables, reset_database
 
 _LANGUAGES = ["nl", "ru"]
 _PAIRS = [("nl", "ru")]
@@ -97,6 +94,7 @@ async def seed_words(user_id: str, *, backend: NeonBackend | None = None) -> Non
     """Add words to Neon and wait for translations."""
     service = make_database_service(user_id, backend=backend)
     await service.add_words(WORDS)
+    await service.wait_for_background_translations()
     await wait_for_translations(len(WORDS), user_id, backend=backend)
 
 

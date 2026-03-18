@@ -3,9 +3,9 @@
 import asyncio
 
 from nl_processing.core.models import Language, PartOfSpeech, Word, WordPair
+from nl_processing.database_core.exceptions import ConfigurationError
 import pytest
 
-from nl_processing.database.exceptions import ConfigurationError
 from nl_processing.database.service import DatabaseService
 from tests.unit.database.conftest import MockBackend
 

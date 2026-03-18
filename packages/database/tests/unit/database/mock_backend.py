@@ -19,6 +19,10 @@ class MockBackend(AbstractBackend):
         self._detailed_words: dict[tuple[str, int, str], dict[str, str | int]] = {}
         self.count_user_words_calls = 0
 
+    def create_background_backend(self) -> AbstractBackend:
+        """Reuse the in-memory backend during unit tests."""
+        return self
+
     async def add_word(self, table: str, normalized_form: str, word_type: str) -> int | None:
         bucket = self._words.setdefault(table, {})
         if normalized_form in bucket:
@@ -110,12 +114,6 @@ class MockBackend(AbstractBackend):
             if tbl == table and uid == user_id and wid in source_word_ids:
                 result.append({"source_word_id": wid, "score": score})
         return result
-
-    async def check_event_applied(self, table: str, event_id: str) -> bool:
-        return (table, event_id) in self._applied_events
-
-    async def mark_event_applied(self, table: str, event_id: str) -> None:
-        self._applied_events.add((table, event_id))
 
     async def apply_score_delta_atomic(
         self, score_table: str, events_table: str, user_id: str, event_id: str, source_word_id: int, delta: int

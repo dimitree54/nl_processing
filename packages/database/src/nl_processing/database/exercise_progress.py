@@ -7,10 +7,29 @@ sync contracts used by sampling and database_cache.
 from datetime import datetime
 
 from nl_processing.core.models import Language, ScoredWordPair, WordPairSnapshot
-from nl_processing.database_core._database_config import _init_backend_and_tables
+from nl_processing.database_core._database_config import read_database_url
 from nl_processing.database_core.backend.abstract import AbstractBackend
+from nl_processing.database_core.backend.neon import NeonBackend
 
 from nl_processing.database._row_helpers import row_to_word_pair
+
+
+def _build_progress_backend(
+    exercise_types: list[str],
+    source_language: Language,
+    target_language: Language,
+    backend: AbstractBackend | None,
+) -> tuple[AbstractBackend, dict[str, str], str]:
+    """Build backend and remote table names for the progress store."""
+    if not exercise_types:
+        msg = "exercise_types must be a non-empty list"
+        raise ValueError(msg)
+    active_backend = backend or NeonBackend(read_database_url())
+    src = source_language.value
+    tgt = target_language.value
+    score_tables = {exercise_type: f"{src}_{tgt}_{exercise_type}" for exercise_type in exercise_types}
+    applied_events_table = f"applied_events_{src}_{tgt}"
+    return active_backend, score_tables, applied_events_table
 
 
 class ExerciseProgressStore:
@@ -25,7 +44,7 @@ class ExerciseProgressStore:
         exercise_types: list[str],
         backend: AbstractBackend | None = None,
     ) -> None:
-        self._backend, self._score_tables, self._applied_events_table = _init_backend_and_tables(
+        self._backend, self._score_tables, self._applied_events_table = _build_progress_backend(
             exercise_types, source_language, target_language, backend
         )
         self._user_id = user_id

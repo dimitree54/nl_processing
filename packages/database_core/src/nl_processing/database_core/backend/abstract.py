@@ -6,6 +6,10 @@ class AbstractBackend(ABC):
     """Abstract base class defining the contract for all database operations."""
 
     @abstractmethod
+    def create_background_backend(self) -> "AbstractBackend":
+        """Return a backend handle safe to use from background tasks."""
+
+    @abstractmethod
     async def add_word(self, table: str, normalized_form: str, word_type: str) -> int | None:
         """Insert word if not exists, return row id."""
 
@@ -54,14 +58,6 @@ class AbstractBackend(ABC):
         source_word_ids: list[int],
     ) -> list[dict[str, str | int]]:
         """Return exercise score rows for the given user and words."""
-
-    @abstractmethod
-    async def check_event_applied(self, table: str, event_id: str) -> bool:
-        """Check if event_id exists in the applied_events table."""
-
-    @abstractmethod
-    async def mark_event_applied(self, table: str, event_id: str) -> None:
-        """Insert event_id into the applied_events table."""
 
     @abstractmethod
     async def apply_score_delta_atomic(

@@ -67,31 +67,6 @@ async def get_scores(
     return [dict(row) for row in rows]
 
 
-async def check_event(
-    conn: asyncpg.Connection,  # type: ignore[type-arg]
-    table: str,
-    event_id: str,
-) -> bool:
-    """Check if event_id exists in the applied_events table."""
-    try:
-        row = await conn.fetchrow(check_event_applied_query(table), event_id)
-    except asyncpg.PostgresError as exc:
-        raise DatabaseError(str(exc)) from exc
-    return row is not None
-
-
-async def mark_event(
-    conn: asyncpg.Connection,  # type: ignore[type-arg]
-    table: str,
-    event_id: str,
-) -> None:
-    """Insert event_id into the applied_events table."""
-    try:
-        await conn.execute(mark_event_applied_query(table), event_id)
-    except asyncpg.PostgresError as exc:
-        raise DatabaseError(str(exc)) from exc
-
-
 async def atomic_apply_delta(
     conn: asyncpg.Connection,  # type: ignore[type-arg]
     score_table: str,

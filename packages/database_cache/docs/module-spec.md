@@ -128,6 +128,10 @@ The module sits between interactive callers and the remote `database` package. `
 | IF-4 | Remote read-through | Outbound | `database.DetailedWordStore` or compatible protocol | `get_details()` / `get_or_extract_details()` for detailed records | Used by detailed-word cache. |
 | IF-5 | Local storage | Internal | SQLite via `aiosqlite` | Practice-cache tables, detailed-word cache tables, metadata | Separate DB files per cache surface. |
 
+### Internal and Non-Contract Notes
+
+- Package-local destructive remote-schema helpers live under `packages/database_cache/tests/` and are not part of the supported runtime contract.
+
 ### Data and State Ownership
 
 | Entity or State | Ownership | Description | Lifecycle or Retention | Notes |
@@ -200,6 +204,7 @@ The module sits between interactive callers and the remote `database` package. `
 
 - Reuse package-local `pytest` suites across unit, integration, and e2e layers.
 - Keep live remote checks focused on contracts owned by `database`; keep local behavior SQLite-backed in tests.
+- Keep destructive remote-schema helpers package-local to `database_cache` tests instead of importing them from `database`.
 
 **Unit:**
 

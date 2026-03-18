@@ -1,41 +1,7 @@
-"""Test helpers for database_core package.
+"""Package-local real-database helpers for database_cache E2E tests."""
 
-This module provides package-local test utilities that don't depend on
-other packages' testing modules, keeping database_core architecturally
-independent.
-"""
-
-from nl_processing.database_core.backend.abstract import AbstractBackend
 from nl_processing.database_core.backend.neon import NeonBackend
 from nl_processing.database_core.exceptions import DatabaseError
-
-
-async def count_language_table_words(language: str, *, backend: AbstractBackend) -> int:
-    """Count total word rows in the words_{language} table.
-
-    This is a package-local test helper for verifying table lifecycle
-    behavior in database_core integration tests. It counts all canonical
-    word entries in the specified language table, independent of user
-    associations.
-
-    Args:
-        language: Language code (e.g., "de", "fr") for the words table
-        backend: Backend instance to execute the query
-
-    Returns:
-        Number of word rows in the words_{language} table
-
-    Raises:
-        DatabaseError: If the query fails
-    """
-    conn = await backend._connect()  # noqa: SLF001
-    try:
-        row = await conn.fetchrow(
-            f"SELECT COUNT(*) AS cnt FROM words_{language}",  # noqa: S608
-        )
-        return int(row["cnt"])  # type: ignore[index]
-    except Exception as exc:
-        raise DatabaseError(str(exc)) from exc
 
 
 async def drop_all_tables(
@@ -45,7 +11,7 @@ async def drop_all_tables(
     *,
     backend: NeonBackend,
 ) -> None:
-    """Drop all database_core-managed tables in FK-safe order."""
+    """Drop all remote tables used by the E2E cache fixtures."""
     conn = await backend._connect()  # noqa: SLF001
     try:
         for src, tgt in pairs:
@@ -70,6 +36,6 @@ async def reset_database(
     *,
     backend: NeonBackend,
 ) -> None:
-    """Drop and recreate all managed tables for integration tests."""
+    """Drop and recreate the remote schema used by cache E2E tests."""
     await drop_all_tables(languages, pairs, exercise_slugs, backend=backend)
     await backend.create_tables(languages, pairs, exercise_slugs)

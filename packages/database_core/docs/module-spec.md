@@ -51,7 +51,7 @@ related_docs:
 | FR-1 | Expose `AbstractBackend` as the supported backend contract for higher-level persistence modules. | Must | Provider boundary. |
 | FR-2 | Expose `NeonBackend(database_url)` as the default concrete backend implementation. | Must | Default remote provider. |
 | FR-3 | Expose `read_database_url()` and fail fast when `DATABASE_URL` is missing. | Must | Shared backend initialization helper. |
-| FR-4 | Expose `_init_backend_and_tables(...)` for higher-level modules that derive exercise score and applied-event table names from languages and exercise types. | Must | Internal shared helper used across persistence modules. |
+| FR-4 | Expose a backend contract that can safely create independent backend handles for background work while keeping provider failures explicit. | Must | Higher-level modules rely on this to avoid connection reuse across background tasks. |
 | FR-5 | Surface provider/connection/query failures as `DatabaseError` and misconfiguration as `ConfigurationError`. | Must | Shared failure contract. |
 | FR-6 | Create required remote tables idempotently for the backend-supported schema helpers. | Must | Backend bootstrap contract. |
 
@@ -98,12 +98,13 @@ related_docs:
 | --- | --- | --- | --- | --- | --- |
 | IF-1 | Python API | Outbound | `database` and future persistence modules | `AbstractBackend` | Defines supported async backend operations. |
 | IF-2 | Python API | Outbound | `database` and tests | `NeonBackend` | Provides default Neon implementation. |
-| IF-3 | Python API | Outbound | `database` | `read_database_url()`, `_init_backend_and_tables(...)` | Supplies fail-fast backend initialization helpers. |
+| IF-3 | Python API | Outbound | `database` and future persistence modules | `read_database_url()` plus `AbstractBackend.create_background_backend()` | Supplies fail-fast configuration and backend cloning for concurrent/background usage. |
 | IF-4 | Python API | Outbound | Callers and tests | `ConfigurationError`, `DatabaseError` | Shared generic database error types. |
 
 ### Internal and Non-Contract Notes
 
 - SQL helper modules under `nl_processing.database_core.backend` are internal implementation helpers; callers should not depend on them as stable public API.
+- Package-local test helpers live under `packages/database_core/tests/` and are not part of the supported runtime contract.
 
 ### External Dependencies and Constraints
 
@@ -117,27 +118,21 @@ related_docs:
 | --- | --- | --- | --- |
 | `database` | It now consumes provider/core mechanics from `database_core` instead of owning them directly | `../../database/docs/module-spec.md` | Updated |
 
-### Compatibility Notes
-
-| ID | Area | Expectation | Impact if Broken | Notes |
-| --- | --- | --- | --- | --- |
-| COMP-1 | Legacy `database` imports | Old import paths continue working through compatibility shims | Consumer import breakage | Extraction must not change `database` public interfaces. |
-
 ## 4. Acceptance and Validation
 
 ### Acceptance Criteria
 
-- AC-1: `database` keeps its current public interfaces while consuming extracted provider code from `database_core`.
+- AC-1: Higher-level persistence modules use `database_core` directly for provider configuration, backend abstractions, and concrete Neon integration without any compatibility import layer.
 - AC-2: `database_core` owns the abstract backend, Neon backend, generic DB configuration helpers, and generic DB exceptions.
-- AC-3: Backend-focused unit and integration tests run from `database_core` without relying on `database` internals.
+- AC-3: Backend-focused unit and integration tests run from `database_core` without relying on `database` internals or `database`-owned test helpers.
 
 ### High-Level Validation Coverage
 
 | ID | Target | What Must Be True | Observable Evidence or Result |
 | --- | --- | --- | --- |
-| VAL-1 | FR-1, FR-2 | Higher-level modules can construct and use the extracted backend contract and Neon implementation | Unit/integration tests pass via `database_core` package paths |
+| VAL-1 | FR-1, FR-2 | Higher-level modules can construct and use the backend contract and Neon implementation, including safe background backend cloning | Unit/integration tests pass via `database_core` package paths |
 | VAL-2 | FR-3, FR-5 | Missing env and provider failures remain explicit | Config and backend tests still raise documented exceptions |
-| VAL-3 | COMP-1 | Existing `database` imports remain valid | `database` tests pass without public API changes |
+| VAL-3 | AC-3 | Package-local tests no longer depend on `database` runtime or `database` test helpers | `database_core` tests import only `database_core`-owned helpers or direct backend APIs |
 
 ### Risks
 

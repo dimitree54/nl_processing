@@ -32,15 +32,7 @@ class ConnectionManager:
             raise DatabaseError("Database connection was not initialized")
         return self._connection
 
-    async def create_fresh_connection(self) -> asyncpg.Connection:  # type: ignore[type-arg]
-        """Create a new connection for background tasks to avoid concurrency issues."""
-        try:
-            return await asyncpg.connect(dsn=self._database_url)
-        except asyncpg.PostgresError as exc:
-            raise DatabaseError(str(exc)) from exc
-        except OSError as exc:
-            raise DatabaseError(str(exc)) from exc
-
-    def get_database_url(self) -> str:
-        """Get the database URL for creating new instances."""
+    @property
+    def database_url(self) -> str:
+        """Expose the configured database URL for backend cloning."""
         return self._database_url

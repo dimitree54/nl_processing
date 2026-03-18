@@ -17,11 +17,9 @@ from nl_processing.database_core.backend._neon_detailed import (
 )
 from nl_processing.database_core.backend._neon_exercise import (
     atomic_apply_delta,
-    check_event,
     create_exercise_tables,
     get_scores,
     increment_score,
-    mark_event,
 )
 from nl_processing.database_core.backend._neon_users import (
     add_translation_link as add_translation_link_impl,
@@ -51,6 +49,10 @@ class NeonBackend(AbstractBackend):
 
     def __init__(self, database_url: str) -> None:
         self._connection_manager = ConnectionManager(database_url)
+
+    def create_background_backend(self) -> AbstractBackend:
+        """Create a fresh backend instance for background tasks."""
+        return NeonBackend(self._connection_manager.database_url)
 
     async def _connect(self) -> asyncpg.Connection:  # type: ignore[type-arg]
         return await self._connection_manager.get_connection()
@@ -113,14 +115,6 @@ class NeonBackend(AbstractBackend):
     ) -> list[dict[str, str | int]]:
         conn = await self._connect()
         return await get_scores(conn, table, user_id, source_word_ids)
-
-    async def check_event_applied(self, table: str, event_id: str) -> bool:
-        conn = await self._connect()
-        return await check_event(conn, table, event_id)
-
-    async def mark_event_applied(self, table: str, event_id: str) -> None:
-        conn = await self._connect()
-        await mark_event(conn, table, event_id)
 
     async def apply_score_delta_atomic(
         self, score_table: str, events_table: str,

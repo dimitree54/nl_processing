@@ -30,7 +30,7 @@ The module sits below the LLM-facing extract and translate packages and above do
 - `DatabaseService` for adding words, reading translated word pairs, deleting personal vocabulary entries, and creating tables.
 - `DetailedWordStore` for pair-specific detailed-word persistence and get-or-extract behavior.
 - `ExerciseProgressStore` for score-aware reads, canonical snapshot export, and idempotent delta replay.
-- Public persistence services, supported domain models from `core`, structured logging, and test-only reset helpers.
+- Public persistence services, supported domain models from `core`, structured logging, and explicit delete-domain exceptions.
 - Composition over the extracted `database_core` backend/provider layer.
 
 ### Out of Scope
@@ -71,6 +71,7 @@ The module sits below the LLM-facing extract and translate packages and above do
 | FR-12 | `DetailedWordStore` must persist pair-specific detailed-word rows keyed by canonical source-word identity and requested `word_type`, with `schema_key`, `schema_version`, and validated JSON payload columns. | Must | Storage must round-trip through the extractor-owned schema registry. |
 | FR-13 | `get_or_extract_details(words)` must read persisted detailed rows first, extract only misses through an injected extractor, persist the validated results, and return merged typed records in supported-input order. | Must | Convenience read-through behavior requested by the user. |
 | FR-14 | The store must reject missing canonical source words, unsupported schema versions, and invalid payloads instead of silently creating fallback rows. | Must | No silent storage repair or implicit corpus mutation. |
+| FR-15 | The module must expose `WordNotFoundError` as the supported delete-domain exception for personal-vocabulary deletes targeting source-word IDs outside the requesting user's vocabulary. | Must | Domain-specific delete failure remains part of the public contract. |
 
 ### Rules and Invariants
 
@@ -84,6 +85,7 @@ The module sits below the LLM-facing extract and translate packages and above do
 - BR-8: `PersonalWord`, `ExerciseProgressSummary`, and `EnrichedWordPairSnapshot` are unsupported target-state contract surfaces in `database`.
 - BR-9: Detailed-word rows are source-target specific and shared across users.
 - BR-10: Detailed-word rows must store only schema-validated payloads and must be parseable through the extractor-owned registry.
+- BR-11: `WordNotFoundError` is a `database`-owned exception, not a compatibility alias to a backend-layer exception module.
 
 ### Non-Functional Requirements
 
@@ -103,7 +105,7 @@ The module sits below the LLM-facing extract and translate packages and above do
 | FM-3 | Background translation fails after `add_words()`. | Log the failure without undoing the successful write path. | Retry via later workflows if needed. |
 | FM-4 | Unknown `exercise_type` or invalid `delta` is passed. | Raise `ValueError` before remote mutation. | Caller fixes the input contract. |
 | FM-5 | A caller depends on removed `list_personal_words()`, `get_progress_summary()`, or duplicate progress DTOs. | Those surfaces are unsupported in the target-state contract and must not be treated as public API. | Breaking cleanup is intentional. |
-| FM-6 | Delete is requested for a source-word ID outside the user's personal vocabulary. | Raise an explicit domain failure instead of silently succeeding. | Caller refreshes IDs or fixes the request. |
+| FM-6 | Delete is requested for a source-word ID outside the user's personal vocabulary. | Raise `WordNotFoundError` instead of silently succeeding. | Caller refreshes IDs or fixes the request. |
 | FM-7 | `get_or_extract_details()` is asked for a word that is not present in the canonical corpus. | Raise an explicit database-layer error. | Caller must persist the source word first. |
 | FM-8 | Persisted detailed payload does not match the declared schema version or schema key. | Raise an explicit database-layer error and reject the row. | Fix migration or stored data; do not coerce. |
 
@@ -117,7 +119,7 @@ The module sits below the LLM-facing extract and translate packages and above do
 - Pair-specific detailed-word tables and read-through store behavior.
 - Public persistence APIs plus cache-facing snapshot/replay primitives.
 - Per-user membership, delete behavior, and score-bearing snapshot export over per-user state.
-- Backend abstraction and structured logging.
+- Structured logging and delete-domain exceptions.
 
 **Does Not Own:**
 
@@ -132,9 +134,15 @@ The module sits below the LLM-facing extract and translate packages and above do
 | IF-1 | Python API | Inbound | Callers | `DatabaseService.add_words()`, `get_words()`, `delete_word()`, `delete_words()`, `create_tables()` | Main public persistence surface for add/get/delete/bootstrap workflows. |
 | IF-2 | Python API | Inbound | Callers, `database_cache` | `DetailedWordStore.get_details()` and `get_or_extract_details()` | Pair-specific detailed-word persistence surface. |
 | IF-3 | Python API | Inbound | `sampling`, `database_cache` | `ExerciseProgressStore.increment()`, `get_word_pairs_with_scores()`, `export_remote_snapshot()`, `apply_score_delta(...)` | Scored reads return shared `core.ScoredWordPair` values; snapshot export returns canonical `core.WordPairSnapshot` records with stable IDs and `added_at` for cache sync and caller-derived views. |
-| IF-4 | External system | Outbound | Neon PostgreSQL via `asyncpg` | SQL tables for words, translations, detailed words, user membership, scores, and applied events | Default backend implementation. |
-| IF-5 | Optional dependency | Inbound | Translator implementation | `translate(words: list[Word]) -> list[Word]` protocol | Injected into `DatabaseService` when auto-translation is wanted. |
-| IF-6 | Optional dependency | Inbound | Detailed extractor implementation | `extract(words: list[Word]) -> list[DetailedWordRecord]` protocol | Injected into `DetailedWordStore` when read-through extraction is wanted. |
+| IF-4 | Python API | Outbound | Callers | `WordNotFoundError` | Domain-specific delete failure for missing user-vocabulary membership. |
+| IF-5 | External system | Outbound | Neon PostgreSQL via `asyncpg` | SQL tables for words, translations, detailed words, user membership, scores, and applied events | Default backend implementation. |
+| IF-6 | Optional dependency | Inbound | Translator implementation | `translate(words: list[Word]) -> list[Word]` protocol | Injected into `DatabaseService` when auto-translation is wanted. |
+| IF-7 | Optional dependency | Inbound | Detailed extractor implementation | `extract(words: list[Word]) -> list[DetailedWordRecord]` protocol | Injected into `DetailedWordStore` when read-through extraction is wanted. |
+
+### Internal and Non-Contract Notes
+
+- `nl_processing.database.exceptions`: Supported only for `WordNotFoundError`; generic backend failures come from `database_core`.
+- Package-local test helpers live under `packages/database/tests/` and are not part of the supported runtime contract.
 
 ### Data and State Ownership
 
@@ -190,7 +198,8 @@ The module sits below the LLM-facing extract and translate packages and above do
 | FR-4, FR-7, FR-8, FR-10 | IF-3, DEC-2, DEC-4, DEC-5, DEC-7, DEC-11, CR-1, CR-3, CR-5 | QA-3 |
 | FR-5 | IF-4, DEC-2 | QA-4 |
 | FR-9 | IF-1, IF-4, DEC-6 | QA-5 |
-| FR-11, FR-12, FR-13, FR-14 | IF-2, IF-6, DEC-8, DEC-9, DEC-10, CR-4 | QA-6 |
+| FR-11, FR-12, FR-13, FR-14 | IF-2, IF-7, DEC-8, DEC-9, DEC-10, CR-4 | QA-6 |
+| FR-15 | IF-1, IF-4, FM-6 | QA-5 |
 
 ## 4. Delivery and Validation
 
@@ -202,6 +211,7 @@ The module sits below the LLM-facing extract and translate packages and above do
 - AC-4: The supported `DatabaseService` contract remains limited to add/get/delete/create-table workflows and does not include `list_personal_words()`.
 - AC-5: The supported `database` contract does not include `get_progress_summary()` or duplicate progress-oriented DTOs when callers can derive those views from canonical snapshots.
 - AC-6: Deleting one or many personal-vocabulary entries removes only per-user membership and scores.
+- AC-6a: Deletes targeting words outside the requesting user's vocabulary raise `WordNotFoundError`.
 - AC-7: `DetailedWordStore` returns persisted detailed rows when present and extracts+persists only misses when an extractor is injected.
 - AC-8: Invalid detailed payloads, missing source words, and unsupported schema versions fail fast instead of being coerced or silently created.
 - AC-9: `database_cache` can consume canonical snapshot export plus the typed detailed-word store contract without private SQL knowledge.
@@ -218,7 +228,7 @@ The module sits below the LLM-facing extract and translate packages and above do
 **Framework and Constraints:**
 
 - Reuse package-local `pytest` suites, with integration/e2e tests running against a real Neon database under Doppler-managed configuration.
-- Keep remote reset helpers confined to tests.
+- Keep remote reset helpers package-local to each test suite; do not expose shared reset helpers through `database` runtime code.
 - Keep real OpenAI coverage intentionally sparse and reuse one seeded scenario whenever the same translated state can prove multiple related behaviors.
 
 **Unit:**

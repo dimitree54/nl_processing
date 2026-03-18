@@ -1,6 +1,6 @@
 """Exception classes for detailed word operations."""
 
-from nl_processing.database.exceptions import DatabaseError
+from nl_processing.database_core.exceptions import DatabaseError
 
 
 class SourceWordNotFoundError(DatabaseError):

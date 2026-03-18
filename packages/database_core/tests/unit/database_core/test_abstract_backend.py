@@ -23,6 +23,7 @@ def test_abstract_backend_has_required_methods() -> None:
     # Check that the abstract methods exist
     abstract_methods = AbstractBackend.__abstractmethods__
     expected_methods = {
+        "create_background_backend",
         "add_word",
         "get_word",
         "add_translation_link",
@@ -31,8 +32,6 @@ def test_abstract_backend_has_required_methods() -> None:
         "add_user_word",
         "increment_user_exercise_score",
         "get_user_exercise_scores",
-        "check_event_applied",
-        "mark_event_applied",
         "apply_score_delta_atomic",
         "create_tables",
         "check_user_word_exists",
