@@ -2,9 +2,10 @@
 <module type="PYTHON_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
-      <sourceFolder url="file://$MODULE_DIR$/packages/core" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/core/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/packages/extract_text_from_image/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/core" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/packages/extract_text_from_image" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/dist" />
       <excludeFolder url="file://$MODULE_DIR$/packages/core/build" />
